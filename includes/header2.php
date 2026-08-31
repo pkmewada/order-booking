@@ -489,7 +489,6 @@
                                 </div>
                             </div>
                         </div>
-    
                         <div class="menu-image mb-3">
                             <p class="switcher-style-head">Menu With Background Image:</p>
                             <div class="d-flex flex-wrap align-items-center switcher-style">
@@ -880,10 +879,6 @@
                                         </div>
                                     </div>
                                 </li>
-
-                    
-
-                                
                                 <li class="dropdown-item">
                                     <div class="d-flex align-items-center">
                                         <div class="pe-2 lh-1">
@@ -1010,33 +1005,29 @@
                     </li>
 
 
+                    <!-- Start::header-element -->
+                    <li class="header-element dropdown">
+                        <!-- Start::header-link|dropdown-toggle -->
+                        <a href="javascript:void(0);" class="header-link dropdown-toggle" id="mainHeaderProfile" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                            <div class="d-flex align-items-center">
+                                <div class="me-xl-2 me-0">
 
-                     <!-- Start::header-element -->
-            <li class="header-element dropdown">
-                <!-- Start::header-link|dropdown-toggle -->
-                <a href="javascript:void(0);" class="header-link dropdown-toggle" id="mainHeaderProfile" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
-                    <div class="d-flex align-items-center">
-                        <div class="me-xl-2 me-0">
-                        
-                        </div>
-                        <div class="me-xl-2 me-0">
-    <i class="ti ti-settings fs-5"></i>
-</div>
-                    </div>
-                </a>
-                <!-- End::header-link|dropdown-toggle -->
-                <ul class="main-header-dropdown dropdown-menu pt-0 overflow-hidden header-profile-dropdown dropdown-menu-end" aria-labelledby="mainHeaderProfile">
-                    <li><a class="dropdown-item d-flex align-items-center" href="profile.html"><i class="ti ti-user me-2 fs-18 text-primary"></i>Profile</a></li>
-                    <li><a class="dropdown-item d-flex align-items-center" href="mail.html"><i class="ti ti-mail me-2 fs-18 text-secondary"></i>Inbox</a></li>
-                    <li><a class="dropdown-item d-flex align-items-center" href="to-do-list.html"><i class="ti ti-checklist me-2 fs-18 text-success"></i>Task Manager</a></li>
-                    <li><a class="dropdown-item d-flex align-items-center" href="setting"><i class="ti ti-settings me-2 fs-18 text-orange"></i>Settings</a></li>
-                    <li><a class="dropdown-item d-flex align-items-center" href="chat.html"><i class="ti ti-headset me-2 fs-18 text-info"></i>Support</a></li>
-                    <li><a class="dropdown-item d-flex align-items-center" href="sign-in-cover.html"><i class="ti ti-logout me-2 fs-18 text-warning"></i>Log Out</a></li>
-                </ul>
-            </li> 
-
-
-
+                                </div>
+                                <div class="me-xl-2 me-0">
+                                    <i class="ti ti-settings fs-5"></i>
+                                </div>
+                            </div>
+                        </a>
+                        <!-- End::header-link|dropdown-toggle -->
+                        <ul class="main-header-dropdown dropdown-menu pt-0 overflow-hidden header-profile-dropdown dropdown-menu-end" aria-labelledby="mainHeaderProfile">
+                            <li><a class="dropdown-item d-flex align-items-center" href="profile.html"><i class="ti ti-user me-2 fs-18 text-primary"></i>Profile</a></li>
+                            <li><a class="dropdown-item d-flex align-items-center" href="mail.html"><i class="ti ti-mail me-2 fs-18 text-secondary"></i>Inbox</a></li>
+                            <li><a class="dropdown-item d-flex align-items-center" href="to-do-list.html"><i class="ti ti-checklist me-2 fs-18 text-success"></i>Task Manager</a></li>
+                            <li><a class="dropdown-item d-flex align-items-center" href="setting"><i class="ti ti-settings me-2 fs-18 text-orange"></i>Settings</a></li>
+                            <li><a class="dropdown-item d-flex align-items-center" href="chat.html"><i class="ti ti-headset me-2 fs-18 text-info"></i>Support</a></li>
+                            <li><a class="dropdown-item d-flex align-items-center" href="sign-in-cover.html"><i class="ti ti-logout me-2 fs-18 text-warning"></i>Log Out</a></li>
+                        </ul>
+                    </li>
                 </ul>
             </div>
         </header>
@@ -1064,7 +1055,7 @@
 
 
                     <ul class="main-menu">
-                        <li class="slide__category"><span class="category-name">Main</span></li>
+                        <li class="slide__category"><span class="category-name">Setup</span></li>
 
                         <!-- ==================== Manufacturing (Master Menu) ==================== -->
                         <li class="slide has-sub">
@@ -1081,129 +1072,14 @@
                                     <a href="javascript:void(0)">Manufacturing</a>
                                 </li>
 
-                                <!-- Dashboard -->
+                                <!-- Direct child items (Setup removed) -->
                                 <li class="slide">
-                                    <a href="dashboard" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <path
-                                                d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                                        </svg>
-                                        <span class="side-menu__label">Dashboard</span>
-                                    </a>
+                                    <a href="empolyee" class="side-menu__item">Employee</a>
+                                </li>
+                                <li class="slide">
+                                    <a href="colour" class="side-menu__item">Colour</a>
                                 </li>
 
-                                <!-- Batches -->
-                                <li class="slide">
-                                    <a href="batch" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
-                                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
-                                        </svg>
-                                        <span class="side-menu__label">Batches</span>
-                                    </a>
-                                </li>
-
-                                <!-- Batch Approval -->
-                                <li class="slide">
-                                    <a href="batch-approval" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                            <circle cx="9" cy="7" r="4"></circle>
-                                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                                        </svg>
-                                        <span class="side-menu__label">Batch Approval</span>
-                                    </a>
-                                </li>
-
-                                <!-- Cutting Manager -->
-                                <li class="slide">
-                                    <a href="cutting-manager" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                            <path d="M2 17l10 5 10-5" />
-                                            <path d="M2 12l10 5 10-5" />
-                                        </svg>
-                                        <span class="side-menu__label">Cutting Manager</span>
-                                    </a>
-                                </li>
-
-                                <!-- Stitching Manager -->
-                                <li class="slide">
-                                    <a href="stitching-manager" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                            <path d="M2 17l10 5 10-5" />
-                                            <path d="M2 12l10 5 10-5" />
-                                            <path d="M12 22V2" />
-                                        </svg>
-                                        <span class="side-menu__label">Stitching Manager</span>
-                                    </a>
-                                </li>
-
-                                <!-- Ironing -->
-                                <li class="slide">
-                                    <a href="ironing-manager" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M3 7h18M3 11h18M3 15h12M3 19h6" />
-                                            <path d="M21 19h-6" />
-                                            <path d="M21 15v-4" />
-                                        </svg>
-                                        <span class="side-menu__label">Ironing</span>
-                                    </a>
-                                </li>
-
-                                <!-- Product Manager -->
-                                <li class="slide">
-                                    <a href="product-manager" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M3 7h18M3 11h18M3 15h12M3 19h6" />
-                                            <path d="M21 19h-6" />
-                                            <path d="M21 15v-4" />
-                                        </svg>
-                                        <span class="side-menu__label">Product Manager</span>
-                                    </a>
-                                </li>
-
-                                <!-- Stock -->
-                                <li class="slide">
-                                    <a href="stock" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
-                                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
-                                        </svg>
-                                        <span class="side-menu__label">Stock</span>
-                                    </a>
-                                </li>
-
-                                <!-- Audit -->
-                                <li class="slide">
-                                    <a href="a" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                            <polyline points="14 2 14 8 20 8" />
-                                            <line x1="16" y1="13" x2="8" y2="13" />
-                                            <line x1="16" y1="17" x2="8" y2="17" />
-                                            <polyline points="10 9 9 9 8 9" />
-                                        </svg>
-                                        <span class="side-menu__label">Audit</span>
-                                    </a>
-                                </li>
-
-                                <!-- Settings -->
-                                <li class="slide">
-                                    <a href="a" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <circle cx="12" cy="12" r="3"></circle>
-                                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                                        </svg>
-                                        <span class="side-menu__label">Settings</span>
-                                    </a>
-                                </li>
                             </ul>
                         </li>
 
@@ -1226,57 +1102,20 @@
                                     <a href="javascript:void(0)">Order Booking</a>
                                 </li>
 
-                                <!-- Dashboard -->
+                                <!-- Direct child items (Setup removed) -->
                                 <li class="slide">
-                                    <a href="dashboard" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <path
-                                                d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                                        </svg>
-                                        <span class="side-menu__label">Dashboard</span>
-                                    </a>
+                                    <a href="agent" class="side-menu__item">Agent</a>
+                                </li>
+                                <li class="slide">
+                                    <a href="distributor" class="side-menu__item">Distributor</a>
+                                </li>
+                                <li class="slide">
+                                    <a href="transporter" class="side-menu__item">Transporter</a>
+                                </li>
+                                <li class="slide">
+                                    <a href="product-creation" class="side-menu__item">Product Creation</a>
                                 </li>
 
-
-
-                                <!-- Customer Creation -->
-                                <li class="slide">
-                                    <a href="customer-creation" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                            <circle cx="8.5" cy="7" r="4"></circle>
-                                            <line x1="20" y1="8" x2="20" y2="14"></line>
-                                            <line x1="17" y1="11" x2="23" y2="11"></line>
-                                        </svg>
-                                        <span class="side-menu__label">Customer Creation</span>
-                                    </a>
-                                </li>
-
-                                <!-- Order Punch -->
-                                <li class="slide">
-                                    <a href="order-punch" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M12 20h9"></path>
-                                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
-                                        </svg>
-                                        <span class="side-menu__label">Order Punch</span>
-                                    </a>
-                                </li>
-
-                                <!-- Order List -->
-                                <li class="slide">
-                                    <a href="order-list" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-                                            <path d="M9 12h6"></path>
-                                            <path d="M9 16h6"></path>
-                                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-                                        </svg>
-                                        <span class="side-menu__label">Order List</span>
-                                    </a>
-                                </li>
                             </ul>
                         </li>
 
