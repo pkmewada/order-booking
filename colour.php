@@ -1,4 +1,4 @@
-<?php require_once __DIR__ . '/includes/header.php'; ?>
+<?php require_once __DIR__ . '/includes/header2.php'; ?>
 
 <div class="main-content app-content">
     <div class="container-fluid">
