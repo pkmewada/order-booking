@@ -1,0 +1,14 @@
+RewriteEngine On
+
+# Serve existing files/folders directly
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Prevent direct access to pages
+RewriteRule ^/ - [F,L]
+
+# Route everything else
+RewriteRule ^(.+)$ index.php?url=$1 [QSA,L]
+RewriteRule ^$ index.php [L]
+
