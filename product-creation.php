@@ -51,8 +51,8 @@
                             <table id="productTable" class="table table-bordered text-nowrap w-100">
                                 <thead>
                                     <tr>
-                                        <th>Photo</th>
                                         <th>#</th>
+                                        <th>Photo</th>
                                         <th>Item Description</th>
                                         <th>Barcode No</th>
                                         <th>Size</th>
@@ -100,6 +100,34 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" id="uploadImportBtn">
                     <i class="bx bx-upload me-1"></i> Upload &amp; Import
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Photo Upload Modal -->
+<div class="modal fade" id="photoModal" tabindex="-1" aria-labelledby="photoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="photoModalLabel">Upload Product Photo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-3">
+                    <img id="photoPreview" src="" alt="Product Preview" class="img-fluid rounded" style="max-height: 200px; display: none;">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Choose Photo</label>
+                    <input type="file" class="form-control" id="photoFileInput" accept="image/*">
+                </div>
+                <div class="fs-12 text-muted">Supported formats: JPG, PNG, GIF, WEBP. Max size: 2MB.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="uploadPhotoBtn">
+                    <i class="bx bx-upload me-1"></i> Upload Photo
                 </button>
             </div>
         </div>

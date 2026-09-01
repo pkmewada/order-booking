@@ -1,8 +1,16 @@
 $(document).ready(function() {
     let products = [];
     let searchTerm = '';
+    let currentProductId = null;
 
     const TEMPLATE_HEADERS = ['Item Description', 'Barcode No', 'Size', 'Brand'];
+
+    // Brand-Size mappings
+    const BRAND_SIZES = {
+        'NIVI BLOSSOM': '28-34',
+        'AMARI': 'S-L',
+        'LITTLE DOLLY': '18-26'
+    };
 
     loadProducts();
 
@@ -42,17 +50,22 @@ $(document).ready(function() {
         }
 
         filtered.forEach((prod, index) => {
-            const photoCell = prod.photo
-                ? `<img src="${prod.photo}" alt="photo" style="width:40px;height:40px;object-fit:cover;border-radius:4px;">`
-                : `<input type="file" accept="image/*" class="form-control form-control-sm photo-upload-input" data-id="${prod.id}" style="max-width:150px;">`;
+            const photoHtml = prod.photo ? 
+                `<img src="${prod.photo}" alt="Product" class="product-photo" style="width:32px; height:32px; object-fit:cover; border-radius:4px; cursor:pointer;" data-id="${prod.id}">` :
+                `<button class="btn btn-sm btn-outline-secondary upload-photo-btn" data-id="${prod.id}" title="Upload Photo">
+                    <i class="bx bx-camera"></i>
+                </button>`;
+
+            // Get size range for display
+            const sizeDisplay = BRAND_SIZES[prod.brand] || prod.size;
 
             tbody.append(`
                 <tr>
-                    <td>${photoCell}</td>
                     <td>${index + 1}</td>
+                    <td class="text-center">${photoHtml}</td>
                     <td>${prod.description}</td>
                     <td>${prod.barcode}</td>
-                    <td>${prod.size}</td>
+                    <td>${sizeDisplay}</td>
                     <td>${prod.brand}</td>
                     <td class="text-center">
                         <div class="btn-group" role="group">
@@ -68,26 +81,32 @@ $(document).ready(function() {
             `);
         });
 
+        // Event handlers for photo upload
+        $('.upload-photo-btn').click(function() {
+            const id = $(this).data('id');
+            openPhotoModal(id);
+        });
+
+        $('.product-photo').click(function() {
+            const id = $(this).data('id');
+            openPhotoModal(id);
+        });
+
         $('.delete-btn').click(function() {
             showDeleteConfirmation($(this).data('id'));
         });
+    }
 
-        $('.photo-upload-input').change(function() {
-            const id = $(this).data('id');
-            const file = this.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const index = products.findIndex(p => p.id === id);
-                if (index !== -1) {
-                    products[index].photo = e.target.result;
-                    saveToLocalStorage();
-                    renderTable();
-                }
-            };
-            reader.readAsDataURL(file);
-        });
+    function openPhotoModal(productId) {
+        currentProductId = productId;
+        const product = products.find(p => p.id === productId);
+        if (product && product.photo) {
+            $('#photoPreview').attr('src', product.photo).show();
+        } else {
+            $('#photoPreview').hide();
+        }
+        $('#photoFileInput').val('');
+        $('#photoModal').modal('show');
     }
 
     function showDeleteConfirmation(id) {
@@ -113,6 +132,49 @@ $(document).ready(function() {
     $('#searchInput').on('keyup', function() {
         searchTerm = $(this).val();
         renderTable();
+    });
+
+    // ---------- Photo Upload ----------
+    $('#photoFileInput').on('change', function() {
+        const file = this.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                $('#photoPreview').attr('src', e.target.result).show();
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    $('#uploadPhotoBtn').click(function() {
+        const file = $('#photoFileInput')[0].files[0];
+        if (!file) {
+            Swal.fire('Warning!', 'Please choose a photo to upload.', 'warning');
+            return;
+        }
+
+        // Check file size (2MB max)
+        if (file.size > 2 * 1024 * 1024) {
+            Swal.fire('Error!', 'File size exceeds 2MB limit.', 'error');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const photoData = e.target.result;
+            const product = products.find(p => p.id === currentProductId);
+            if (product) {
+                product.photo = photoData;
+                saveToLocalStorage();
+                renderTable();
+                $('#photoModal').modal('hide');
+                Swal.fire('Success!', 'Photo uploaded successfully.', 'success');
+            }
+        };
+        reader.onerror = function() {
+            Swal.fire('Error!', 'Failed to read the photo file.', 'error');
+        };
+        reader.readAsDataURL(file);
     });
 
     // ---------- Import ----------
@@ -193,7 +255,11 @@ $(document).ready(function() {
 
             products.push({
                 id: 'PRD' + Date.now() + Math.floor(Math.random() * 1000),
-                description, barcode, size, brand
+                description, 
+                barcode, 
+                size, 
+                brand,
+                photo: null
             });
             existingBarcodes.add(barcode.toLowerCase());
             imported++;

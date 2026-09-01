@@ -1,107 +1,101 @@
 $(document).ready(function() {
+    // Brand-Size mappings
     const BRAND_SIZES = {
-        'NIVI BLOSSOM': ['28', '30', '32', '34'],
-        'AMARI': ['S', 'M', 'L'],
-        'LITTLE DOLLY': ['18', '20', '22', '24', '26']
+        'NIVI BLOSSOM': '28-34',
+        'AMARI': 'S-L',
+        'LITTLE DOLLY': '18-26'
     };
 
-    function populateSizes(brand, selectedSize) {
-        const $size = $('#productSize');
-        $size.empty().append('<option value="">Select Size</option>');
-        const sizes = BRAND_SIZES[brand] || [];
-        sizes.forEach(size => {
-            $size.append(`<option value="${size}">${size}</option>`);
-        });
-        $size.prop('disabled', sizes.length === 0);
-        if (selectedSize) {
-            $size.val(selectedSize);
+    // Function to update size display based on brand
+    function updateSizeDisplay(brand) {
+        if (brand && BRAND_SIZES[brand]) {
+            $('#sizeDisplay').val(BRAND_SIZES[brand]);
+        } else {
+            $('#sizeDisplay').val('');
         }
     }
 
-    $('#productBrand').change(function() {
-        populateSizes($(this).val());
+    // Update size display when brand changes
+    $('#brand').change(function() {
+        const brand = $(this).val();
+        updateSizeDisplay(brand);
     });
 
-    function getProducts() {
-        const stored = localStorage.getItem('products');
-        return stored ? JSON.parse(stored) : [];
+    // Load product data if editing
+    const productId = $('#productId').val();
+    if (productId) {
+        const products = JSON.parse(localStorage.getItem('products') || '[]');
+        const product = products.find(p => p.id === productId);
+        if (product) {
+            $('#description').val(product.description);
+            $('#barcode').val(product.barcode);
+            $('#brand').val(product.brand);
+            updateSizeDisplay(product.brand);
+        }
+    } else {
+        // For new product - set default brand and size
+        const defaultBrand = 'NIVI BLOSSOM';
+        $('#brand').val(defaultBrand);
+        updateSizeDisplay(defaultBrand);
     }
 
-    function saveProducts(products) {
-        localStorage.setItem('products', JSON.stringify(products));
-    }
+    // Form submission
+    $('#productForm').submit(function(e) {
+        e.preventDefault();
+        
+        const description = $('#description').val().trim();
+        const barcode = $('#barcode').val().trim();
+        const brand = $('#brand').val();
+        const size = $('#sizeDisplay').val();
 
-    const editId = new URLSearchParams(window.location.search).get('id');
-    let editingProduct = null;
-
-    if (editId) {
-        editingProduct = getProducts().find(p => p.id === editId) || null;
-
-        if (editingProduct) {
-            $('#formTitle').text('Edit Product');
-            $('#formBreadcrumb').text('Edit Product');
-            $('#productId').val(editingProduct.id);
-            $('#itemDescription').val(editingProduct.description);
-            $('#barcodeNo').val(editingProduct.barcode);
-            $('#productBrand').val(editingProduct.brand);
-            populateSizes(editingProduct.brand, editingProduct.size);
-        } else {
-            Swal.fire('Not Found!', 'This product could not be found. It may have been deleted.', 'warning');
-        }
-    }
-
-    $('#saveProductBtn').click(function() {
-        const id = $('#productId').val();
-        const description = $('#itemDescription').val().trim();
-        const barcode = $('#barcodeNo').val().trim();
-        const size = $('#productSize').val();
-        const brand = $('#productBrand').val();
-
-        if (!description) {
-            Swal.fire('Warning!', 'Please enter item description', 'warning');
-            $('#itemDescription').focus();
-            return;
-        }
-        if (!barcode) {
-            Swal.fire('Warning!', 'Please enter barcode no', 'warning');
-            $('#barcodeNo').focus();
-            return;
-        }
-        if (!size) {
-            Swal.fire('Warning!', 'Please select a size', 'warning');
-            $('#productSize').focus();
-            return;
-        }
-        if (!brand) {
-            Swal.fire('Warning!', 'Please select a brand', 'warning');
-            $('#productBrand').focus();
+        if (!description || !barcode || !brand || !size) {
+            Swal.fire('Warning!', 'Please fill in all required fields.', 'warning');
             return;
         }
 
-        const products = getProducts();
-        const duplicate = products.some(p => p.barcode.toLowerCase() === barcode.toLowerCase() && p.id !== id);
-        if (duplicate) {
-            Swal.fire('Warning!', 'A product with this barcode already exists', 'warning');
-            return;
-        }
-
-        if (id) {
-            const index = products.findIndex(p => p.id === id);
+        // Get products from localStorage
+        let products = JSON.parse(localStorage.getItem('products') || '[]');
+        
+        const productId = $('#productId').val();
+        if (productId) {
+            // Edit existing product
+            const index = products.findIndex(p => p.id === productId);
             if (index !== -1) {
-                products[index] = { ...products[index], description, barcode, size, brand };
+                products[index] = {
+                    ...products[index],
+                    description,
+                    barcode,
+                    brand,
+                    size
+                };
             }
         } else {
-            products.push({ id: 'PRD' + Date.now(), description, barcode, size, brand });
+            // Add new product
+            // Check duplicate barcode
+            if (products.some(p => p.barcode.toLowerCase() === barcode.toLowerCase())) {
+                Swal.fire('Warning!', 'Barcode already exists. Please use a unique barcode.', 'warning');
+                return;
+            }
+            
+            products.push({
+                id: 'PRD' + Date.now() + Math.floor(Math.random() * 1000),
+                description,
+                barcode,
+                brand,
+                size,
+                photo: null
+            });
         }
 
-        saveProducts(products);
-
+        // Save to localStorage
+        localStorage.setItem('products', JSON.stringify(products));
+        
         Swal.fire({
             icon: 'success',
             title: 'Success!',
-            text: id ? 'Product updated successfully!' : 'Product added successfully!',
-            timer: 1500,
-            showConfirmButton: false
+            text: productId ? 'Product updated successfully.' : 'Product added successfully.',
+            timer: 2000,
+            showConfirmButton: true
         }).then(() => {
             window.location.href = 'product-creation';
         });
