@@ -1,195 +1,237 @@
-$(document).ready(function() {
-    // Initial batch data with approval status
-    let batchData = [
-        { 
-            id: 1, 
-            batchId: 'BATCH-001',
-            brand: 'NIVI BLOSSOM',
-            designNumber: 'D-1001', 
-            color: 'Red', 
-            quantity: 100, 
-            priority: 'High',
-            createdAt: new Date().toLocaleDateString(),
-            status: 'pending',
-            photo: 'assets/images/batch1.jpg',
-            pieceType: '1 Piece',
-            checks: [], // Store checked items
-            remarks: '' // Store remarks
-        },
-        { 
-            id: 2, 
-            batchId: 'BATCH-002',
-            brand: 'AMARI',
-            designNumber: 'D-1002', 
-            color: 'Blue', 
-            quantity: 150, 
-            priority: 'Medium',
-            createdAt: new Date().toLocaleDateString(),
-            status: 'pending',
-            photo: 'assets/images/batch2.jpg',
-            pieceType: '2 Piece',
-            checks: ['check1', 'check2'], // Example: 2 checks saved
-            remarks: 'Need to verify fabric quality' // Example remarks
-        },
-        { 
-            id: 3, 
-            batchId: 'BATCH-003',
-            brand: 'LITTLE DOLLY',
-            designNumber: 'D-1003', 
-            color: 'Green', 
-            quantity: 200, 
-            priority: 'Low',
-            createdAt: new Date().toLocaleDateString(),
-            status: 'approved',
-            photo: 'assets/images/batch3.jpg',
-            pieceType: '1 Piece',
-            checks: ['check1', 'check2', 'check3', 'check4'], // All 4 checks
-            remarks: 'All checks completed successfully' // Example remarks
-        },
-        { 
-            id: 4, 
-            batchId: 'BATCH-004',
-            brand: 'NIVI BLOSSOM',
-            designNumber: 'D-1004', 
-            color: 'Yellow', 
-            quantity: 120, 
-            priority: 'High',
-            createdAt: new Date().toLocaleDateString(),
-            status: 'pending',
-            photo: 'assets/images/batch4.jpg',
-            pieceType: '3 Piece',
-            checks: ['check1'], // 1 check saved
-            remarks: '' // Empty remarks
-        },
-        { 
-            id: 5, 
-            batchId: 'BATCH-005',
-            brand: 'AMARI',
-            designNumber: 'D-1005', 
-            color: 'Black', 
-            quantity: 200, 
-            priority: 'Medium',
-            createdAt: new Date().toLocaleDateString(),
-            status: 'pending',
-            photo: 'assets/images/batch5.jpg',
-            pieceType: '2 Piece',
-            checks: ['check1', 'check2', 'check3'], // 3 checks saved
-            remarks: 'Waiting for additional fabric shipment' // Example remarks
-        }
-    ];
+$(document).ready(function () {
+    "use strict";
 
-    let currentViewBatchId = null;
+    const BATCH_STORAGE_KEY = "batchData";
+    const REQUIREMENT_STORAGE_KEY = "requirementData";
 
-    // Initialize
-    renderTable();
+    let batchData = [];
+    let currentBatchId = null;
 
-    // Function to get check labels
-    function getCheckLabels(checkIds) {
-        const checkMap = {
-            'check1': 'Frame/Pattern Availability',
-            'check2': 'Main Fabric Stock',
-            'check3': 'Additional Fabric',
-            'check4': 'Zip Stock'
-        };
-        return checkIds.map(id => checkMap[id] || id);
+    const approvalModalElement = document.getElementById("approvalModal");
+    const approvalModal = new bootstrap.Modal(approvalModalElement);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Helpers
+    |--------------------------------------------------------------------------
+    */
+
+    function escapeHtml(value) {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     }
 
-    // Function to generate check status with blue tick
-    function generateCheckStatus(checkIds) {
-        const checkMap = {
-            'check1': 'Frame/Pattern',
-            'check2': 'Main Fabric',
-            'check3': 'Additional Fabric',
-            'check4': 'Zip Stock'
-        };
-        
-        const allChecks = ['check1', 'check2', 'check3', 'check4'];
-        let html = '<div style="font-size: 12px; line-height: 1.8;">';
-        
-        allChecks.forEach(checkId => {
-            const isChecked = checkIds.includes(checkId);
-            const label = checkMap[checkId] || checkId;
-            if (isChecked) {
-                html += `<div><span style="color: #0d6efd; font-weight: bold;">✓</span> <strong>${label}</strong></div>`;
-            } else {
-                html += `<div><span style="color: #dc3545;">✗</span> ${label}</div>`;
+    function readStorage(key) {
+        try {
+            const value = localStorage.getItem(key);
+
+            if (!value) {
+                return [];
             }
-        });
-        
-        html += '</div>';
-        return html;
+
+            const parsed = JSON.parse(value);
+
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            console.error("Storage error:", error);
+            return [];
+        }
     }
 
-    // Function to render table
+    function saveStorage(key, value) {
+        localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    function normalize(value) {
+        return String(value ?? "").trim().toLowerCase();
+    }
+
+    function getStatusBadge(status) {
+        const statuses = {
+            pending: {
+                label: "Pending",
+                className: "bg-warning text-dark"
+            },
+            approved: {
+                label: "Approved",
+                className: "bg-success"
+            },
+            missing: {
+                label: "Missing Item",
+                className: "bg-danger"
+            }
+        };
+
+        const statusData = statuses[status] || statuses.pending;
+
+        return `
+            <span class="badge ${statusData.className}">
+                ${statusData.label}
+            </span>
+        `;
+    }
+
+    function showMessage(type, message) {
+        $("#approvalMessage")
+            .removeClass("alert-success alert-warning alert-danger")
+            .addClass(`alert-${type}`)
+            .html(message)
+            .show();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Load Data
+    |--------------------------------------------------------------------------
+    */
+
+    function loadData() {
+        batchData = readStorage(BATCH_STORAGE_KEY);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Render Table
+    |--------------------------------------------------------------------------
+    */
+
     function renderTable() {
-        const tbody = $('#batchTableBody');
+        const tbody = $("#approvalTableBody");
+
         tbody.empty();
 
-        // Get filter values
-        const statusFilter = $('#statusFilter').val();
-        const searchTerm = $('#searchInput').val().toLowerCase();
+        const statusFilter = normalize($("#approvalStatusFilter").val());
+        const searchTerm = normalize($("#approvalSearchInput").val());
 
-        // Apply filters
-        let filteredData = batchData;
+        let filteredBatches = batchData.filter(batch => {
+            const searchText = [
+                batch.batchId,
+                batch.brand,
+                batch.designNumber,
+                batch.color,
+                batch.piece
+            ]
+                .filter(Boolean)
+                .join(" ");
 
-        if (statusFilter) {
-            filteredData = filteredData.filter(b => b.status === statusFilter);
-        }
-
-        if (searchTerm) {
-            filteredData = filteredData.filter(b => 
-                b.batchId.toLowerCase().includes(searchTerm) ||
-                b.brand.toLowerCase().includes(searchTerm) ||
-                b.designNumber.toLowerCase().includes(searchTerm)
+            return (
+                (!statusFilter ||
+                    normalize(batch.status || "pending") === statusFilter) &&
+                (!searchTerm ||
+                    normalize(searchText).includes(searchTerm))
             );
-        }
+        });
 
-        if (filteredData.length === 0) {
-            tbody.append(`
+        if (!filteredBatches.length) {
+            tbody.html(`
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-4">
-                        <i class="bx bx-info-circle me-2"></i>No batches found.
+                    <td colspan="11" class="text-center text-muted py-4">
+                        <i class="bx bx-info-circle me-1"></i>
+                        No batches found.
                     </td>
                 </tr>
             `);
+
             return;
         }
 
-        filteredData.forEach((batch) => {
-            const statusColor = batch.status === 'approved' ? 'text-success' : 'text-warning';
-            const statusText = batch.status === 'approved' ? 'Approved' : 'Pending';
-            
-            // Get check status
-            const checkStatusHTML = generateCheckStatus(batch.checks);
-            
-            // Display remarks
-            const remarksDisplay = batch.remarks && batch.remarks.trim() !== ''
-                ? batch.remarks
-                : '<span class="text-muted">No remarks</span>';
-            
+        filteredBatches.forEach(batch => {
+            const itemList = Array.isArray(batch.itemList)
+                ? batch.itemList
+                : [];
+
+            const itemAvailability = batch.itemAvailability || {};
+
+            const availableItems = itemList.filter(item => {
+                return itemAvailability[item] === "yes";
+            });
+
+            const missingItems = Array.isArray(batch.missingItems)
+                ? batch.missingItems
+                : [];
+
+            const availableHtml = availableItems.length
+                ? availableItems.map(item => `
+                    <span class="badge bg-success me-1 mb-1">
+                        ${escapeHtml(item)}
+                    </span>
+                `).join("")
+                : `<span class="text-muted">-</span>`;
+
+            const missingHtml = missingItems.length
+                ? missingItems.map(item => `
+                    <span class="badge bg-danger me-1 mb-1">
+                        ${escapeHtml(item)}
+                    </span>
+                `).join("")
+                : `<span class="text-muted">-</span>`;
+
             tbody.append(`
                 <tr>
                     <td>
-                        <span class="fw-semibold">${batch.batchId}</span>
+                        <strong>
+                            ${escapeHtml(batch.batchId || "-")}
+                        </strong>
                     </td>
-                    <td><strong>${batch.brand}</strong></td>
+
                     <td>
-                        <img src="${batch.photo || 'assets/images/default.jpg'}" alt="Batch" style="width: 50px; height: 50px; object-fit: cover; border-radius: 5px;">
+                        <img
+                            src="${escapeHtml(batch.photo || "assets/images/default.jpg")}"
+                            alt="Batch"
+                            style="
+                                width:55px;
+                                height:55px;
+                                object-fit:cover;
+                                border-radius:6px;
+                            "
+                            onerror="this.src='assets/images/default.jpg';"
+                        >
                     </td>
+
                     <td>
-                        <span class="${statusColor} fw-semibold">${statusText}</span>
+                        ${escapeHtml(batch.brand || "-")}
                     </td>
+
                     <td>
-                        ${checkStatusHTML}
+                        ${escapeHtml(batch.designNumber || "-")}
                     </td>
+
                     <td>
-                        <small class="d-block text-truncate" style="max-width: 150px;" title="${batch.remarks || 'No remarks'}">
-                            ${remarksDisplay}
-                        </small>
+                        ${escapeHtml(batch.piece || "-")}
                     </td>
+
                     <td>
-                        <button class="btn btn-sm btn-primary view-btn" data-id="${batch.id}" title="View Details">
-                            <i class="bx bx-show"></i> View
+                        ${escapeHtml(batch.quantity || "0")}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(batch.priority || "-")}
+                    </td>
+
+                    <td style="white-space:normal; min-width:170px;">
+                        ${availableHtml}
+                    </td>
+
+                    <td style="white-space:normal; min-width:170px;">
+                        ${missingHtml}
+                    </td>
+
+                    <td>
+                        ${getStatusBadge(batch.status || "pending")}
+                    </td>
+
+                    <td>
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-primary open-approval-btn"
+                            data-id="${escapeHtml(batch.id)}"
+                        >
+                            <i class="bx bx-show me-1"></i>
+                            View
                         </button>
                     </td>
                 </tr>
@@ -197,239 +239,624 @@ $(document).ready(function() {
         });
     }
 
-    // Show view modal
-    function showViewModal(batchId) {
-        const batch = batchData.find(b => b.id === batchId);
-        if (!batch) return;
+    /*
+    |--------------------------------------------------------------------------
+    | Get Current Batch
+    |--------------------------------------------------------------------------
+    */
 
-        currentViewBatchId = batchId;
-
-        // Set image
-        $('#viewImage').attr('src', batch.photo || 'assets/images/default.jpg');
-        
-        // Set details
-        $('#viewBatchId').text(batch.batchId);
-        $('#viewBrand').text(batch.brand);
-        $('#viewDesignNumber').text(batch.designNumber);
-        $('#viewColor').text(batch.color);
-        $('#viewQuantity').text(batch.quantity);
-        $('#viewPriority').text(batch.priority);
-        $('#viewCreatedDate').text(batch.createdAt);
-        
-        // Reset checklist
-        $('.checklist-item').prop('checked', false);
-        $('#statusMessage').hide();
-        $('#actionButtons').show();
-
-        // Set remarks
-        $('#remarksInput').val(batch.remarks || '');
-
-        // Set piece type radio based on batch data
-        if (batch.pieceType === '1 Piece') {
-            $('#pieceType1').prop('checked', true);
-        } else if (batch.pieceType === '2 Piece') {
-            $('#pieceType2').prop('checked', true);
-        } else if (batch.pieceType === '3 Piece') {
-            $('#pieceType3').prop('checked', true);
-        } else {
-            $('#pieceType1').prop('checked', true);
-        }
-
-        // Restore saved checks
-        if (batch.checks && batch.checks.length > 0) {
-            batch.checks.forEach(checkId => {
-                $('#' + checkId).prop('checked', true);
-            });
-        }
-
-        // Show buttons based on status
-        if (batch.status === 'pending') {
-            $('#approveBtn').show();
-            $('#pendingBtn').show();
-            $('#statusMessage').hide();
-        } else if (batch.status === 'approved') {
-            $('#approveBtn').hide();
-            $('#pendingBtn').hide();
-            $('#statusMessage').removeClass('alert-warning alert-danger').addClass('alert-success')
-                .html(`<i class="bx bx-check-circle me-2"></i> This batch is already <strong>Approved</strong>.`)
-                .show();
-        }
-
-        $('#viewModal').modal('show');
-    }
-
-    // Update batch status
-    function updateBatchStatus(batchId, newStatus, pieceType, checks, remarks) {
-        const batch = batchData.find(b => b.id === batchId);
-        if (!batch) return false;
-
-        batch.status = newStatus;
-        if (pieceType) {
-            batch.pieceType = pieceType;
-        }
-        if (checks) {
-            batch.checks = checks;
-        }
-        if (remarks !== undefined) {
-            batch.remarks = remarks;
-        }
-        renderTable();
-        return true;
-    }
-
-    // Event Handlers
-
-    // View button
-    $(document).on('click', '.view-btn', function() {
-        const id = parseInt($(this).data('id'));
-        showViewModal(id);
-    });
-
-    // Approve from modal - REQUIRE ALL 4 CHECKS
-    $('#approveBtn').click(function() {
-        if (!currentViewBatchId) return;
-        
-        const batch = batchData.find(b => b.id === currentViewBatchId);
-        if (!batch) return;
-
-        // Get selected piece type
-        const pieceType = $('input[name="pieceType"]:checked').val() || '1 Piece';
-
-        // Get all checked items
-        const checkedItems = [];
-        $('.checklist-item:checked').each(function() {
-            checkedItems.push($(this).attr('id'));
+    function getCurrentBatch() {
+        return batchData.find(batch => {
+            return String(batch.id) === String(currentBatchId);
         });
+    }
 
-        // Get remarks
-        const remarks = $('#remarksInput').val().trim();
+    /*
+    |--------------------------------------------------------------------------
+    | Render Item Availability
+    |--------------------------------------------------------------------------
+    */
 
-        // Check if ALL 4 checkboxes are checked
-        const requiredChecks = ['check1', 'check2', 'check3', 'check4'];
-        const allChecked = requiredChecks.every(checkId => checkedItems.includes(checkId));
+    function renderItemAvailability(batch) {
+        const container = $("#approvalItemList");
 
-        if (!allChecked) {
-            $('#statusMessage').removeClass('alert-success alert-danger').addClass('alert-warning')
-                .html('<i class="bx bx-info-circle me-2"></i> Please check ALL 4 quality checks before approving.')
-                .show();
+        container.empty();
+
+        const items = Array.isArray(batch.itemList)
+            ? batch.itemList
+            : [];
+
+        if (!items.length) {
+            container.html(`
+                <div class="alert alert-warning mb-0">
+                    No item list found for this batch.
+                </div>
+            `);
+
             return;
         }
 
-        // Get checkbox labels
-        const selectedLabels = [];
-        $('.checklist-item:checked').each(function() {
-            selectedLabels.push($(this).next('label').text());
+        const itemAvailability = batch.itemAvailability || {};
+
+        items.forEach((item, index) => {
+            const currentValue = itemAvailability[item] || "";
+
+            const yesId = `available_yes_${index}`;
+            const noId = `available_no_${index}`;
+
+            container.append(`
+                <div class="border-bottom pb-3 mb-3">
+                    <div class="row align-items-center g-2">
+
+                        <div class="col-md-7">
+                            <strong>
+                                ${escapeHtml(item)}
+                            </strong>
+                        </div>
+
+                        <div class="col-md-5">
+                            <div class="d-flex gap-3">
+
+                                <div class="form-check">
+                                    <input
+                                        class="form-check-input item-availability-radio"
+                                        type="radio"
+                                        name="availability_${index}"
+                                        id="${yesId}"
+                                        value="yes"
+                                        data-item="${escapeHtml(item)}"
+                                        ${currentValue === "yes" ? "checked" : ""}
+                                    >
+
+                                    <label
+                                        class="form-check-label text-success"
+                                        for="${yesId}"
+                                    >
+                                        Yes
+                                    </label>
+                                </div>
+
+                                <div class="form-check">
+                                    <input
+                                        class="form-check-input item-availability-radio"
+                                        type="radio"
+                                        name="availability_${index}"
+                                        id="${noId}"
+                                        value="no"
+                                        data-item="${escapeHtml(item)}"
+                                        ${currentValue === "no" ? "checked" : ""}
+                                    >
+
+                                    <label
+                                        class="form-check-label text-danger"
+                                        for="${noId}"
+                                    >
+                                        No
+                                    </label>
+                                </div>
+
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            `);
+        });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Get Availability Data
+    |--------------------------------------------------------------------------
+    */
+
+    function getAvailabilityFromModal() {
+        const availability = {};
+
+        $(".item-availability-radio:checked").each(function () {
+            const item = $(this).data("item");
+            const value = $(this).val();
+
+            availability[item] = value;
         });
 
+        return availability;
+    }
+
+    function getMissingItems(availability, itemList) {
+        return itemList.filter(item => {
+            return availability[item] === "no";
+        });
+    }
+
+    function getUnavailableOrUnselectedItems(availability, itemList) {
+        return itemList.filter(item => {
+            return availability[item] !== "yes";
+        });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Open Approval Modal
+    |--------------------------------------------------------------------------
+    */
+
+    function openApprovalModal(batchId) {
+        currentBatchId = batchId;
+
+        const batch = getCurrentBatch();
+
+        if (!batch) {
+            return;
+        }
+
+        $("#approvalPhoto").attr(
+            "src",
+            batch.photo || "assets/images/default.jpg"
+        );
+
+        $("#approvalBatchId").text(batch.batchId || "-");
+        $("#approvalBrand").text(batch.brand || "-");
+        $("#approvalDesignNumber").text(batch.designNumber || "-");
+        $("#approvalColor").text(batch.color || "-");
+        $("#approvalPiece").text(batch.piece || "-");
+        $("#approvalQuantity").text(batch.quantity || "-");
+        $("#approvalPriority").text(batch.priority || "-");
+
+        $("#approvalRemarks").val(batch.approvalRemarks || "");
+
+        $("#approvalMessage")
+            .hide()
+            .removeClass("alert-success alert-warning alert-danger")
+            .html("");
+
+        renderItemAvailability(batch);
+
+        const isApproved = batch.status === "approved";
+
+        $("#approveAvailableBtn").prop("disabled", isApproved);
+        $("#approveMissingBtn").prop("disabled", isApproved);
+
+        if (isApproved) {
+            showMessage(
+                "success",
+                "This batch has already been approved."
+            );
+        }
+
+        approvalModal.show();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Save Approval
+    |--------------------------------------------------------------------------
+    */
+
+    function saveApproval(newStatus) {
+        const batch = getCurrentBatch();
+
+        if (!batch) {
+            return null;
+        }
+
+        const itemList = Array.isArray(batch.itemList)
+            ? batch.itemList
+            : [];
+
+        const availability = getAvailabilityFromModal();
+        const remarks = $("#approvalRemarks").val().trim();
+
+        const missingItems = getMissingItems(
+            availability,
+            itemList
+        );
+
+        const incompleteItems = getUnavailableOrUnselectedItems(
+            availability,
+            itemList
+        );
+
+        if (itemList.length && incompleteItems.length) {
+            showMessage(
+                "warning",
+                "Please select Yes or No for every item."
+            );
+
+            return null;
+        }
+
+        if (newStatus === "approved" && missingItems.length) {
+            showMessage(
+                "warning",
+                "Some items are marked No. Use Approve Missing Item."
+            );
+
+            return null;
+        }
+
+        if (newStatus === "missing" && !missingItems.length) {
+            showMessage(
+                "warning",
+                "Please mark at least one item as No."
+            );
+
+            return null;
+        }
+
+        const index = batchData.findIndex(item => {
+            return String(item.id) === String(currentBatchId);
+        });
+
+        if (index === -1) {
+            return null;
+        }
+
+        batchData[index] = {
+            ...batchData[index],
+            status: newStatus,
+            itemAvailability: availability,
+            missingItems,
+            approvalRemarks: remarks,
+            approvedAt: newStatus === "approved"
+                ? new Date().toLocaleString("en-GB")
+                : batchData[index].approvedAt || "",
+            missingMarkedAt: newStatus === "missing"
+                ? new Date().toLocaleString("en-GB")
+                : batchData[index].missingMarkedAt || "",
+            updatedAt: new Date().toLocaleString("en-GB")
+        };
+
+        saveStorage(BATCH_STORAGE_KEY, batchData);
+
+        return batchData[index];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Create Requirement
+    |--------------------------------------------------------------------------
+    */
+
+    function createRequirement(batch) {
+        const requirementData = readStorage(
+            REQUIREMENT_STORAGE_KEY
+        );
+
+        const existingRequirement = requirementData.find(requirement => {
+            return (
+                String(requirement.batchId) === String(batch.batchId) &&
+                requirement.status !== "completed"
+            );
+        });
+
+        if (existingRequirement) {
+            return existingRequirement;
+        }
+
+        const nextId = requirementData.length
+            ? Math.max(
+                ...requirementData.map(item => Number(item.id) || 0)
+            ) + 1
+            : 1;
+
+        const requirement = {
+            id: nextId,
+            requirementId: `REQ-${String(nextId).padStart(3, "0")}`,
+            batchId: batch.batchId,
+            bomId: batch.bomId || "",
+            brand: batch.brand || "",
+            designNumber: batch.designNumber || "",
+            color: batch.color || "",
+            piece: batch.piece || "",
+            quantity: batch.quantity || 0,
+            priority: batch.priority || "Medium",
+            photo: batch.photo || "",
+            missingItems: Array.isArray(batch.missingItems)
+                ? [...batch.missingItems]
+                : [],
+            itemAvailability: batch.itemAvailability || {},
+            remarks: batch.approvalRemarks || "",
+            status: "pending",
+            createdAt: new Date().toLocaleString("en-GB")
+        };
+
+        requirementData.push(requirement);
+
+        saveStorage(
+            REQUIREMENT_STORAGE_KEY,
+            requirementData
+        );
+
+        return requirement;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | View Button
+    |--------------------------------------------------------------------------
+    */
+
+    $(document).on("click", ".open-approval-btn", function () {
+        const id = $(this).data("id");
+
+        openApprovalModal(id);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | All Yes
+    |--------------------------------------------------------------------------
+    */
+
+    $("#allItemsYesBtn").on("click", function () {
+        $(".item-availability-radio[value='yes']").prop(
+            "checked",
+            true
+        );
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | All No
+    |--------------------------------------------------------------------------
+    */
+
+    $("#allItemsNoBtn").on("click", function () {
+        $(".item-availability-radio[value='no']").prop(
+            "checked",
+            true
+        );
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Approve All Available
+    |--------------------------------------------------------------------------
+    */
+
+    $("#approveAvailableBtn").on("click", function () {
+        const batch = getCurrentBatch();
+
+        if (!batch) {
+            return;
+        }
+
+        const itemList = Array.isArray(batch.itemList)
+            ? batch.itemList
+            : [];
+
+        const availability = getAvailabilityFromModal();
+        const incompleteItems = getUnavailableOrUnselectedItems(
+            availability,
+            itemList
+        );
+
+        if (incompleteItems.length) {
+            showMessage(
+                "warning",
+                "Every item must be marked Yes before approval."
+            );
+
+            return;
+        }
+
+        const missingItems = getMissingItems(
+            availability,
+            itemList
+        );
+
+        if (missingItems.length) {
+            showMessage(
+                "warning",
+                "Some items are missing. Use Approve Missing Item."
+            );
+
+            return;
+        }
+
         Swal.fire({
-            title: 'Approve Batch?',
-            html: `
-                <div class="text-start">
-                    <p><strong>Batch:</strong> ${batch.batchId}</p>
-                    <p><strong>Piece Type:</strong> ${pieceType}</p>
-                    <p><strong>All 4 Checks Completed:</strong></p>
-                    <ul class="mb-0">
-                        ${selectedLabels.map(check => `<li>✅ ${check}</li>`).join('')}
-                    </ul>
-                    ${remarks ? `<p class="mt-2"><strong>Remarks:</strong> ${remarks}</p>` : ''}
-                </div>
-            `,
-            icon: 'question',
+            title: "Approve Batch?",
+            text: `${batch.batchId} has all items available.`,
+            icon: "question",
             showCancelButton: true,
-            confirmButtonColor: '#28a745',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Yes, Approve!',
-            cancelButtonText: 'Cancel'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                updateBatchStatus(currentViewBatchId, 'approved', pieceType, checkedItems, remarks);
-                $('#viewModal').modal('hide');
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Approved!',
-                    text: `Batch ${batch.batchId} approved with all 4 checks completed.`,
-                    timer: 2000,
-                    showConfirmButton: false
-                });
+            confirmButtonText: "Yes, Approve",
+            cancelButtonText: "Cancel",
+            confirmButtonColor: "#198754"
+        }).then(function (result) {
+            if (!result.isConfirmed) {
+                return;
             }
+
+            const savedBatch = saveApproval("approved");
+
+            if (!savedBatch) {
+                return;
+            }
+
+            approvalModal.hide();
+            renderTable();
+
+            Swal.fire({
+                icon: "success",
+                title: "Approved",
+                text: `${batch.batchId} approved successfully.`,
+                timer: 1800,
+                showConfirmButton: false
+            });
         });
     });
 
-    // Pending from modal - NO CHECKS REQUIRED
-    $('#pendingBtn').click(function() {
-        if (!currentViewBatchId) return;
-        
-        const batch = batchData.find(b => b.id === currentViewBatchId);
-        if (!batch) return;
+    /*
+    |--------------------------------------------------------------------------
+    | Approve Missing Item
+    |--------------------------------------------------------------------------
+    */
 
-        // Get selected piece type
-        const pieceType = $('input[name="pieceType"]:checked').val() || '1 Piece';
+    $("#approveMissingBtn").on("click", function () {
+        const batch = getCurrentBatch();
 
-        // Get all checked items
-        const checkedItems = [];
-        $('.checklist-item:checked').each(function() {
-            checkedItems.push($(this).attr('id'));
-        });
+        if (!batch) {
+            return;
+        }
 
-        // Get remarks
-        const remarks = $('#remarksInput').val().trim();
+        const itemList = Array.isArray(batch.itemList)
+            ? batch.itemList
+            : [];
 
-        // Get checkbox labels
-        const selectedLabels = [];
-        $('.checklist-item:checked').each(function() {
-            selectedLabels.push($(this).next('label').text());
-        });
+        const availability = getAvailabilityFromModal();
+
+        const incompleteItems = getUnavailableOrUnselectedItems(
+            availability,
+            itemList
+        );
+
+        if (incompleteItems.length) {
+            showMessage(
+                "warning",
+                "Please select Yes or No for every item."
+            );
+
+            return;
+        }
+
+        const missingItems = getMissingItems(
+            availability,
+            itemList
+        );
+
+        if (!missingItems.length) {
+            showMessage(
+                "warning",
+                "No missing item selected."
+            );
+
+            return;
+        }
 
         Swal.fire({
-            title: 'Save as Pending?',
+            title: "Approve Missing Item?",
             html: `
                 <div class="text-start">
-                    <p><strong>Batch:</strong> ${batch.batchId}</p>
-                    <p><strong>Piece Type:</strong> ${pieceType}</p>
-                    <p><strong>Selected Checks (${checkedItems.length}/4):</strong></p>
-                    <ul class="mb-0">
-                        ${selectedLabels.length > 0 ? selectedLabels.map(check => `<li>${check}</li>`).join('') : '<li>No checks selected</li>'}
+                    <p>
+                        <strong>Batch:</strong>
+                        ${escapeHtml(batch.batchId)}
+                    </p>
+
+                    <p>
+                        <strong>Missing Items:</strong>
+                    </p>
+
+                    <ul>
+                        ${missingItems.map(item => `
+                            <li>${escapeHtml(item)}</li>
+                        `).join("")}
                     </ul>
-                    ${remarks ? `<p class="mt-2"><strong>Remarks:</strong> ${remarks}</p>` : ''}
-                    <p class="mt-2 text-muted">These selections will be saved when you reopen.</p>
+
+                    <p class="mb-0">
+                        These items will be added to Requirements.
+                    </p>
                 </div>
             `,
-            icon: 'question',
+            icon: "warning",
             showCancelButton: true,
-            confirmButtonColor: '#ffc107',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Yes, Save as Pending!',
-            cancelButtonText: 'Cancel'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                updateBatchStatus(currentViewBatchId, 'pending', pieceType, checkedItems, remarks);
-                $('#viewModal').modal('hide');
-                Swal.fire({
-                    icon: 'info',
-                    title: 'Pending!',
-                    text: `Batch ${batch.batchId} saved as pending with ${checkedItems.length} checks.`,
-                    timer: 2000,
-                    showConfirmButton: false
-                });
+            confirmButtonText: "Create Requirement",
+            cancelButtonText: "Cancel",
+            confirmButtonColor: "#dc3545"
+        }).then(function (result) {
+            if (!result.isConfirmed) {
+                return;
             }
+
+            const savedBatch = saveApproval("missing");
+
+            if (!savedBatch) {
+                return;
+            }
+
+            const requirement = createRequirement(savedBatch);
+
+            if (!requirement) {
+                Swal.fire({
+                    icon: "error",
+                    title: "Error",
+                    text: "Requirement could not be created."
+                });
+
+                return;
+            }
+
+            approvalModal.hide();
+            renderTable();
+
+            Swal.fire({
+                icon: "success",
+                title: "Requirement Created",
+                text: "Missing item requirement saved successfully.",
+                showCancelButton: true,
+                confirmButtonText: "Open Requirement",
+                cancelButtonText: "Close"
+            }).then(function (nextResult) {
+                if (nextResult.isConfirmed) {
+                    window.location.href = "requirment.php";
+                }
+            });
         });
     });
 
-    // Filter events
-    $('#statusFilter, #searchInput').on('change keyup', function() {
+    /*
+    |--------------------------------------------------------------------------
+    | Filters
+    |--------------------------------------------------------------------------
+    */
+
+    $("#approvalStatusFilter").on("change", renderTable);
+
+    $("#approvalSearchInput").on("keyup", renderTable);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Refresh
+    |--------------------------------------------------------------------------
+    */
+
+    $("#refreshApprovalBtn").on("click", function () {
+        loadData();
         renderTable();
+
+        Swal.fire({
+            icon: "success",
+            title: "Refreshed",
+            text: "Batch data loaded from localStorage.",
+            timer: 1200,
+            showConfirmButton: false
+        });
     });
 
-    // Modal close handler
-    $('#viewModal').on('hidden.bs.modal', function() {
-        currentViewBatchId = null;
-        $('.checklist-item').prop('checked', false);
-        $('#statusMessage').hide();
-        $('#remarksInput').val('');
-        // Reset to default
-        $('#pieceType1').prop('checked', true);
+    /*
+    |--------------------------------------------------------------------------
+    | Modal Reset
+    |--------------------------------------------------------------------------
+    */
+
+    $("#approvalModal").on("hidden.bs.modal", function () {
+        currentBatchId = null;
+
+        $("#approvalItemList").empty();
+        $("#approvalRemarks").val("");
+
+        $("#approvalMessage")
+            .hide()
+            .removeClass("alert-success alert-warning alert-danger")
+            .html("");
     });
 
-    // Initial render
+    /*
+    |--------------------------------------------------------------------------
+    | Initial Load
+    |--------------------------------------------------------------------------
+    */
+
+    loadData();
     renderTable();
 });
