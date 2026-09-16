@@ -77,14 +77,8 @@
                                 <th>Brand</th>
                                 <th>Design Number</th>
                                 <th>Color</th>
-                                <th>Photo</th>
-                                <th>Piece</th>
-                                <th>Item List</th>
-                                <th>Additional Work</th>
                                 <th>Quantity</th>
                                 <th>Priority</th>
-                                <th>Status</th>
-                                <th>Created At</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
@@ -103,7 +97,7 @@
 <div class="modal fade" id="batchModal" tabindex="-1"
     aria-labelledby="batchModalLabel" aria-hidden="true">
 
-    <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
 
             <div class="modal-header">
@@ -124,13 +118,13 @@
 
                     <div class="row g-3">
 
-                        <div class="col-md-4">
+                        <div class="col-md-12">
                             <label class="form-label">Batch ID</label>
                             <input type="text" id="batchIdPreview"
                                 class="form-control" readonly>
                         </div>
 
-                        <div class="col-md-8">
+                        <div class="col-md-12">
                             <label class="form-label" for="designNumber">
                                 Design Number <span class="text-danger">*</span>
                             </label>
@@ -148,19 +142,19 @@
                             </small>
                         </div>
 
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="form-label">Brand</label>
                             <input type="text" id="brandSelect"
                                 class="form-control" readonly required>
                         </div>
 
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="form-label">Color</label>
                             <input type="text" id="colorSelect"
                                 class="form-control" readonly required>
                         </div>
 
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="form-label">Quantity</label>
                             <input type="number" id="quantityInput"
                                 class="form-control"
@@ -168,7 +162,7 @@
                                 placeholder="Enter quantity" required>
                         </div>
 
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="form-label">Priority</label>
                             <select id="prioritySelect"
                                 class="form-select" required>
@@ -179,39 +173,11 @@
                             </select>
                         </div>
 
-                        <div class="col-md-4">
-                            <label class="form-label">Created At</label>
-                            <input type="text" id="createdAtPreview"
-                                class="form-control" readonly>
-                        </div>
-
-                        <div class="col-md-4">
-                            <label class="form-label">Design Photo</label>
-
-                            <div class="border rounded p-2 text-center"
-                                style="min-height:230px;">
-
-                                <img id="batchPhotoPreview"
-                                    src="assets/images/default.jpg"
-                                    alt="Design Photo"
-                                    class="img-fluid rounded"
-                                    style="max-height:210px; object-fit:contain;">
-                            </div>
-                        </div>
-
                     </div>
 
-                    <hr class="my-4">
-
-                    <h5 class="mb-3">BOM Piece Configuration</h5>
-
-                    <div id="batchPiecesContainer">
-
-                        <div class="text-muted border rounded p-4 text-center">
-                            Select a design number to load all BOM pieces.
-                        </div>
-
-                    </div>
+                    <!-- Hidden containers for internal data (not shown to user) -->
+                    <div id="batchPiecesContainer" style="display:none;"></div>
+                    <img id="batchPhotoPreview" src="assets/images/default.jpg" alt="" style="display:none;">
 
                     <div id="batchFormMessage"
                         class="alert mt-3"
@@ -241,7 +207,7 @@
 <div class="modal fade" id="viewBatchModal" tabindex="-1"
     aria-labelledby="viewBatchModalLabel" aria-hidden="true">
 
-    <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
 
             <div class="modal-header">
@@ -256,70 +222,40 @@
 
             <div class="modal-body">
 
-                <div class="row g-4">
-
-                    <div class="col-md-5 text-center">
-                        <img id="viewBatchPhoto"
-                            src="assets/images/default.jpg"
-                            alt="Batch Photo"
-                            class="img-fluid rounded"
-                            style="max-height:400px; object-fit:contain;">
-                    </div>
-
-                    <div class="col-md-7">
-                        <h5 class="mb-3">Batch Information</h5>
-
-                        <div class="table-responsive">
-                            <table class="table table-bordered">
-                                <tbody>
-                                    <tr>
-                                        <th>Batch ID</th>
-                                        <td id="viewBatchId">-</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Brand</th>
-                                        <td id="viewBatchBrand">-</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Design Number</th>
-                                        <td id="viewBatchDesign">-</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Color</th>
-                                        <td id="viewBatchColor">-</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Total Pieces</th>
-                                        <td id="viewBatchPiece">-</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Quantity</th>
-                                        <td id="viewBatchQuantity">-</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Priority</th>
-                                        <td id="viewBatchPriority">-</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Status</th>
-                                        <td id="viewBatchStatus">-</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Created At</th>
-                                        <td id="viewBatchCreatedAt">-</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <tbody>
+                            <tr>
+                                <th>Batch ID</th>
+                                <td id="viewBatchId">-</td>
+                            </tr>
+                            <tr>
+                                <th>Brand</th>
+                                <td id="viewBatchBrand">-</td>
+                            </tr>
+                            <tr>
+                                <th>Design Number</th>
+                                <td id="viewBatchDesign">-</td>
+                            </tr>
+                            <tr>
+                                <th>Color</th>
+                                <td id="viewBatchColor">-</td>
+                            </tr>
+                            <tr>
+                                <th>Quantity</th>
+                                <td id="viewBatchQuantity">-</td>
+                            </tr>
+                            <tr>
+                                <th>Priority</th>
+                                <td id="viewBatchPriority">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
 
-                <hr>
-
-                <h5 class="mb-3">Piece Item List & Additional Work</h5>
-
-                <div id="viewBatchItems"></div>
+                <!-- Hidden view containers (data still saved) -->
+                <img id="viewBatchPhoto" src="assets/images/default.jpg" alt="" style="display:none;">
+                <div id="viewBatchItems" style="display:none;"></div>
 
             </div>
 

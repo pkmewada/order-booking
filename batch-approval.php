@@ -1,5 +1,59 @@
 <?php require_once __DIR__ . '/includes/header.php'; ?>
 
+<style>
+    /* Full-page approval modal */
+    #approvalModal .modal-dialog {
+        max-width: 100%;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+    }
+
+    #approvalModal .modal-content {
+        height: 100vh;
+        border-radius: 0;
+        border: none;
+    }
+
+    #approvalModal .modal-body {
+        overflow-y: auto;
+    }
+
+    /* Item availability — 3 per row */
+    .item-availability-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .item-availability-card {
+        border: 1px solid #e2e7f1;
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: #fff;
+    }
+
+    .item-availability-card .item-name {
+        font-weight: 600;
+        color: #18243d;
+        margin-bottom: 8px;
+        display: block;
+        word-break: break-word;
+    }
+
+    @media (max-width: 768px) {
+        .item-availability-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 480px) {
+        .item-availability-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
 <div class="main-content app-content">
     <div class="container-fluid">
 
@@ -52,6 +106,7 @@
                         >
                             <option value="">All Status</option>
                             <option value="pending">Pending</option>
+                            <option value="progress">Progress</option>
                             <option value="approved">Approved</option>
                             <option value="missing">Missing Item</option>
                         </select>
@@ -85,11 +140,12 @@
                                 <th>Photo</th>
                                 <th>Brand</th>
                                 <th>Design Number</th>
-                                <th>Piece</th>
+                                <th>Color</th>
+                                <th>Piece Type</th>
+                                <th>Item List</th>
+                                <th>Additional Work</th>
                                 <th>Quantity</th>
                                 <th>Priority</th>
-                                <th>Available Items</th>
-                                <th>Missing Items</th>
                                 <th>Status</th>
                                 <th>Action</th>
                             </tr>
@@ -107,7 +163,7 @@
     </div>
 </div>
 
-<!-- Approval Modal -->
+<!-- Approval Modal — FULL PAGE -->
 <div
     class="modal fade"
     id="approvalModal"
@@ -115,7 +171,7 @@
     aria-labelledby="approvalModalLabel"
     aria-hidden="true"
 >
-    <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
 
             <div class="modal-header">
@@ -135,7 +191,8 @@
 
                 <div class="row g-4">
 
-                    <div class="col-lg-5">
+                    <!-- LEFT: Photo -->
+                    <div class="col-lg-4">
                         <div
                             class="border rounded p-3 text-center"
                             style="
@@ -156,7 +213,8 @@
                         </div>
                     </div>
 
-                    <div class="col-lg-7">
+                    <!-- RIGHT: Info + Pieces -->
+                    <div class="col-lg-8">
 
                         <h5 class="mb-3">
                             Batch Information
@@ -182,10 +240,6 @@
                                         <td id="approvalColor">-</td>
                                     </tr>
                                     <tr>
-                                        <th>Piece</th>
-                                        <td id="approvalPiece">-</td>
-                                    </tr>
-                                    <tr>
                                         <th>Quantity</th>
                                         <td id="approvalQuantity">-</td>
                                     </tr>
@@ -193,88 +247,27 @@
                                         <th>Priority</th>
                                         <td id="approvalPriority">-</td>
                                     </tr>
+                                    <tr>
+                                        <th>Status</th>
+                                        <td id="approvalStatus">-</td>
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
 
                         <hr>
 
-                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                            <h5 class="mb-0">
-                                Item Availability
-                            </h5>
+                        <h5 class="mb-3">
+                            Piece-wise Item Availability
+                        </h5>
 
-                            <div>
-                                <button
-                                    type="button"
-                                    class="btn btn-sm btn-outline-primary"
-                                    id="allItemsYesBtn"
-                                >
-                                    All Yes
-                                </button>
-
-                                <button
-                                    type="button"
-                                    class="btn btn-sm btn-outline-danger"
-                                    id="allItemsNoBtn"
-                                >
-                                    All No
-                                </button>
-                            </div>
-                        </div>
-
-                        <p class="text-muted small mt-2">
-                            Select Yes if the item is available.
-                            Select No if the item is missing.
+                        <p class="text-muted small">
+                            Har piece ke items check karein. Agar sab items hain toh Approve karein.
+                            Agar koi missing hai toh "Missing" button se requirement create karein.
                         </p>
 
-                        <div
-                            id="approvalItemList"
-                            class="border rounded p-3"
-                            style="max-height:350px; overflow-y:auto;"
-                        >
-                            <!-- Item availability list -->
-                        </div>
-
-                        <div class="mt-3">
-                            <label for="approvalRemarks" class="form-label">
-                                Remarks
-                            </label>
-
-                            <textarea
-                                id="approvalRemarks"
-                                class="form-control"
-                                rows="3"
-                                placeholder="Enter remarks..."
-                            ></textarea>
-                        </div>
-
-                        <div
-                            id="approvalMessage"
-                            class="alert mt-3"
-                            style="display:none;"
-                        ></div>
-
-                        <div class="d-flex gap-2 mt-3">
-
-                            <button
-                                type="button"
-                                class="btn btn-success flex-fill"
-                                id="approveAvailableBtn"
-                            >
-                                <i class="bx bx-check-circle me-1"></i>
-                                Approve
-                            </button>
-
-                            <button
-                                type="button"
-                                class="btn btn-warning flex-fill"
-                                id="approveMissingBtn"
-                            >
-                                <i class="bx bx-error-circle me-1"></i>
-                                Approve Missing Item
-                            </button>
-
+                        <div id="approvalPiecesContainer">
+                            <!-- Piece-wise cards -->
                         </div>
 
                     </div>

@@ -12,7 +12,7 @@
     <meta name="Author" content="Spruko Technologies Private Limited">
     <meta name="keywords"
         content="admin dashboard,admin template,admin panel,bootstrap admin dashboard,html template,sales dashboard,dashboard,template dashboard,admin,html and css template,admin dashboard bootstrap,personal dashboard,crypto dashboard,stocks dashboard,admin panel template">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>';
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="icon" href="assets/images/brand-logos/favicon.ico" type="image/x-icon">
     <script src="assets/libs/choices.js/public/assets/scripts/choices.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -33,6 +33,268 @@
     <link rel="stylesheet" href="https://cdn.datatables.net/1.12.1/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.3.0/css/responsive.bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.2.3/css/buttons.bootstrap5.min.css">
+
+    <style>
+        /* =========================================================
+           GLOBAL — BLACK THEME OVERRIDES (LIGHT MODE ONLY)
+           Dark mode is left untouched.
+           ========================================================= */
+
+        /* Sidebar background */
+        html[data-theme-mode="light"] .app-sidebar {
+            background-color: #ffffff !important;
+            border-right: 1px solid #e9edf5 !important;
+        }
+
+        html[data-theme-mode="light"] .main-sidebar-header {
+            background-color: #ffffff !important;
+            border-bottom: 1px solid #e9edf5 !important;
+        }
+
+        /* Category label ("MAIN") */
+        html[data-theme-mode="light"] .slide__category .category-name {
+            color: #161617 !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            font-size: 11px;
+        }
+
+        /* Top-level menu items */
+        html[data-theme-mode="light"] .main-menu .side-menu__item {
+            color: #161617 !important;
+        }
+
+        html[data-theme-mode="light"] .main-menu .side-menu__item .side-menu__label {
+            color: #161617 !important;
+        }
+
+        html[data-theme-mode="light"] .main-menu .side-menu__item .side-menu__icon,
+        html[data-theme-mode="light"] .main-menu .side-menu__item .side-menu__icon svg {
+            color: #161617 !important;
+            fill: #161617 !important;
+            stroke: #161617 !important;
+        }
+
+        html[data-theme-mode="light"] .main-menu .side-menu__item .side-menu__angle {
+            color: #161617 !important;
+        }
+
+        /* Hover */
+        html[data-theme-mode="light"] .main-menu .side-menu__item:hover,
+        html[data-theme-mode="light"] .main-menu .side-menu__item:hover .side-menu__label,
+        html[data-theme-mode="light"] .main-menu .side-menu__item:hover .side-menu__angle {
+            color: #000 !important;
+        }
+
+        html[data-theme-mode="light"] .main-menu .side-menu__item:hover .side-menu__icon,
+        html[data-theme-mode="light"] .main-menu .side-menu__item:hover .side-menu__icon svg {
+            color: #000 !important;
+            fill: #000 !important;
+            stroke: #000 !important;
+        }
+
+        /* Active / open */
+        html[data-theme-mode="light"] .main-menu .slide.active > .side-menu__item,
+        html[data-theme-mode="light"] .main-menu .side-menu__item.active,
+        html[data-theme-mode="light"] .main-menu .side-menu__item.active .side-menu__label {
+            color: #000 !important;
+            background-color: transparent !important;
+        }
+
+        html[data-theme-mode="light"] .main-menu .side-menu__item.active .side-menu__icon,
+        html[data-theme-mode="light"] .main-menu .side-menu__item.active .side-menu__icon svg {
+            color: #000 !important;
+            fill: #000 !important;
+            stroke: #000 !important;
+        }
+
+        /* Submenu background */
+        html[data-theme-mode="light"] .main-menu .slide-menu {
+            background-color: #ffffff !important;
+            border-color: #e9edf5 !important;
+        }
+
+        /* Submenu header (e.g. "Manufacturing") */
+        html[data-theme-mode="light"] .slide-menu .side-menu__label1 > a {
+            color: #161617 !important;
+            font-weight: 600 !important;
+        }
+
+        /* Submenu items */
+        html[data-theme-mode="light"] .main-menu .slide-menu .side-menu__item {
+            color: #161617 !important;
+        }
+
+        html[data-theme-mode="light"] .main-menu .slide-menu .side-menu__item .side-menu__label {
+            color: #161617 !important;
+        }
+
+        html[data-theme-mode="light"] .main-menu .slide-menu .side-menu__item .side-menu__icon,
+        html[data-theme-mode="light"] .main-menu .slide-menu .side-menu__item .side-menu__icon svg {
+            color: #161617 !important;
+            fill: #161617 !important;
+            stroke: #161617 !important;
+        }
+
+        html[data-theme-mode="light"] .main-menu .slide-menu .side-menu__item:hover,
+        html[data-theme-mode="light"] .main-menu .slide-menu .side-menu__item:hover .side-menu__label {
+            color: #000 !important;
+        }
+
+        html[data-theme-mode="light"] .main-menu .slide-menu .side-menu__item:hover .side-menu__icon,
+        html[data-theme-mode="light"] .main-menu .slide-menu .side-menu__item:hover .side-menu__icon svg {
+            color: #000 !important;
+            fill: #000 !important;
+            stroke: #000 !important;
+        }
+
+        /* Active submenu item */
+        html[data-theme-mode="light"] .main-menu .slide-menu .side-menu__item.active,
+        html[data-theme-mode="light"] .main-menu .slide-menu .side-menu__item.active .side-menu__label {
+            color: #000 !important;
+            background-color: #f2f2f2 !important;
+        }
+
+        /* Slide arrows (left/right) */
+        html[data-theme-mode="light"] .slide-left svg,
+        html[data-theme-mode="light"] .slide-right svg {
+            fill: #161617 !important;
+        }
+
+        /* Header bar */
+        html[data-theme-mode="light"] .app-header {
+            background-color: #ffffff !important;
+            border-bottom: 1px solid #e9edf5 !important;
+        }
+
+        html[data-theme-mode="light"] .header-content-left .header-logo img,
+        html[data-theme-mode="light"] .header-content-left .desktop-logo,
+        html[data-theme-mode="light"] .header-content-left .toggle-logo,
+        html[data-theme-mode="light"] .header-content-left .desktop-dark,
+        html[data-theme-mode="light"] .header-content-left .toggle-dark {
+            filter: brightness(0) saturate(100%);
+        }
+
+        /* Header icons */
+        html[data-theme-mode="light"] .header-content-right .header-link,
+        html[data-theme-mode="light"] .header-content-right .header-link svg,
+        html[data-theme-mode="light"] .header-content-right .header-link-icon,
+        html[data-theme-mode="light"] .header-content-right .header-link i {
+            color: #161617 !important;
+            fill: #161617 !important;
+        }
+
+        html[data-theme-mode="light"] .header-content-right .header-link:hover,
+        html[data-theme-mode="light"] .header-content-right .header-link:hover svg,
+        html[data-theme-mode="light"] .header-content-right .header-link:hover .header-link-icon,
+        html[data-theme-mode="light"] .header-content-right .header-link:hover i {
+            color: #000 !important;
+            fill: #000 !important;
+        }
+
+        /* Header search bar */
+        html[data-theme-mode="light"] .header-search-bar {
+            border: 1px solid #161617 !important;
+            color: #161617 !important;
+            background-color: #ffffff !important;
+        }
+
+        html[data-theme-mode="light"] .header-search-icon i {
+            color: #161617 !important;
+        }
+
+        /* Sidebar toggle hamburger */
+        html[data-theme-mode="light"] .sidemenu-toggle.header-link span,
+        html[data-theme-mode="light"] .sidemenu-toggle.header-link span::before,
+        html[data-theme-mode="light"] .sidemenu-toggle.header-link span::after {
+            background-color: #161617 !important;
+        }
+
+        /* Dropdown menus */
+        html[data-theme-mode="light"] .main-header-dropdown,
+        html[data-theme-mode="light"] .header-profile-dropdown {
+            border: 1px solid #e9edf5 !important;
+        }
+
+        html[data-theme-mode="light"] .main-header-dropdown .dropdown-item,
+        html[data-theme-mode="light"] .header-profile-dropdown .dropdown-item {
+            color: #161617 !important;
+        }
+
+        html[data-theme-mode="light"] .main-header-dropdown .dropdown-item:hover,
+        html[data-theme-mode="light"] .header-profile-dropdown .dropdown-item:hover {
+            background-color: #f2f2f2 !important;
+            color: #000 !important;
+        }
+
+        /* Profile dropdown icons keep their own colors, but theme them darker */
+        html[data-theme-mode="light"] .header-profile-dropdown .dropdown-item i {
+            color: #161617 !important;
+        }
+
+        /* Notifications badge */
+        html[data-theme-mode="light"] .badge.bg-secondary-transparent {
+            background-color: rgba(22, 22, 23, 0.1) !important;
+            color: #161617 !important;
+        }
+
+        /* Scrollbar (optional, matching black) */
+        html[data-theme-mode="light"] .simplebar-scrollbar::before {
+            background-color: #161617 !important;
+            opacity: 0.35;
+        }
+
+        /* Bootstrap primary buttons */
+        html[data-theme-mode="light"] .btn-primary {
+            background-color: #161617 !important;
+            border-color: #161617 !important;
+        }
+
+        html[data-theme-mode="light"] .btn-primary:hover,
+        html[data-theme-mode="light"] .btn-primary:focus,
+        html[data-theme-mode="light"] .btn-primary:active {
+            background-color: #2b2b2d !important;
+            border-color: #2b2b2d !important;
+        }
+
+        /* Bootstrap badges */
+        html[data-theme-mode="light"] .badge.bg-primary {
+            background-color: #161617 !important;
+        }
+
+        /* Links (global) */
+        html[data-theme-mode="light"] a {
+            color: #161617;
+        }
+
+        html[data-theme-mode="light"] a:hover {
+            color: #000;
+        }
+
+        /* Forms */
+        html[data-theme-mode="light"] .form-check-input:checked {
+            background-color: #161617 !important;
+            border-color: #161617 !important;
+        }
+
+        html[data-theme-mode="light"] .form-check-input:focus {
+            border-color: #161617 !important;
+            box-shadow: 0 0 0 0.2rem rgba(22, 22, 23, 0.15) !important;
+        }
+
+        /* Page title + breadcrumb */
+        html[data-theme-mode="light"] .page-title,
+        html[data-theme-mode="light"] .page-header-breadcrumb .breadcrumb-item,
+        html[data-theme-mode="light"] .page-header-breadcrumb .breadcrumb-item a,
+        html[data-theme-mode="light"] .page-header-breadcrumb .breadcrumb-item.active {
+            color: #161617 !important;
+        }
+
+        html[data-theme-mode="light"] .page-header-breadcrumb .breadcrumb-item + .breadcrumb-item::before {
+            color: #161617 !important;
+        }
+    </style>
 
 </head>
 
@@ -489,7 +751,7 @@
                                 </div>
                             </div>
                         </div>
-    
+
                         <div class="menu-image mb-3">
                             <p class="switcher-style-head">Menu With Background Image:</p>
                             <div class="d-flex flex-wrap align-items-center switcher-style">
