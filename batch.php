@@ -1,5 +1,200 @@
 <?php require_once __DIR__ . '/includes/header.php'; ?>
 
+<style>
+    #refreshBatchBtn {
+        background-color: #161617 !important;
+        border-color: #161617 !important;
+        color: #fff !important;
+        box-shadow: none !important;
+    }
+
+    #refreshBatchBtn:hover,
+    #refreshBatchBtn:focus {
+        background-color: #2b2b2d !important;
+        border-color: #2b2b2d !important;
+        color: #fff !important;
+    }
+
+    #refreshBatchBtn.spinning i {
+        animation: spinRefresh 0.8s linear infinite;
+        display: inline-block;
+    }
+
+    @keyframes spinRefresh {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    #createBatchBtn {
+        background-color: #161617 !important;
+        border-color: #161617 !important;
+        color: #fff !important;
+    }
+
+    #createBatchBtn:hover,
+    #createBatchBtn:focus {
+        background-color: #2b2b2d !important;
+        border-color: #2b2b2d !important;
+        color: #fff !important;
+    }
+
+    .view-batch-btn {
+        background-color: #161617 !important;
+        border-color: #161617 !important;
+        color: #fff !important;
+    }
+
+    .view-batch-btn:hover,
+    .view-batch-btn:focus {
+        background-color: #2b2b2d !important;
+        border-color: #2b2b2d !important;
+        color: #fff !important;
+    }
+
+    .edit-batch-btn {
+        background-color: #161617 !important;
+        border-color: #161617 !important;
+        color: #fff !important;
+    }
+
+    .edit-batch-btn:hover,
+    .edit-batch-btn:focus {
+        background-color: #2b2b2d !important;
+        border-color: #2b2b2d !important;
+        color: #fff !important;
+    }
+
+    .delete-batch-btn {
+        background-color: #dc3545 !important;
+        border-color: #dc3545 !important;
+        color: #fff !important;
+    }
+
+    .delete-batch-btn:hover,
+    .delete-batch-btn:focus {
+        background-color: #bb2d3b !important;
+        border-color: #bb2d3b !important;
+        color: #fff !important;
+    }
+
+    #batchForm .btn-primary {
+        background-color: #161617 !important;
+        border-color: #161617 !important;
+        color: #fff !important;
+    }
+
+    #batchForm .btn-primary:hover,
+    #batchForm .btn-primary:focus {
+        background-color: #2b2b2d !important;
+        border-color: #2b2b2d !important;
+        color: #fff !important;
+    }
+
+    /* ---------- Design Number Search + Dropdown ---------- */
+    .design-search-wrap {
+        position: relative;
+    }
+
+    .design-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        z-index: 2000;
+        max-height: 240px;
+        overflow-y: auto;
+        display: none;
+        background: #fff;
+        border: 1px solid #dfe5f1;
+        border-top: none;
+        border-radius: 0 0 7px 7px;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+    }
+
+    .design-dropdown .design-option {
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #f1f3f9;
+        font-size: 14px;
+    }
+
+    .design-dropdown .design-option:last-child {
+        border-bottom: none;
+    }
+
+    .design-dropdown .design-option:hover,
+    .design-dropdown .design-option.active {
+        background: #f4f5f9;
+    }
+
+    .design-dropdown .design-option .design-meta {
+        font-size: 12px;
+        color: #6c7a92;
+        margin-top: 2px;
+    }
+
+    /* ---------- Photo in modal ---------- */
+    .batch-photo-box {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        border: 1px solid #dfe5f1;
+        border-radius: 8px;
+        background: #f8f9fc;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+
+    .batch-photo-box img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /* ---------- Photo in table (clickable) ---------- */
+    .batch-table-photo {
+        width: 55px;
+        height: 55px;
+        object-fit: cover;
+        border-radius: 7px;
+        border: 1px solid #e9edf5;
+        cursor: pointer;
+        transition: transform .15s ease;
+    }
+
+    .batch-table-photo:hover {
+        transform: scale(1.06);
+    }
+
+    /* ---------- Photo zoom modal ---------- */
+    #photoZoomModal .modal-content {
+        background: transparent;
+        border: none;
+    }
+
+    #photoZoomModal .modal-body {
+        padding: 0;
+        text-align: center;
+    }
+
+    #photoZoomModal img {
+        max-width: 100%;
+        max-height: 85vh;
+        border-radius: 10px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    #photoZoomModal .btn-close {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 10;
+        filter: invert(1);
+        opacity: 1;
+    }
+</style>
+
 <div class="main-content app-content">
     <div class="container-fluid">
 
@@ -16,10 +211,19 @@
                 </nav>
             </div>
 
-            <button type="button" class="btn btn-primary" id="createBatchBtn">
-                <i class="bx bx-plus me-1"></i>
-                Create Batch
-            </button>
+            <div class="d-flex gap-2">
+                
+
+                <button type="button" class="btn btn-primary" id="createBatchBtn">
+                    <i class="bx bx-plus me-1"></i>
+                    Create Batch
+                </button>
+
+                <button type="button" class="btn" id="refreshBatchBtn" title="Refresh">
+                    <i class="bx bx-refresh align-middle"></i>
+                </button>
+                
+            </div>
         </div>
 
         <div class="card custom-card">
@@ -74,6 +278,7 @@
                         <thead>
                             <tr>
                                 <th>Batch ID</th>
+                                <th>Photo</th>
                                 <th>Brand</th>
                                 <th>Design Number</th>
                                 <th>Color</th>
@@ -97,7 +302,7 @@
 <div class="modal fade" id="batchModal" tabindex="-1"
     aria-labelledby="batchModalLabel" aria-hidden="true">
 
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
 
             <div class="modal-header">
@@ -116,68 +321,88 @@
 
                     <input type="hidden" id="editBatchId">
 
-                    <div class="row g-3">
+                    <!-- Line 1: Batch ID + Design Number -->
+                    <div class="row g-3 mb-3">
 
-                        <div class="col-md-12">
+                        <div class="col-md-6">
                             <label class="form-label">Batch ID</label>
                             <input type="text" id="batchIdPreview"
                                 class="form-control" readonly>
                         </div>
 
-                        <div class="col-md-12">
+                        <div class="col-md-6">
                             <label class="form-label" for="designNumber">
                                 Design Number <span class="text-danger">*</span>
                             </label>
 
-                            <input type="text" id="designNumber"
-                                class="form-control"
-                                list="designSuggestions"
-                                placeholder="Search design number"
-                                autocomplete="off" required>
+                            <div class="design-search-wrap">
+                                <input type="text" id="designNumber"
+                                    class="form-control"
+                                    placeholder="Search design number"
+                                    autocomplete="off" required>
 
-                            <datalist id="designSuggestions"></datalist>
+                                <div id="designDropdown" class="design-dropdown"></div>
+                            </div>
 
                             <small class="text-muted">
-                                Select a design number from BOM Master.
+                                Type to search. Select from dropdown.
                             </small>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label">Brand</label>
-                            <input type="text" id="brandSelect"
-                                class="form-control" readonly required>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label">Color</label>
-                            <input type="text" id="colorSelect"
-                                class="form-control" readonly required>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label">Quantity</label>
-                            <input type="number" id="quantityInput"
-                                class="form-control"
-                                min="1"
-                                placeholder="Enter quantity" required>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label">Priority</label>
-                            <select id="prioritySelect"
-                                class="form-select" required>
-                                <option value="">Select Priority</option>
-                                <option value="High">High</option>
-                                <option value="Medium">Medium</option>
-                                <option value="Low">Low</option>
-                            </select>
                         </div>
 
                     </div>
 
-                    <!-- Hidden containers for internal data (not shown to user) -->
+                    <!-- Line 2: Photo (left) + Quantity (right) -->
+                    <div class="row g-3">
+
+                        <div class="col-md-6">
+                            <label class="form-label">Design Photo</label>
+
+                            <div class="batch-photo-box">
+                                <img id="batchPhotoPreview"
+                                    src="assets/images/default.jpg"
+                                    alt="Design Photo">
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+
+                            <div class="mb-3">
+                                <label class="form-label">Brand</label>
+                                <input type="text" id="brandSelect"
+                                    class="form-control" readonly>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Color</label>
+                                <input type="text" id="colorSelect"
+                                    class="form-control" readonly>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Quantity</label>
+                                <input type="number" id="quantityInput"
+                                    class="form-control"
+                                    min="1"
+                                    placeholder="Enter quantity" required>
+                            </div>
+
+                            <div>
+                                <label class="form-label">Priority</label>
+                                <select id="prioritySelect"
+                                    class="form-select" required>
+                                    <option value="">Select Priority</option>
+                                    <option value="High">High</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="Low">Low</option>
+                                </select>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <!-- Hidden containers -->
                     <div id="batchPiecesContainer" style="display:none;"></div>
-                    <img id="batchPhotoPreview" src="assets/images/default.jpg" alt="" style="display:none;">
 
                     <div id="batchFormMessage"
                         class="alert mt-3"
@@ -253,8 +478,7 @@
                     </table>
                 </div>
 
-                <!-- Hidden view containers (data still saved) -->
-                <img id="viewBatchPhoto" src="assets/images/default.jpg" alt="" style="display:none;">
+                <!-- Hidden -->
                 <div id="viewBatchItems" style="display:none;"></div>
 
             </div>
@@ -266,6 +490,18 @@
                 </button>
             </div>
 
+        </div>
+    </div>
+</div>
+
+<!-- PHOTO ZOOM MODAL -->
+<div class="modal fade" id="photoZoomModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <div class="modal-body">
+                <img id="photoZoomImg" src="" alt="Zoomed Photo">
+            </div>
         </div>
     </div>
 </div>

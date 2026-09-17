@@ -295,10 +295,6 @@ $(document).ready(function () {
         `;
     }
 
-    /* ======================================================
-       BUILD DEFAULT WORK ROWS (3 rows: 2 delete + 1 add)
-       ====================================================== */
-
     function buildDefaultWorkRows(pieceNumber) {
         let html = "";
 
@@ -720,24 +716,20 @@ $(document).ready(function () {
 
         btn.addClass("spinning");
 
-        // Reload data from storage
         bomData = loadData();
 
         nextId = getNextId();
 
-        // Reset filters
         $("#brandFilter").val("");
 
         $("#pieceFilter").val("");
 
         $("#searchInput").val("");
 
-        // Re-render
         updateBrandFilter();
 
         renderTable();
 
-        // Stop spinning after animation completes
         setTimeout(function () {
             btn.removeClass("spinning");
         }, 800);
@@ -1209,7 +1201,7 @@ $(document).ready(function () {
             tbody.html(`
                 <tr>
                     <td
-                        colspan="7"
+                        colspan="6"
                         class="text-center text-muted py-5"
                     >
                         No BOM records found.
@@ -1244,12 +1236,6 @@ $(document).ready(function () {
             tbody.append(`
 
                 <tr>
-
-                    <td>
-                        <strong>
-                            ${escapeHtml(bom.bomId)}
-                        </strong>
-                    </td>
 
                     <td>${escapeHtml(bom.brand)}</td>
 
@@ -1361,7 +1347,7 @@ $(document).ready(function () {
     );
 
     /* ======================================================
-       PRODUCTION FLOW CHART — TEXT ONLY, NO BOX
+       PRODUCTION FLOW CHART
        ====================================================== */
 
     function buildFlowNodes(works) {
@@ -1489,6 +1475,159 @@ $(document).ready(function () {
             renderBomFlowChart();
         }
     );
+
+    /* ======================================================
+       SAME BOM MASTER — Design Number Search + Dropdown
+       ====================================================== */
+
+    // Open the small modal
+    $("#sameBomBtn").on("click", function () {
+        if (!bomData.length) {
+            alertMsg("Pehle koi BOM Master banao.", "info");
+            return;
+        }
+
+        $("#sameDesignSearch").val("");
+        $("#sameDesignDropdown").hide().empty();
+
+        $("#sameBomModal").modal("show");
+    });
+
+    // Build dropdown matches by design number (also shows bomId, brand, color)
+    function buildSameDropdown(query) {
+        const dropdown = $("#sameDesignDropdown");
+        const q = String(query || "").toLowerCase().trim();
+
+        if (!q) {
+            dropdown.hide().empty();
+            return;
+        }
+
+        const matches = bomData.filter(function (bom) {
+            const design = String(bom.designNumber || "").toLowerCase();
+            const bomId = String(bom.bomId || "").toLowerCase();
+            return design.includes(q) || bomId.includes(q);
+        });
+
+        if (!matches.length) {
+            dropdown.html(`
+                <div class="list-group-item text-muted small">
+                    No matching design number.
+                </div>
+            `).show();
+            return;
+        }
+
+        dropdown.empty();
+
+        matches.forEach(function (bom) {
+            const label = [
+                bom.designNumber,
+                bom.bomId,
+                bom.brand,
+                bom.color,
+                bom.pieceCount + " Pic"
+            ].filter(Boolean).join(" | ");
+
+            dropdown.append(`
+                <button
+                    type="button"
+                    class="list-group-item list-group-item-action same-design-option"
+                    data-id="${bom.id}"
+                >
+                    <div class="fw-semibold">
+                        ${escapeHtml(bom.designNumber || "-")}
+                    </div>
+                    <div class="small text-muted">
+                        ${escapeHtml(bom.bomId || "")}
+                        ${bom.brand ? " • " + escapeHtml(bom.brand) : ""}
+                        ${bom.color ? " • " + escapeHtml(bom.color) : ""}
+                        ${bom.pieceCount ? " • " + bom.pieceCount + " Pic" : ""}
+                    </div>
+                </button>
+            `);
+        });
+
+        dropdown.show();
+    }
+
+    // Live search
+    $("#sameDesignSearch").on("input", function () {
+        buildSameDropdown($(this).val());
+    });
+
+    // Re-open dropdown on focus if there's text
+    $("#sameDesignSearch").on("focus", function () {
+        if ($(this).val().trim()) {
+            buildSameDropdown($(this).val());
+        }
+    });
+
+    // Hide dropdown when clicking outside
+    $(document).on("click", function (e) {
+        if (!$(e.target).closest("#sameDesignSearch, #sameDesignDropdown").length) {
+            $("#sameDesignDropdown").hide();
+        }
+    });
+
+    // When user clicks a design option → fill Create BOM form
+    $(document).on("click", ".same-design-option", function () {
+
+        const id = Number($(this).data("id"));
+
+        const source = bomData.find(item =>
+            Number(item.id) === id
+        );
+
+        if (!source) return;
+
+        // Deep clone pieces so edits don't affect source
+        const clonedPieces = JSON.parse(
+            JSON.stringify(source.pieces || [])
+        );
+
+        // --- Fill Create BOM form with source flow ---
+        // Brand copied from source
+        $("#brandSelect").val(source.brand || "");
+
+        // Design Number kept EMPTY for user to type new
+        $("#designNumber").val("");
+
+        // Color kept EMPTY for user to pick new
+        $("#colorSelect").val("");
+
+        // Photo kept EMPTY for user to upload new
+        currentPhoto = "";
+        $("#photoUpload").val("");
+        $("#photoPreview").empty();
+
+        // Piece count from source
+        $(".piece-radio").prop("checked", false);
+        if (source.pieceCount) {
+            $(
+                `.piece-radio[value="${source.pieceCount}"]`
+            ).prop("checked", true);
+        }
+
+        // Render pieces with the source flow data
+        renderPieceTable(clonedPieces);
+
+        // Render production flow chart from same data
+        setTimeout(function () {
+            renderBomFlowChart();
+        }, 50);
+
+        // Modal title change
+        $("#bomModalLabel").text("Create BOM Master (Same Flow)");
+
+        // Close the small modal
+        $("#sameBomModal").modal("hide");
+
+        alertMsg(
+            "Flow copy ho gaya. Ab naya Design Number, Color aur Photo manually fill karein.",
+            "success"
+        );
+    });
 
     /* ======================================================
        INITIAL LOAD

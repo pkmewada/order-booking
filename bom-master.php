@@ -11,10 +11,6 @@ include __DIR__ . "/includes/header.php";
 ?>
 
 <style>
-    /* ==========================================================
-   BOM MASTER — PIECE CONFIGURATION
-   ========================================================== */
-
     /* Page title + breadcrumb — black */
     .page-title,
     .page-header-breadcrumb .breadcrumb-item,
@@ -31,7 +27,6 @@ include __DIR__ . "/includes/header.php";
         color: #161617 !important;
     }
 
-    /* Checkboxes & radios — black */
     .form-check-input:checked {
         background-color: #161617 !important;
         border-color: #161617 !important;
@@ -42,7 +37,6 @@ include __DIR__ . "/includes/header.php";
         box-shadow: 0 0 0 0.2rem rgba(22, 22, 23, 0.15) !important;
     }
 
-    /* Buttons — black */
     .btn-primary {
         background-color: #161617 !important;
         border-color: #161617 !important;
@@ -71,14 +65,12 @@ include __DIR__ . "/includes/header.php";
         color: #fff !important;
     }
 
-    /* Refresh button — black outline, turns black on hover */
     #refreshBomBtn {
         background-color: #161617 !important;
         border-color: #161617 !important;
         color: #fff !important;
         box-shadow: none !important;
     }
-
 
     #refreshBomBtn.spinning i {
         animation: spinRefresh 0.8s linear infinite;
@@ -89,8 +81,6 @@ include __DIR__ . "/includes/header.php";
         from { transform: rotate(0deg); }
         to { transform: rotate(360deg); }
     }
-
-    /* Table */
 
     #pieceConfigTable th {
         background: #f8f9fc;
@@ -117,7 +107,6 @@ include __DIR__ . "/includes/header.php";
         vertical-align: top;
     }
 
-    /* Row: Piece badge + dropdown side-by-side */
     .piece-head-row {
         display: flex;
         align-items: center;
@@ -125,8 +114,6 @@ include __DIR__ . "/includes/header.php";
         width: 100%;
         margin-bottom: 10px;
     }
-
-    /* Piece badge — black */
 
     .piece-number-badge {
         display: inline-flex;
@@ -142,8 +129,6 @@ include __DIR__ . "/includes/header.php";
         flex: 0 0 auto;
     }
 
-    /* Item dropdown */
-
     .piece-item {
         width: 100%;
         height: 42px;
@@ -155,8 +140,6 @@ include __DIR__ . "/includes/header.php";
         flex: 1 1 auto;
         min-width: 0;
     }
-
-    /* Item list */
 
     .item-list-box {
         width: 100%;
@@ -170,8 +153,6 @@ include __DIR__ . "/includes/header.php";
         margin-bottom: 14px;
         color: #1e293b;
     }
-
-    /* Six checkboxes in one row */
 
     .item-list-options {
         display: grid;
@@ -202,8 +183,6 @@ include __DIR__ . "/includes/header.php";
         cursor: pointer;
         white-space: nowrap;
     }
-
-    /* Additional Work */
 
     .piece-work-container {
         width: 100%;
@@ -258,13 +237,11 @@ include __DIR__ . "/includes/header.php";
         transition: .2s ease;
     }
 
-    /* + button — black */
     .work-action-btn.add {
         background: #161617;
         color: #fff;
     }
 
-    /* delete button — red */
     .work-action-btn.delete {
         background: #ff4d5e;
         color: #fff;
@@ -274,8 +251,6 @@ include __DIR__ . "/includes/header.php";
         opacity: .86;
         transform: translateY(-1px);
     }
-
-    /* Production Flow Chart — TEXT ONLY, NO BOX */
 
     #bomFlowChart {
         margin-top: 20px;
@@ -316,7 +291,7 @@ include __DIR__ . "/includes/header.php";
 
     .bom-flow-node.bom-fixed-node {
         color: #161617;
-        font-weight: 700;
+        font-weight: 500;
     }
 
     .bom-flow-connector {
@@ -331,8 +306,6 @@ include __DIR__ . "/includes/header.php";
     .bom-flow-connector::before {
         content: "→";
     }
-
-    /* Full-screen modal */
 
     #bomModal .modal-dialog {
         max-width: 100%;
@@ -351,13 +324,24 @@ include __DIR__ . "/includes/header.php";
         overflow-y: auto;
     }
 
-    /* Piece badge inside flow header — black */
     .bom-piece-flow-header .badge.bg-primary {
         background-color: #161617 !important;
     }
 
     .badge.bg-primary {
         background-color: #161617 !important;
+    }
+
+    #sameBomBtn {
+        background-color: #161617 !important;
+        border-color: #161617 !important;
+        color: #fff !important;
+        white-space: nowrap;
+    }
+
+    #sameBomBtn:hover {
+        background-color: #2b2b2d !important;
+        border-color: #2b2b2d !important;
     }
 
     @media (max-width: 992px) {
@@ -408,19 +392,19 @@ include __DIR__ . "/includes/header.php";
             </div>
 
             <div class="d-flex gap-2">
-                <button type="button" class="btn" id="refreshBomBtn" title="Refresh">
-                    <i class="bx bx-refresh align-middle"></i>
-                    Refresh
-                </button>
+               
 
                 <button type="button" class="btn btn-primary" id="createBomBtn">
                     <i class="bx bx-plus align-middle"></i>
                     Create BOM Master
                 </button>
+
+                 <button type="button" class="btn" id="refreshBomBtn" title="Refresh">
+                    <i class="bx bx-refresh align-middle"></i>
+                </button>
+                
             </div>
         </div>
-
-        <!-- BOM LIST -->
 
         <div class="card custom-card">
             <div class="card-header">
@@ -472,7 +456,6 @@ include __DIR__ . "/includes/header.php";
                     <table class="table table-bordered align-middle w-100">
                         <thead>
                             <tr>
-                                <th>BOM ID</th>
                                 <th>Brand</th>
                                 <th>Design Number</th>
                                 <th>Color</th>
@@ -518,7 +501,18 @@ include __DIR__ . "/includes/header.php";
 
                     <!-- BASIC DETAILS -->
 
-                    <h5 class="mb-3">Basic Details</h5>
+                    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                        <h5 class="mb-0">Basic Details</h5>
+
+                        <button
+                            type="button"
+                            class="btn btn-sm"
+                            id="sameBomBtn"
+                            title="Same BOM Master">
+                            <i class="bx bx-copy align-middle"></i>
+                            Same BOM Master
+                        </button>
+                    </div>
 
                     <div class="row g-3">
 
@@ -659,6 +653,70 @@ include __DIR__ . "/includes/header.php";
                     id="saveBomBtn">
                     <i class="bx bx-save me-1"></i>
                     Save BOM
+                </button>
+
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- SAME BOM MODAL (only Design Number search + dropdown) -->
+
+<div class="modal fade" id="sameBomModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title">Same BOM Master</h5>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+
+                <label class="form-label">
+                    Search Design Number <span class="text-danger">*</span>
+                </label>
+
+                <div class="position-relative">
+                    <input
+                        type="text"
+                        id="sameDesignSearch"
+                        class="form-control"
+                        placeholder="Type design number..."
+                        autocomplete="off">
+
+                    <div
+                        id="sameDesignDropdown"
+                        class="list-group position-absolute w-100"
+                        style="
+                            z-index: 2000;
+                            max-height: 240px;
+                            overflow-y: auto;
+                            display: none;
+                            box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+                        ">
+                    </div>
+                </div>
+
+                <small class="text-muted d-block mt-2">
+                    Select design number → pura flow Create BOM form me fill ho jayega.
+                </small>
+
+            </div>
+
+            <div class="modal-footer">
+
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    data-bs-dismiss="modal">
+                    Cancel
                 </button>
 
             </div>

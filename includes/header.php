@@ -156,6 +156,11 @@
             background-color: #f2f2f2 !important;
         }
 
+        /* Nested submenu (child2) — indent inside child1 */
+        html[data-theme-mode="light"] .main-menu .slide-menu .slide-menu {
+            background-color: #fbfbfd !important;
+        }
+
         /* Slide arrows (left/right) */
         html[data-theme-mode="light"] .slide-left svg,
         html[data-theme-mode="light"] .slide-right svg {
@@ -1135,7 +1140,7 @@
                                     </a>
                                 </li>
 
-                                <!-- Batches -->
+                                <!-- Bom Master -->
                                 <li class="slide">
                                     <a href="bom-master" class="side-menu__item">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
@@ -1174,63 +1179,95 @@
                                     </a>
                                 </li>
 
-                                <!-- Cutting Manager -->
-                                <li class="slide">
-                                    <a href="cutting-manager" class="side-menu__item">
+                                <!-- ==================== Additional Work (Sub-parent) ==================== -->
+                                <li class="slide has-sub">
+                                    <a href="javascript:void(0);" class="side-menu__item">
+                                        <i class="ri-arrow-down-s-line side-menu__angle"></i>
                                         <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <path d="M12 2L2 7l10 5 10-5-10-5z" />
                                             <path d="M2 17l10 5 10-5" />
                                             <path d="M2 12l10 5 10-5" />
                                         </svg>
-                                        <span class="side-menu__label">Embroidery</span>
+                                        <span class="side-menu__label">Additional Work</span>
                                     </a>
-                                </li>
 
-                                <!-- Cutting Manager -->
-                                <li class="slide">
-                                    <a href="cutting-manager" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                            <path d="M2 17l10 5 10-5" />
-                                            <path d="M2 12l10 5 10-5" />
-                                        </svg>
-                                        <span class="side-menu__label">Digital Print</span>
-                                    </a>
-                                </li>
+                                    <ul class="slide-menu child2">
+                                        <li class="slide side-menu__label1">
+                                            <a href="javascript:void(0)">Additional Work</a>
+                                        </li>
 
-                                <!-- Cutting Manager -->
-                                <li class="slide">
-                                    <a href="cutting-manager" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                            <path d="M2 17l10 5 10-5" />
-                                            <path d="M2 12l10 5 10-5" />
-                                        </svg>
-                                        <span class="side-menu__label">Screen Print</span>
-                                    </a>
+                                        <!-- Embroidery -->
+                                        <li class="slide">
+                                            <a href="cutting-manager" class="side-menu__item">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                                    <path d="M2 17l10 5 10-5" />
+                                                    <path d="M2 12l10 5 10-5" />
+                                                </svg>
+                                                <span class="side-menu__label">Embroidery</span>
+                                            </a>
+                                        </li>
+
+                                        <!-- Digital Print -->
+                                        <li class="slide">
+                                            <a href="cutting-manager" class="side-menu__item">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                                    <path d="M2 17l10 5 10-5" />
+                                                    <path d="M2 12l10 5 10-5" />
+                                                </svg>
+                                                <span class="side-menu__label">Digital Print</span>
+                                            </a>
+                                        </li>
+
+                                        <!-- Screen Print -->
+                                        <li class="slide">
+                                            <a href="cutting-manager" class="side-menu__item">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                                    <path d="M2 17l10 5 10-5" />
+                                                    <path d="M2 12l10 5 10-5" />
+                                                </svg>
+                                                <span class="side-menu__label">Screen Print</span>
+                                            </a>
+                                        </li>
+
+                                        <!-- Hand Work -->
+                                        <li class="slide">
+                                            <a href="cutting-manager" class="side-menu__item">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                                    <path d="M2 17l10 5 10-5" />
+                                                    <path d="M2 12l10 5 10-5" />
+                                                </svg>
+                                                <span class="side-menu__label">Hand Work</span>
+                                            </a>
+                                        </li>
+
+                                        <!-- Peco -->
+                                        <li class="slide">
+                                            <a href="cutting-manager" class="side-menu__item">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                                    <path d="M2 17l10 5 10-5" />
+                                                    <path d="M2 12l10 5 10-5" />
+                                                </svg>
+                                                <span class="side-menu__label">Peco</span>
+                                            </a>
+                                        </li>
+                                    </ul>
                                 </li>
+                                <!-- ==================== /Additional Work ==================== -->
 
                                  <!-- Cutting Manager -->
                                 <li class="slide">
-                                    <a href="cutting-manager" class="side-menu__item">
+                                    <a href="requirment" class="side-menu__item">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <path d="M12 2L2 7l10 5 10-5-10-5z" />
                                             <path d="M2 17l10 5 10-5" />
                                             <path d="M2 12l10 5 10-5" />
                                         </svg>
-                                        <span class="side-menu__label">Hand Work</span>
-                                    </a>
-                                </li>
-
-                                 <!-- Cutting Manager -->
-                                <li class="slide">
-                                    <a href="cutting-manager" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                            <path d="M2 17l10 5 10-5" />
-                                            <path d="M2 12l10 5 10-5" />
-                                        </svg>
-                                        <span class="side-menu__label">Peco</span>
+                                        <span class="side-menu__label">Requirment</span>
                                     </a>
                                 </li>
 

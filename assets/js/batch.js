@@ -16,6 +16,10 @@ $(document).ready(function () {
         document.getElementById("viewBatchModal")
     );
 
+    const photoZoomModal = new bootstrap.Modal(
+        document.getElementById("photoZoomModal")
+    );
+
     // --------------------------------------------------
     // HELPERS
     // --------------------------------------------------
@@ -193,21 +197,6 @@ $(document).ready(function () {
         bomData = readStorage(BOM_STORAGE_KEY);
     }
 
-    function renderDesignSuggestions() {
-        const datalist = $("#designSuggestions");
-        datalist.empty();
-
-        const designNumbers = [
-            ...new Set(bomData.map(getDesignNumber).filter(Boolean))
-        ];
-
-        designNumbers.forEach(designNumber => {
-            datalist.append(`
-                <option value="${escapeHtml(designNumber)}"></option>
-            `);
-        });
-    }
-
     // --------------------------------------------------
     // FILTERS
     // --------------------------------------------------
@@ -223,6 +212,9 @@ $(document).ready(function () {
 
         const brandFilter = $("#brandFilter");
         const colorFilter = $("#colorFilter");
+
+        const currentBrand = brandFilter.val();
+        const currentColor = colorFilter.val();
 
         brandFilter.find("option:not(:first)").remove();
         colorFilter.find("option:not(:first)").remove();
@@ -242,10 +234,93 @@ $(document).ready(function () {
                 </option>
             `);
         });
+
+        if (currentBrand) brandFilter.val(currentBrand);
+        if (currentColor) colorFilter.val(currentColor);
     }
 
     // --------------------------------------------------
-    // DESIGN SELECTION — fetch full BOM data silently
+    // DESIGN NUMBER SEARCH + DROPDOWN
+    // --------------------------------------------------
+
+    function buildDesignDropdown(query) {
+        const dropdown = $("#designDropdown");
+        const q = normalize(query);
+
+        let matches = bomData.filter(bom => getDesignNumber(bom));
+
+        if (q) {
+            matches = matches.filter(bom => {
+                const design = normalize(getDesignNumber(bom));
+                const brand = normalize(getBrand(bom));
+                const color = normalize(getColor(bom));
+                return design.includes(q) ||
+                    brand.includes(q) ||
+                    color.includes(q);
+            });
+        }
+
+        if (!matches.length) {
+            dropdown.html(`
+                <div class="design-option text-muted">
+                    No matching design found.
+                </div>
+            `).show();
+            return;
+        }
+
+        dropdown.empty();
+
+        matches.forEach(bom => {
+            const design = getDesignNumber(bom);
+            const brand = getBrand(bom);
+            const color = getColor(bom);
+
+            dropdown.append(`
+                <div class="design-option"
+                    data-design="${escapeHtml(design)}">
+                    <div class="fw-semibold">${escapeHtml(design)}</div>
+                    <div class="design-meta">
+                        ${escapeHtml(brand || "-")} • ${escapeHtml(color || "-")}
+                    </div>
+                </div>
+            `);
+        });
+
+        dropdown.show();
+    }
+
+    // Show dropdown on focus / input
+    $("#designNumber").on("focus", function () {
+        buildDesignDropdown($(this).val());
+    });
+
+    $("#designNumber").on("input", function () {
+        buildDesignDropdown($(this).val());
+        fillDesignData();
+    });
+
+    // Select from dropdown
+    $(document).on("click", "#designDropdown .design-option", function () {
+        const design = $(this).data("design");
+
+        if (!design) return;
+
+        $("#designNumber").val(design);
+        $("#designDropdown").hide();
+
+        fillDesignData();
+    });
+
+    // Hide dropdown when clicking outside
+    $(document).on("click", function (e) {
+        if (!$(e.target).closest("#designNumber, #designDropdown").length) {
+            $("#designDropdown").hide();
+        }
+    });
+
+    // --------------------------------------------------
+    // FILL DESIGN DATA
     // --------------------------------------------------
 
     function fillDesignData() {
@@ -265,7 +340,6 @@ $(document).ready(function () {
             );
 
             $("#batchPiecesContainer").html("");
-
             return;
         }
 
@@ -308,6 +382,7 @@ $(document).ready(function () {
         );
 
         $("#batchPiecesContainer").html("");
+        $("#designDropdown").hide().empty();
 
         $("#batchModalLabel").text("Create Batch");
         $("#batchFormMessage").hide().html("");
@@ -336,12 +411,40 @@ $(document).ready(function () {
         batchModal.show();
     });
 
-    $("#designNumber").on("input change", function () {
-        fillDesignData();
+    // --------------------------------------------------
+    // REFRESH BUTTON
+    // --------------------------------------------------
+
+    $("#refreshBatchBtn").on("click", function () {
+        const btn = $(this);
+
+        btn.addClass("spinning");
+
+        loadData();
+
+        $("#brandFilter").val("");
+        $("#priorityFilter").val("");
+        $("#colorFilter").val("");
+        $("#batchSearch").val("");
+
+        renderFilters();
+        renderTable();
+
+        setTimeout(function () {
+            btn.removeClass("spinning");
+        }, 800);
+
+        Swal.fire({
+            icon: "success",
+            title: "Refreshed",
+            text: "Batch list reloaded successfully.",
+            timer: 1200,
+            showConfirmButton: false
+        });
     });
 
     // --------------------------------------------------
-    // SAVE BATCH — saves FULL BOM data even though not shown
+    // SAVE BATCH
     // --------------------------------------------------
 
     $("#batchForm").on("submit", function (event) {
@@ -443,7 +546,7 @@ $(document).ready(function () {
     });
 
     // --------------------------------------------------
-    // TABLE — Batch ID, Brand, Design, Color, Qty, Priority, Action
+    // TABLE
     // --------------------------------------------------
 
     function renderTable() {
@@ -483,7 +586,7 @@ $(document).ready(function () {
         if (!filteredBatches.length) {
             tbody.html(`
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-4">
+                    <td colspan="8" class="text-center text-muted py-4">
                         <i class="bx bx-info-circle me-1"></i>
                         No batch found.
                     </td>
@@ -493,12 +596,22 @@ $(document).ready(function () {
         }
 
         filteredBatches.forEach(batch => {
+            const photo = batch.photo || "assets/images/default.jpg";
 
             tbody.append(`
                 <tr>
 
                     <td>
                         <strong>${escapeHtml(batch.batchId)}</strong>
+                    </td>
+
+                    <td>
+                        <img
+                            src="${escapeHtml(photo)}"
+                            alt="Photo"
+                            class="batch-table-photo view-photo-btn"
+                            data-photo="${escapeHtml(photo)}"
+                            title="Click to view">
                     </td>
 
                     <td>${escapeHtml(batch.brand || "-")}</td>
@@ -516,7 +629,7 @@ $(document).ready(function () {
 
                             <button
                                 type="button"
-                                class="btn btn-sm btn-info view-batch-btn"
+                                class="btn btn-sm btn-primary view-batch-btn"
                                 data-id="${escapeHtml(batch.id)}"
                                 title="View">
                                 <i class="bx bx-show"></i>
@@ -545,6 +658,19 @@ $(document).ready(function () {
             `);
         });
     }
+
+    // --------------------------------------------------
+    // PHOTO ZOOM
+    // --------------------------------------------------
+
+    $(document).on("click", ".view-photo-btn", function () {
+        const photo = $(this).data("photo");
+
+        if (!photo) return;
+
+        $("#photoZoomImg").attr("src", photo);
+        photoZoomModal.show();
+    });
 
     // --------------------------------------------------
     // EDIT BATCH
@@ -613,7 +739,7 @@ $(document).ready(function () {
     });
 
     // --------------------------------------------------
-    // VIEW BATCH — only limited fields shown
+    // VIEW BATCH
     // --------------------------------------------------
 
     $(document).on("click", ".view-batch-btn", function () {
@@ -629,12 +755,6 @@ $(document).ready(function () {
         $("#viewBatchColor").text(batch.color || "-");
         $("#viewBatchQuantity").text(batch.quantity || "-");
         $("#viewBatchPriority").text(batch.priority || "-");
-
-        // Hidden but populated
-        $("#viewBatchPhoto").attr(
-            "src",
-            batch.photo || "assets/images/default.jpg"
-        );
 
         viewBatchModal.show();
     });
@@ -659,7 +779,6 @@ $(document).ready(function () {
     // --------------------------------------------------
 
     loadData();
-    renderDesignSuggestions();
     renderFilters();
     renderTable();
 

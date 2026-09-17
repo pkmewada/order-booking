@@ -1,57 +1,107 @@
 <?php require_once __DIR__ . '/includes/header.php'; ?>
 
 <style>
-    /* Full-page approval modal */
-    #approvalModal .modal-dialog {
-        max-width: 100%;
+    #approvalModal .modal-dialog { max-width: 100%; width: 100%; height: 100%; margin: 0; }
+    #approvalModal .modal-content { height: 100vh; border-radius: 0; border: none; }
+    #approvalModal .modal-body { overflow-y: auto; padding: 16px 20px; }
+
+    .batch-top-row {
+        display: grid;
+        grid-template-columns: 25% 25% 50%;
+        gap: 12px;
+        align-items: start;
+        margin-bottom: 16px;
+    }
+
+    @media (max-width: 992px) { .batch-top-row { grid-template-columns: 1fr; } }
+
+    .batch-photo-box {
+        border: 1px solid #e2e7f1;
+        border-radius: 8px;
+        background: #f8f9fa;
+        padding: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        aspect-ratio: 4 / 5;
         width: 100%;
+    }
+
+    .batch-photo-box img { width: 100%; height: 100%; display: block; border-radius: 6px; object-fit: cover; }
+
+    .batch-info-box {
+        border: 1px solid #e2e7f1;
+        border-radius: 8px;
+        padding: 12px 14px;
         height: 100%;
-        margin: 0;
-    }
-
-    #approvalModal .modal-content {
-        height: 100vh;
-        border-radius: 0;
-        border: none;
-    }
-
-    #approvalModal .modal-body {
         overflow-y: auto;
     }
 
-    /* Item availability — 3 per row */
-    .item-availability-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 12px;
-    }
+    .batch-info-box h6 { margin-bottom: 10px; color: #18243d; font-size: 15px; font-weight: 700; }
+    .batch-info-box .table { margin-bottom: 0; background: #fff; }
+    .batch-info-box .table th { font-size: 13px; width: 42%; background: #ffffff; vertical-align: middle; padding: 8px 10px; font-weight: 600; color: #18243d; }
+    .batch-info-box .table td { font-size: 13px; vertical-align: middle; background: #ffffff; padding: 8px 10px; color: #333; }
 
-    .item-availability-card {
-        border: 1px solid #e2e7f1;
-        border-radius: 8px;
-        padding: 10px 12px;
-        background: #fff;
-    }
+    .batch-flow-box { border: 1px solid #e2e7f1; border-radius: 8px; background: #fff; padding: 12px 14px; height: 100%; overflow-y: auto; }
+    .batch-flow-box h6 { margin-bottom: 10px; color: #18243d; font-size: 15px; font-weight: 700; }
+    #batchFlowChart > div { margin-bottom: 10px !important; }
+    #batchFlowChart > div:last-child { margin-bottom: 0 !important; }
+    #batchFlowChart .badge { font-size: 11px !important; padding: 4px 9px !important; }
+    #batchFlowChart .fw-semibold { font-size: 13px !important; }
 
-    .item-availability-card .item-name {
-        font-weight: 600;
-        color: #18243d;
-        margin-bottom: 8px;
-        display: block;
-        word-break: break-word;
-    }
+    .batch-flow-track { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; font-size: 13px; color: #18243d; line-height: 1.6; }
+    .batch-flow-node { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; color: #18243d; font-size: 13px; font-weight: 500; }
+    .batch-flow-node strong { font-size: 13px; }
+    .batch-flow-node.batch-fixed-node { color: #161617; font-weight: 700; }
+    .batch-flow-connector { display: inline-flex; align-items: center; color: #9aa6c2; font-size: 13px; font-weight: 600; margin: 0 3px; }
+    .batch-flow-connector::before { content: "→"; }
 
-    @media (max-width: 768px) {
-        .item-availability-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-    }
+    .piece-cards-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    @media (max-width: 1200px) { .piece-cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 768px) { .piece-cards-grid { grid-template-columns: 1fr; } }
 
-    @media (max-width: 480px) {
-        .item-availability-grid {
-            grid-template-columns: 1fr;
-        }
-    }
+    .piece-card { border: 1px solid #e2e7f1; border-radius: 10px; background: #fff; padding: 12px; display: flex; flex-direction: column; gap: 10px; transition: box-shadow .15s ease; }
+    .piece-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.07); }
+    .piece-card .piece-card-header { display: flex; align-items: center; justify-content: space-between; gap: 6px; border-bottom: 1px dashed #eef1f7; padding-bottom: 8px; }
+    .piece-card .piece-card-title { font-weight: 600; font-size: 14px; color: #18243d; }
+    .piece-card .piece-card-item { font-size: 12px; color: #6b7280; margin-top: 2px; }
+    .piece-card .piece-card-status .badge { font-size: 10px; padding: 3px 7px; }
+
+    .work-text { font-size: 12px; color: #333; line-height: 1.5; }
+    .work-text .work-empty { color: #9ca3af; font-size: 11px; }
+
+    .item-list-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .item-list-top .item-list-label { font-size: 12px; color: #6b7280; font-weight: 600; }
+
+    .all-toggle { display: inline-flex; border: 1px solid #e2e7f1; border-radius: 999px; overflow: hidden; background: #f9fafb; }
+    .all-toggle input[type="radio"] { display: none; }
+    .all-toggle label { font-size: 11px; padding: 3px 12px; cursor: pointer; color: #6b7280; user-select: none; transition: all .15s ease; margin: 0; line-height: 1.5; }
+    .all-toggle label:hover { background: #f1f5fb; }
+    .all-toggle input[type="radio"]:checked + label.all-yes-label { background: #198754; color: #fff; }
+    .all-toggle input[type="radio"]:checked + label.all-no-label { background: #dc3545; color: #fff; }
+
+    .item-list-rows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 10px; max-height: 220px; overflow-y: auto; padding-right: 2px; }
+    @media (max-width: 1200px) { .item-list-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 500px) { .item-list-rows { grid-template-columns: 1fr; } }
+
+    .item-list-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #18243d; cursor: pointer; padding: 2px 0; user-select: none; transition: color .12s ease; }
+    .item-list-row:hover { color: #000; }
+    .item-list-row input[type="checkbox"] { width: 14px; height: 14px; margin: 0; cursor: pointer; accent-color: #161617; flex-shrink: 0; }
+    .item-list-row .item-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item-list-row.checked-row .item-name { color: #1b5e20; font-weight: 600; }
+
+    .piece-card .piece-card-actions { display: flex; gap: 6px; margin-top: auto; padding-top: 8px; border-top: 1px dashed #eef1f7; flex-wrap: wrap; }
+    .piece-card .piece-card-actions .btn { font-size: 11px; padding: 4px 8px; flex: 1 1 calc(33.33% - 4px); min-width: 70px; }
+    .piece-card .piece-remarks { font-size: 11px; padding: 4px 6px; border-radius: 6px; }
+
+    #approvalTableBody td, #approvalTableBody th { vertical-align: top !important; }
+    .piece-type-cell { white-space: nowrap; font-size: 13px; color: #18243d; line-height: 1.6; }
+    .piece-type-cell .piece-num { font-weight: 700; color: #161617; }
+    .piece-type-cell .piece-item-text { font-weight: 400; color: #333; }
+
+    /* Button states */
+    .btn-approve-piece:disabled { opacity: 0.45; cursor: not-allowed; }
 </style>
 
 <div class="main-content app-content">
@@ -59,81 +109,43 @@
 
         <div class="my-4 page-header-breadcrumb d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div>
-                <h1 class="page-title fw-medium fs-18 mb-2">
-                    Batch Approval
-                </h1>
-
+                <h1 class="page-title fw-medium fs-18 mb-2">Batch Approval</h1>
                 <nav>
                     <ol class="breadcrumb mb-0">
-                        <li class="breadcrumb-item">
-                            <a href="javascript:void(0);">Production</a>
-                        </li>
-                        <li class="breadcrumb-item active">
-                            Batch Approval
-                        </li>
+                        <li class="breadcrumb-item"><a href="javascript:void(0);">Production</a></li>
+                        <li class="breadcrumb-item active">Batch Approval</li>
                     </ol>
                 </nav>
             </div>
-
-            <button
-                type="button"
-                class="btn btn-primary"
-                id="refreshApprovalBtn"
-            >
+            <button type="button" class="btn btn-primary" id="refreshApprovalBtn">
                 <i class="bx bx-refresh me-1"></i>
-                Refresh
             </button>
         </div>
 
         <div class="card custom-card">
-            <div class="card-header">
-                <div class="card-title">
-                    Batch Approval List
-                </div>
-            </div>
-
+            <div class="card-header"><div class="card-title">Batch Approval List</div></div>
             <div class="card-body">
-
                 <div class="row mb-3">
                     <div class="col-md-3">
-                        <label class="form-label" for="approvalStatusFilter">
-                            Status
-                        </label>
-
-                        <select
-                            id="approvalStatusFilter"
-                            class="form-select"
-                        >
+                        <label class="form-label" for="approvalStatusFilter">Status</label>
+                        <select id="approvalStatusFilter" class="form-select">
                             <option value="">All Status</option>
                             <option value="pending">Pending</option>
-                            <option value="progress">Progress</option>
                             <option value="approved">Approved</option>
                             <option value="missing">Missing Item</option>
                         </select>
                     </div>
-
                     <div class="col-md-4 ms-auto">
-                        <label class="form-label" for="approvalSearchInput">
-                            Search
-                        </label>
-
+                        <label class="form-label" for="approvalSearchInput">Search</label>
                         <div class="input-group">
-                            <span class="input-group-text">
-                                <i class="bx bx-search"></i>
-                            </span>
-
-                            <input
-                                type="text"
-                                id="approvalSearchInput"
-                                class="form-control"
-                                placeholder="Search batch, design, brand..."
-                            >
+                            <span class="input-group-text"><i class="bx bx-search"></i></span>
+                            <input type="text" id="approvalSearchInput" class="form-control" placeholder="Search batch, design, brand...">
                         </div>
                     </div>
                 </div>
 
                 <div class="table-responsive">
-                    <table class="table table-bordered text-nowrap align-middle w-100">
+                    <table class="table table-bordered text-nowrap w-100">
                         <thead>
                             <tr>
                                 <th>Batch ID</th>
@@ -142,138 +154,64 @@
                                 <th>Design Number</th>
                                 <th>Color</th>
                                 <th>Piece Type</th>
-                                <th>Item List</th>
-                                <th>Additional Work</th>
                                 <th>Quantity</th>
                                 <th>Priority</th>
                                 <th>Status</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
-
-                        <tbody id="approvalTableBody">
-                            <!-- Loaded by JavaScript -->
-                        </tbody>
+                        <tbody id="approvalTableBody"></tbody>
                     </table>
                 </div>
-
             </div>
         </div>
-
     </div>
 </div>
 
-<!-- Approval Modal — FULL PAGE -->
-<div
-    class="modal fade"
-    id="approvalModal"
-    tabindex="-1"
-    aria-labelledby="approvalModalLabel"
-    aria-hidden="true"
->
+<!-- Approval Modal -->
+<div class="modal fade" id="approvalModal" tabindex="-1" aria-labelledby="approvalModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-
             <div class="modal-header">
-                <h5 class="modal-title" id="approvalModalLabel">
-                    Batch Approval
-                </h5>
-
-                <button
-                    type="button"
-                    class="btn-close"
-                    data-bs-dismiss="modal"
-                    aria-label="Close"
-                ></button>
+                <h5 class="modal-title" id="approvalModalLabel">Batch Approval</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-
             <div class="modal-body">
-
-                <div class="row g-4">
-
-                    <!-- LEFT: Photo -->
-                    <div class="col-lg-4">
-                        <div
-                            class="border rounded p-3 text-center"
-                            style="
-                                min-height:400px;
-                                display:flex;
-                                align-items:center;
-                                justify-content:center;
-                                background:#f8f9fa;
-                            "
-                        >
-                            <img
-                                id="approvalPhoto"
-                                src="assets/images/default.jpg"
-                                alt="Batch Photo"
-                                class="img-fluid rounded"
-                                style="max-height:430px; object-fit:contain;"
-                            >
-                        </div>
+                <div class="batch-top-row">
+                    <div class="batch-photo-box">
+                        <img id="approvalPhoto" src="" alt="Batch Photo" onerror="this.onerror=null;this.style.display='none';">
                     </div>
-
-                    <!-- RIGHT: Info + Pieces -->
-                    <div class="col-lg-8">
-
-                        <h5 class="mb-3">
-                            Batch Information
-                        </h5>
-
+                    <div class="batch-info-box">
+                        <h6>Batch Information</h6>
                         <div class="table-responsive">
-                            <table class="table table-bordered">
+                            <table class="table table-bordered mb-0">
                                 <tbody>
-                                    <tr>
-                                        <th>Batch ID</th>
-                                        <td id="approvalBatchId">-</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Brand</th>
-                                        <td id="approvalBrand">-</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Design Number</th>
-                                        <td id="approvalDesignNumber">-</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Color</th>
-                                        <td id="approvalColor">-</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Quantity</th>
-                                        <td id="approvalQuantity">-</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Priority</th>
-                                        <td id="approvalPriority">-</td>
-                                    </tr>
-                                    <tr>
-                                        <th>Status</th>
-                                        <td id="approvalStatus">-</td>
-                                    </tr>
+                                    <tr><th>Batch ID</th><td id="approvalBatchId">-</td></tr>
+                                    <tr><th>Brand</th><td id="approvalBrand">-</td></tr>
+                                    <tr><th>Design Number</th><td id="approvalDesignNumber">-</td></tr>
+                                    <tr><th>Color</th><td id="approvalColor">-</td></tr>
+                                    <tr><th>Quantity</th><td id="approvalQuantity">-</td></tr>
+                                    <tr><th>Priority</th><td id="approvalPriority">-</td></tr>
                                 </tbody>
                             </table>
                         </div>
-
-                        <hr>
-
-                        <h5 class="mb-3">
-                            Piece-wise Item Availability
-                        </h5>
-
-                        <p class="text-muted small">
-                            Har piece ke items check karein. Agar sab items hain toh Approve karein.
-                            Agar koi missing hai toh "Missing" button se requirement create karein.
-                        </p>
-
-                        <div id="approvalPiecesContainer">
-                            <!-- Piece-wise cards -->
-                        </div>
-
                     </div>
-
+                    <div class="batch-flow-box" id="batchFlowBox" style="display:none;">
+                        <h6>Production Flow Chart</h6>
+                        <div id="batchFlowChart"></div>
+                    </div>
                 </div>
 
+                <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                    <h6 class="mb-0">Piece-wise Item Availability</h6>
+                    <small class="text-muted" style="font-size:11px;">
+                        <b>Approve</b> = all items present |
+                        <b>Confirm</b> = partial (some later) |
+                        <b>Pass</b> = force pass with missing
+                    </small>
+                </div>
+
+                <div id="approvalPiecesContainer" class="piece-cards-grid"></div>
             </div>
         </div>
     </div>
@@ -282,3 +220,5 @@
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
 <script src="assets/js/batch-approval.js"></script>
+</body>
+</html>

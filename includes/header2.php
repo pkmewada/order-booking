@@ -12,7 +12,7 @@
     <meta name="Author" content="Spruko Technologies Private Limited">
     <meta name="keywords"
         content="admin dashboard,admin template,admin panel,bootstrap admin dashboard,html template,sales dashboard,dashboard,template dashboard,admin,html and css template,admin dashboard bootstrap,personal dashboard,crypto dashboard,stocks dashboard,admin panel template">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>';
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>'
     <link rel="icon" href="assets/images/brand-logos/favicon.ico" type="image/x-icon">
     <script src="assets/libs/choices.js/public/assets/scripts/choices.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -34,6 +34,134 @@
     <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.3.0/css/responsive.bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.2.3/css/buttons.bootstrap5.min.css">
 
+    <!-- Custom overrides: black icons, larger dark mode, hide unnecessary header elements -->
+    <style>
+        /* Make all header link icons black */
+        .header-link-icon,
+        .header-link svg,
+        .header-link i,
+        .header-element .header-link svg,
+        .header-element .header-link i {
+            fill: #000000 !important;
+            color: #000000 !important;
+        }
+
+        /* Override any primary/blue buttons and badges to black */
+        .btn-primary,
+        .btn-primary-light,
+        .bg-primary,
+        .badge.bg-primary,
+        .pulse-secondary,
+        .header-icon-pulse.bg-secondary,
+        .header-icon-badge.bg-primary {
+            background-color: #000000 !important;
+            border-color: #000000 !important;
+            color: #ffffff !important;
+        }
+
+        .btn-primary:hover,
+        .btn-primary:focus,
+        .btn-primary:active {
+            background-color: #1a1a1a !important;
+            border-color: #1a1a1a !important;
+        }
+
+        /* Make any blue link or icon black */
+        a .ti,
+        a i,
+        .text-primary,
+        .text-secondary,
+        .text-info,
+        .text-success,
+        .text-warning,
+        .text-orange {
+            color: #000000 !important;
+        }
+
+        /* Headers and tick marks (checkboxes/radios) black */
+        .form-check-input:checked {
+            background-color: #000000 !important;
+            border-color: #000000 !important;
+        }
+
+        .form-check-input:focus {
+            border-color: #000000 !important;
+            box-shadow: 0 0 0 0.25rem rgba(0, 0, 0, 0.25) !important;
+        }
+
+        /* Switcher area changes */
+        .switcher-style-head {
+            color: #000000 !important;
+        }
+
+        /* Hide specific header elements */
+        .header-element.cart-dropdown,
+        .header-element.notifications-dropdown,
+        .header-element.header-fullscreen,
+        .header-element.header-theme-mode .dark-layout {
+            display: none !important;
+        }
+
+        /* Show only the light layout (sun) icon for dark mode toggle */
+        .header-element.header-theme-mode .light-layout {
+            display: block !important;
+        }
+
+        /* Make the dark mode icon bigger and centered */
+        .header-theme-mode .header-link {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0 !important;
+        }
+
+        .header-theme-mode .header-link .light-layout svg {
+            width: 42px !important;
+            height: 42px !important;
+        }
+
+        /* Hide the profile settings dropdown (the gear icon) */
+        .header-element.dropdown:last-child {
+            display: none !important;
+        }
+
+        /* Ensure remaining header icons (search, sidebar toggle) stay black and visible */
+        .header-link i,
+        .header-link svg {
+            fill: #000000 !important;
+            color: #000000 !important;
+        }
+
+        /* Make search icon black */
+        .header-search-icon i {
+            color: #000000 !important;
+        }
+
+        /* Adjust header content right alignment */
+        .header-content-right {
+            display: flex;
+            align-items: center;
+        }
+
+        /* Remove any blue accent from the search bar */
+        .header-search-bar:focus {
+            border-color: #000000 !important;
+            box-shadow: 0 0 0 0.2rem rgba(0, 0, 0, 0.1) !important;
+        }
+
+        /* Sidebar menu items black when active/hover */
+        .side-menu__item.active,
+        .side-menu__item:hover,
+        .side-menu__item:focus {
+            color: #000000 !important;
+        }
+
+        .side-menu__item.active .side-menu__icon,
+        .side-menu__item:hover .side-menu__icon {
+            fill: #000000 !important;
+            color: #000000 !important;
+        }
+    </style>
 </head>
 
 <body>
@@ -581,7 +709,7 @@
                 <!-- Start::header-content-right -->
                 <ul class="header-content-right">
 
-                    <!-- Start::header-element -->
+                    <!-- Start::header-element (mobile search) -->
                     <li class="header-element d-md-none d-block">
                         <a href="javascript:void(0);" class="header-link" data-bs-toggle="modal"
                             data-bs-target="#header-responsive-search">
@@ -591,13 +719,13 @@
                         </a>
                     </li>
 
-                    <!-- Start::header-element -->
+                    <!-- Start::header-element (dark mode toggle) - ONLY this remains -->
                     <li class="header-element header-theme-mode">
                         <!-- Start::header-link|layout-setting -->
                         <a href="javascript:void(0);" class="header-link layout-setting">
                             <span class="light-layout">
                                 <!-- Start::header-link-icon -->
-                                <svg xmlns="http://www.w3.org/2000/svg" class="header-link-icon" width="32" height="32"
+                                <svg xmlns="http://www.w3.org/2000/svg" class="header-link-icon" width="42" height="42"
                                     fill="#000000" viewBox="0 0 256 256">
                                     <path
                                         d="M98.31,130.38ZM94.38,17.62h0A64.06,64.06,0,0,1,17.62,94.38h0A64.12,64.12,0,0,0,55,138.93h0a44.08,44.08,0,0,1,43.33-8.54,68.13,68.13,0,0,1,45.47-47.32l.15,0c0-1,.07-2,.07-3A64,64,0,0,0,94.38,17.62Z"
@@ -608,9 +736,9 @@
                                 </svg>
                                 <!-- End::header-link-icon -->
                             </span>
-                            <span class="dark-layout">
-                                <!-- Start::header-link-icon -->
-                                <svg xmlns="http://www.w3.org/2000/svg" class="header-link-icon" width="32" height="32"
+                            <span class="dark-layout d-none">
+                                <!-- Start::header-link-icon (hidden) -->
+                                <svg xmlns="http://www.w3.org/2000/svg" class="header-link-icon" width="42" height="42"
                                     fill="#000000" viewBox="0 0 256 256">
                                     <path
                                         d="M131.84,84.41v0a68.22,68.22,0,0,0-41.65,46v-.11a44.08,44.08,0,0,0-38.54,5h0a48,48,0,1,1,80.19-50.94Z"
@@ -626,408 +754,6 @@
                     </li>
                     <!-- End::header-element -->
 
-                    <!-- Start::header-element -->
-                    <li class="header-element cart-dropdown dropdown">
-                        <!-- Start::header-link|dropdown-toggle -->
-                        <a href="javascript:void(0);" class="header-link dropdown-toggle" data-bs-auto-close="outside"
-                            data-bs-toggle="dropdown">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="header-link-icon" width="32" height="32"
-                                fill="#000000" viewBox="0 0 256 256">
-                                <path
-                                    d="M224,72l-28.52,92.71A16,16,0,0,1,180.18,176H84.07a16,16,0,0,1-15.39-11.6L42.29,72Z"
-                                    opacity="0.1"></path>
-                                <path
-                                    d="M96,216a16,16,0,1,1-16-16A16,16,0,0,1,96,216Zm88-16a16,16,0,1,0,16,16A16,16,0,0,0,184,200ZM231.65,74.35l-28.53,92.71A23.89,23.89,0,0,1,180.18,184H84.07A24.11,24.11,0,0,1,61,166.59L24.82,40H8A8,8,0,0,1,8,24H24.82A16.08,16.08,0,0,1,40.21,35.6L48.32,64H224a8,8,0,0,1,7.65,10.35ZM213.17,80H52.89l23.49,82.2a8,8,0,0,0,7.69,5.8h96.11a8,8,0,0,0,7.65-5.65Z">
-                                </path>
-                            </svg>
-                            <span class="badge bg-primary rounded-pill header-icon-badge" id="cart-icon-badge">5</span>
-                        </a>
-                        <!-- End::header-link|dropdown-toggle -->
-                        <!-- Start::main-header-dropdown -->
-                        <div class="main-header-dropdown dropdown-menu dropdown-menu-end" data-popper-placement="none">
-                            <div class="p-3">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <p class="mb-0 fs-16">Cart Items<span
-                                            class="badge bg-success-transparent ms-1 fs-12 rounded-circle"
-                                            id="cart-data">5</span></p>
-                                    <a href="ecommerce-search.html"
-                                        class="btn btn-secondary-light btn-sm btn-wave">Continue Shopping <i
-                                            class="ti ti-arrow-narrow-right ms-1"></i></a>
-                                </div>
-                            </div>
-                            <div class="dropdown-divider"></div>
-                            <ul class="list-unstyled mb-0" id="header-cart-items-scroll">
-                                <li class="dropdown-item">
-                                    <div class="d-flex align-items-center cart-dropdown-item gap-3">
-                                        <div class="lh-1">
-                                            <span class="avatar avatar-md bg-gray-300">
-                                                <img src="assets/images/ecommerce/png/30.png" alt="img">
-                                            </span>
-                                        </div>
-                                        <div class="flex-fill">
-                                            <div class="d-flex align-items-center justify-content-between mb-0">
-                                                <div class="mb-0 fs-14 fw-medium">
-                                                    <a href="ecommerce_customer_cart.html">SoundSync Headphones</a>
-                                                    <div class="fs-11 text-muted">
-                                                        <span>Qty : 2,</span>
-                                                        <span>Color : <span class="text-cart-headset fw-semibold">Ocean
-                                                                Blue</span></span>
-                                                    </div>
-                                                </div>
-                                                <div class="text-end">
-                                                    <a href="javascript:void(0);"
-                                                        class="header-cart-remove dropdown-item-close"><i
-                                                            class="ri-delete-bin-line"></i></a>
-                                                    <h6 class="fw-medium mb-0 mt-1">$75<span
-                                                            class="text-decoration-line-through text-muted fw-normal ms-1 fs-13 d-inline-block">$99</span>
-                                                    </h6>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </li>
-                                <li class="dropdown-item">
-                                    <div class="d-flex align-items-center cart-dropdown-item gap-3">
-                                        <div class="lh-1">
-                                            <span class="avatar avatar-md bg-gray-300">
-                                                <img src="assets/images/ecommerce/png/31.png" alt="img">
-                                            </span>
-                                        </div>
-                                        <div class="flex-fill">
-                                            <div class="d-flex align-items-center justify-content-between mb-0">
-                                                <div class="mb-0 fs-14 fw-medium">
-                                                    <a href="ecommerce_customer_cart.html">Western Ladies Bag</a>
-                                                    <div class="fs-11 text-muted">
-                                                        <span>Qty : 1,</span>
-                                                        <span>Color : <span class="text-cart-handbag fw-semibold">Blush
-                                                                Pink</span></span>
-                                                    </div>
-                                                </div>
-                                                <div class="text-end">
-                                                    <a href="javascript:void(0);"
-                                                        class="header-cart-remove dropdown-item-close"><i
-                                                            class="ri-delete-bin-line"></i></a>
-                                                    <h6 class="fw-medium mb-0 mt-1">$120<span
-                                                            class="text-decoration-line-through text-muted fw-normal ms-1 fs-13 d-inline-block">$149</span>
-                                                    </h6>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </li>
-                                <li class="dropdown-item">
-                                    <div class="d-flex align-items-center cart-dropdown-item gap-3">
-                                        <div class="lh-1">
-                                            <span class="avatar avatar-md bg-gray-300">
-                                                <img src="assets/images/ecommerce/png/32.png" alt="img">
-                                            </span>
-                                        </div>
-                                        <div class="flex-fill">
-                                            <div class="d-flex align-items-center justify-content-between mb-0">
-                                                <div class="mb-0 fs-14 fw-medium">
-                                                    <a href="ecommerce_customer_cart.html">Elitr Alarm Clock</a>
-                                                    <div class="fs-11 text-muted">
-                                                        <span>Qty : 2,</span>
-                                                        <span>Color : <span
-                                                                class="text-cart-alaramclock fw-semibold">Sky
-                                                                Blue</span></span>
-                                                    </div>
-                                                </div>
-                                                <div class="text-end">
-                                                    <a href="javascript:void(0);"
-                                                        class="header-cart-remove dropdown-item-close"><i
-                                                            class="ri-delete-bin-line"></i></a>
-                                                    <h6 class="fw-medium mb-0 mt-1">$30<span
-                                                            class="text-decoration-line-through text-muted fw-normal ms-1 fs-13 d-inline-block">$49</span>
-                                                    </h6>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </li>
-                                <li class="dropdown-item">
-                                    <div class="d-flex align-items-center cart-dropdown-item gap-3">
-                                        <div class="lh-1">
-                                            <span class="avatar avatar-md bg-gray-300">
-                                                <img src="assets/images/ecommerce/png/12.png" alt="img">
-                                            </span>
-                                        </div>
-                                        <div class="flex-fill">
-                                            <div class="d-flex align-items-center justify-content-between mb-0">
-                                                <div class="mb-0 fs-14 fw-medium">
-                                                    <a href="ecommerce_customer_cart.html">Aus Polo Assn</a>
-                                                    <div class="fs-11 text-muted">
-                                                        <span>Qty : 3,</span>
-                                                        <span>Color : <span
-                                                                class="text-cart-sweatshirt fw-semibold">Soft
-                                                                Peach</span></span>
-                                                    </div>
-                                                </div>
-                                                <div class="text-end">
-                                                    <a href="javascript:void(0);"
-                                                        class="header-cart-remove dropdown-item-close"><i
-                                                            class="ri-delete-bin-line"></i></a>
-                                                    <h6 class="fw-medium mb-0 mt-1">$70<span
-                                                            class="text-decoration-line-through text-muted fw-normal ms-1 fs-13 d-inline-block">$129</span>
-                                                    </h6>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </li>
-                                <li class="dropdown-item">
-                                    <div class="d-flex align-items-center cart-dropdown-item gap-3">
-                                        <div class="lh-1">
-                                            <span class="avatar avatar-md bg-gray-300">
-                                                <img src="assets/images/ecommerce/png/16.png" alt="img">
-                                            </span>
-                                        </div>
-                                        <div class="flex-fill">
-                                            <div class="d-flex align-items-center justify-content-between mb-0">
-                                                <div class="mb-0 fs-14 fw-medium">
-                                                    <a href="ecommerce_customer_cart.html">Smart Watch</a>
-                                                    <div class="fs-11 text-muted">
-                                                        <span>Qty : 1,</span>
-                                                        <span>Color : <span
-                                                                class="text-cart-smartwatch fw-semibold">Crimson
-                                                                Red</span></span>
-                                                    </div>
-                                                </div>
-                                                <div class="text-end">
-                                                    <a href="javascript:void(0);"
-                                                        class="header-cart-remove dropdown-item-close"><i
-                                                            class="ri-delete-bin-line"></i></a>
-                                                    <h6 class="fw-medium mb-0 mt-1">$200<span
-                                                            class="text-decoration-line-through text-muted fw-normal ms-1 fs-13 d-inline-block">$249</span>
-                                                    </h6>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </li>
-                            </ul>
-                            <div class="p-3 empty-header-item border-top">
-                                <div class="d-flex align-items-center justify-content-between mb-3">
-                                    <div class="fw-medium fs-14">Total :</div>
-                                    <h5 class="mb-0">$740</h5>
-                                </div>
-                                <div class="text-center d-grid">
-                                    <a href="ecommerce_customer_checkout.html" class="btn btn-primary btn-wave">Proceed
-                                        to checkout</a>
-                                </div>
-                            </div>
-                            <div class="p-5 empty-item d-none">
-                                <div class="text-center">
-                                    <span class="avatar avatar-xl avatar-rounded bg-primary-transparent">
-                                        <i class="ri-shopping-cart-2-line fs-2"></i>
-                                    </span>
-                                    <h6 class="fw-medium mb-1 mt-3">Your Cart is Empty</h6>
-                                    <span class="mb-3 fw-normal fs-13 d-block">Add some items to make it happy :)</span>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- End::main-header-dropdown -->
-                    </li>
-                    <!-- End::header-element -->
-
-                    <!-- Start::header-element -->
-                    <li class="header-element notifications-dropdown d-xl-block d-none dropdown">
-                        <!-- Start::header-link|dropdown-toggle -->
-                        <a href="javascript:void(0);" class="header-link dropdown-toggle" data-bs-toggle="dropdown"
-                            data-bs-auto-close="outside" id="messageDropdown" aria-expanded="false">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="header-link-icon animate-bell" width="32"
-                                height="32" fill="#000000" viewBox="0 0 256 256">
-                                <path
-                                    d="M208,192H48a8,8,0,0,1-6.88-12C47.71,168.6,56,139.81,56,104a72,72,0,0,1,144,0c0,35.82,8.3,64.6,14.9,76A8,8,0,0,1,208,192Z"
-                                    opacity="0.1"></path>
-                                <path
-                                    d="M221.8,175.94C216.25,166.38,208,139.33,208,104a80,80,0,1,0-160,0c0,35.34-8.26,62.38-13.81,71.94A16,16,0,0,0,48,200H88.81a40,40,0,0,0,78.38,0H208a16,16,0,0,0,13.8-24.06ZM128,216a24,24,0,0,1-22.62-16h45.24A24,24,0,0,1,128,216ZM48,184c7.7-13.24,16-43.92,16-80a64,64,0,1,1,128,0c0,36.05,8.28,66.73,16,80Z">
-                                </path>
-                            </svg>
-                            <span class="header-icon-pulse bg-secondary rounded pulse pulse-secondary"></span>
-                        </a>
-                        <!-- End::header-link|dropdown-toggle -->
-                        <!-- Start::main-header-dropdown -->
-                        <div class="main-header-dropdown dropdown-menu dropdown-menu-end" data-popper-placement="none">
-                            <div class="p-3">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <p class="mb-0 fs-16">Notifications</p>
-                                    <span class="badge bg-secondary-transparent" id="notifiation-data">5 Unread</span>
-                                </div>
-                            </div>
-                            <div class="dropdown-divider"></div>
-                            <ul class="list-unstyled mb-0" id="header-notification-scroll">
-                                <li class="dropdown-item">
-                                    <div class="d-flex align-items-center">
-                                        <div class="pe-2 lh-1">
-                                            <span class="avatar avatar-md avatar-rounded bg-primary">
-                                                <i class="ti ti-message-dots fs-5"></i>
-                                            </span>
-                                        </div>
-                                        <div class="flex-grow-1 d-flex align-items-center justify-content-between">
-                                            <div>
-                                                <p class="mb-0 fw-medium"><a href="javascript:void(0);">Messages</a></p>
-                                                <div
-                                                    class="text-muted fw-normal fs-12 header-notification-text text-truncate">
-                                                    John Doe messaged you.</div>
-                                            </div>
-                                            <div>
-                                                <a href="javascript:void(0);"
-                                                    class="min-w-fit-content text-muted dropdown-item-close1"><i
-                                                        class="ri-close-circle-line fs-5"></i></a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </li>
-                                <li class="dropdown-item">
-                                    <div class="d-flex align-items-center">
-                                        <div class="pe-2 lh-1">
-                                            <span class="avatar avatar-md bg-secondary avatar-rounded">
-                                                <i class="ti ti-shopping-cart fs-5"></i>
-                                            </span>
-                                        </div>
-                                        <div class="flex-grow-1 d-flex align-items-center justify-content-between">
-                                            <div>
-                                                <p class="mb-0 fw-medium"><a href="javascript:void(0);">Orders</a></p>
-                                                <div
-                                                    class="text-muted fw-normal fs-12 header-notification-text text-truncate">
-                                                    Order <span class="text-warning">#12345</span> confirmed.</div>
-                                            </div>
-                                            <div>
-                                                <a href="javascript:void(0);"
-                                                    class="min-w-fit-content text-muted dropdown-item-close1"><i
-                                                        class="ri-close-circle-line fs-5"></i></a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </li>
-                                <li class="dropdown-item">
-                                    <div class="d-flex align-items-center">
-                                        <div class="pe-2 lh-1">
-                                            <span class="avatar avatar-md bg-success avatar-rounded">
-                                                <i class="ti ti-user-circle fs-5"></i>
-                                            </span>
-                                        </div>
-                                        <div class="flex-grow-1 d-flex align-items-center justify-content-between">
-                                            <div>
-                                                <p class="mb-0 fw-medium"><a href="javascript:void(0);">Profile</a></p>
-                                                <div
-                                                    class="text-muted fw-normal fs-12 header-notification-text text-truncate">
-                                                    Complete your profile for offers!</div>
-                                            </div>
-                                            <div>
-                                                <a href="javascript:void(0);"
-                                                    class="min-w-fit-content text-muted dropdown-item-close1"><i
-                                                        class="ri-close-circle-line fs-5"></i></a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </li>
-                                <li class="dropdown-item">
-                                    <div class="d-flex align-items-center">
-                                        <div class="pe-2 lh-1">
-                                            <span class="avatar avatar-md bg-orange avatar-rounded">
-                                                <i class="ti ti-gift fs-5"></i>
-                                            </span>
-                                        </div>
-                                        <div class="flex-grow-1 d-flex align-items-center justify-content-between">
-                                            <div>
-                                                <p class="mb-0 fw-medium"><a href="javascript:void(0);">Offers</a></p>
-                                                <div
-                                                    class="text-muted fw-normal fs-12 header-notification-text text-truncate">
-                                                    20% off electronics!</div>
-                                            </div>
-                                            <div>
-                                                <a href="javascript:void(0);"
-                                                    class="min-w-fit-content text-muted dropdown-item-close1"><i
-                                                        class="ri-close-circle-line fs-5"></i></a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </li>
-                                <li class="dropdown-item">
-                                    <div class="d-flex align-items-center">
-                                        <div class="pe-2 lh-1">
-                                            <span class="avatar avatar-md bg-info avatar-rounded">
-                                                <i class="ti ti-calendar fs-5"></i>
-                                            </span>
-                                        </div>
-                                        <div class="flex-grow-1 d-flex align-items-center justify-content-between">
-                                            <div>
-                                                <p class="mb-0 fw-medium"><a href="javascript:void(0);">Events</a></p>
-                                                <div
-                                                    class="text-muted fw-normal fs-12 header-notification-text text-truncate">
-                                                    Webinar in 1 hour!</div>
-                                            </div>
-                                            <div>
-                                                <a href="javascript:void(0);"
-                                                    class="min-w-fit-content text-muted dropdown-item-close1"><i
-                                                        class="ri-close-circle-line fs-5"></i></a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </li>
-                            </ul>
-                            <div class="p-3 empty-header-item1 border-top">
-                                <div class="d-grid">
-                                    <a href="javascript:void(0);" class="btn btn-primary btn-wave">View All</a>
-                                </div>
-                            </div>
-                            <div class="p-5 empty-item1 d-none">
-                                <div class="text-center">
-                                    <span class="avatar avatar-xl avatar-rounded bg-secondary-transparent">
-                                        <i class="ri-notification-off-line fs-2"></i>
-                                    </span>
-                                    <h6 class="fw-medium mt-3">No New Notifications</h6>
-                                </div>
-                            </div>
-                        </div>
-                    </li>
-                    <li class="header-element header-fullscreen">
-                        <!-- Start::header-link -->
-                        <a onclick="openFullscreen();" href="javascript:void(0);" class="header-link">
-                            <svg xmlns="http://www.w3.org/2000/svg" class=" full-screen-open header-link-icon"
-                                width="32" height="32" fill="#000000" viewBox="0 0 256 256">
-                                <path d="M208,48V88L168,48ZM48,208H88L48,168Zm160,0V168l-40,40ZM48,88,88,48H48Z"
-                                    opacity="0.1"></path>
-                                <path
-                                    d="M208,40H168a8,8,0,0,0-5.66,13.66l40,40A8,8,0,0,0,216,88V48A8,8,0,0,0,208,40Zm-8,28.69L187.31,56H200ZM53.66,162.34A8,8,0,0,0,40,168v40a8,8,0,0,0,8,8H88a8,8,0,0,0,5.66-13.66ZM56,200V187.31L68.69,200Zm155.06-39.39a8,8,0,0,0-8.72,1.73l-40,40A8,8,0,0,0,168,216h40a8,8,0,0,0,8-8V168A8,8,0,0,0,211.06,160.61ZM200,200H187.31L200,187.31ZM88,40H48a8,8,0,0,0-8,8V88a8,8,0,0,0,13.66,5.66l40-40A8,8,0,0,0,88,40ZM56,68.69V56H68.69Z">
-                                </path>
-                            </svg>
-                            <svg xmlns="http://www.w3.org/2000/svg" class="full-screen-close header-link-icon d-none"
-                                width="32" height="32" fill="#000000" viewBox="0 0 256 256">
-                                <path d="M208,48V96L160,48ZM48,208H96L48,160Z" opacity="0.1"></path>
-                                <path
-                                    d="M208,40H160a8,8,0,0,0-5.66,13.66L172.69,72l-34.35,34.34a8,8,0,0,0,11.32,11.32L184,83.31l18.34,18.35A8,8,0,0,0,216,96V48A8,8,0,0,0,208,40Zm-8,36.69L179.31,56H200Zm-93.66,61.65L72,172.69,53.66,154.34A8,8,0,0,0,40,160v48a8,8,0,0,0,8,8H96a8,8,0,0,0,5.66-13.66L83.31,184l34.35-34.34a8,8,0,0,0-11.32-11.32ZM56,200V179.31L76.69,200Z">
-                                </path>
-                            </svg>
-                        </a>
-                    </li>
-
-
-                    <!-- Start::header-element -->
-                    <li class="header-element dropdown">
-                        <!-- Start::header-link|dropdown-toggle -->
-                        <a href="javascript:void(0);" class="header-link dropdown-toggle" id="mainHeaderProfile" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
-                            <div class="d-flex align-items-center">
-                                <div class="me-xl-2 me-0">
-
-                                </div>
-                                <div class="me-xl-2 me-0">
-                                    <i class="ti ti-settings fs-5"></i>
-                                </div>
-                            </div>
-                        </a>
-                        <!-- End::header-link|dropdown-toggle -->
-                        <ul class="main-header-dropdown dropdown-menu pt-0 overflow-hidden header-profile-dropdown dropdown-menu-end" aria-labelledby="mainHeaderProfile">
-                            <li><a class="dropdown-item d-flex align-items-center" href="profile.html"><i class="ti ti-user me-2 fs-18 text-primary"></i>Profile</a></li>
-                            <li><a class="dropdown-item d-flex align-items-center" href="mail.html"><i class="ti ti-mail me-2 fs-18 text-secondary"></i>Inbox</a></li>
-                            <li><a class="dropdown-item d-flex align-items-center" href="to-do-list.html"><i class="ti ti-checklist me-2 fs-18 text-success"></i>Task Manager</a></li>
-                            <li><a class="dropdown-item d-flex align-items-center" href="setting"><i class="ti ti-settings me-2 fs-18 text-orange"></i>Settings</a></li>
-                            <li><a class="dropdown-item d-flex align-items-center" href="chat.html"><i class="ti ti-headset me-2 fs-18 text-info"></i>Support</a></li>
-                            <li><a class="dropdown-item d-flex align-items-center" href="sign-in-cover.html"><i class="ti ti-logout me-2 fs-18 text-warning"></i>Log Out</a></li>
-                        </ul>
-                    </li>
                 </ul>
             </div>
         </header>
@@ -1078,6 +804,13 @@
                                 </li>
                                 <li class="slide">
                                     <a href="colour" class="side-menu__item">Colour</a>
+                                </li>
+                                <!-- NEW ITEMS ADDED -->
+                                <li class="slide">
+                                    <a href="item-list" class="side-menu__item">Item List</a>
+                                </li>
+                                <li class="slide">
+                                    <a href="additional-work" class="side-menu__item">Additional Work</a>
                                 </li>
 
                             </ul>
