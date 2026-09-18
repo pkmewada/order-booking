@@ -28,25 +28,16 @@
         font-weight: 600;
         text-decoration: line-through;
     }
-    .req-item-name {
-        font-weight: 500;
-        color: #18243d;
-    }
+    .req-item-name { font-weight: 500; color: #18243d; }
     .req-missing-badge {
-        background: #fce4e4;
-        color: #b91c1c;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 600;
+        background: #fce4e4; color: #b91c1c;
+        padding: 2px 8px; border-radius: 4px;
+        font-size: 11px; font-weight: 600;
     }
     .req-received-badge {
-        background: #d1fae5;
-        color: #065f46;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 600;
+        background: #d1fae5; color: #065f46;
+        padding: 2px 8px; border-radius: 4px;
+        font-size: 11px; font-weight: 600;
     }
     .req-photo { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; }
 </style>

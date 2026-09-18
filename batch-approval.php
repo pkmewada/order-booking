@@ -95,13 +95,49 @@
     .piece-card .piece-card-actions .btn { font-size: 11px; padding: 4px 8px; flex: 1 1 calc(33.33% - 4px); min-width: 70px; }
     .piece-card .piece-remarks { font-size: 11px; padding: 4px 6px; border-radius: 6px; }
 
-    #approvalTableBody td, #approvalTableBody th { vertical-align: top !important; }
-    .piece-type-cell { white-space: nowrap; font-size: 13px; color: #18243d; line-height: 1.6; }
-    .piece-type-cell .piece-num { font-weight: 700; color: #161617; }
-    .piece-type-cell .piece-item-text { font-weight: 400; color: #333; }
+    /* ========== TABLE: Piece Type + Status ========== */
+    #approvalTableBody td, #approvalTableBody th {
+        vertical-align: middle !important;
+        padding: 8px 12px;
+    }
 
-    /* Button states */
-    .btn-approve-piece:disabled { opacity: 0.45; cursor: not-allowed; }
+    /* Piece column — each piece on its own line, dashed separators */
+    .piece-cell-lines {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+    }
+    .piece-line {
+        font-size: 13px;
+        color: #18243d;
+        line-height: 1.6;
+        white-space: nowrap;
+        padding: 6px 0;
+        border-bottom: 1px dashed #eef1f7;
+    }
+    .piece-line:first-child { padding-top: 0; }
+    .piece-line:last-child { padding-bottom: 0; border-bottom: none; }
+    .piece-line .piece-num { font-weight: 700; color: #161617; }
+    .piece-line .piece-item-text { font-weight: 400; color: #333; }
+
+    /* Status column — one badge per piece, dashed separators matching Piece column */
+    .status-cell-lines {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        align-items: flex-start;
+    }
+    .status-line {
+        line-height: 1.6;
+        padding: 6px 0;
+        border-bottom: 1px dashed #eef1f7;
+        display: flex;
+        align-items: center;
+        min-height: 24px;
+    }
+    .status-line:first-child { padding-top: 0; }
+    .status-line:last-child { padding-bottom: 0; border-bottom: none; }
+    .status-line .badge { font-size: 11px; padding: 4px 9px; }
 </style>
 
 <div class="main-content app-content">
@@ -131,8 +167,8 @@
                         <select id="approvalStatusFilter" class="form-select">
                             <option value="">All Status</option>
                             <option value="pending">Pending</option>
-                            <option value="approved">Approved</option>
-                            <option value="missing">Missing Item</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="pass">Pass</option>
                         </select>
                     </div>
                     <div class="col-md-4 ms-auto">
@@ -205,9 +241,9 @@
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                     <h6 class="mb-0">Piece-wise Item Availability</h6>
                     <small class="text-muted" style="font-size:11px;">
-                        <b>Approve</b> = all items present |
-                        <b>Confirm</b> = partial (some later) |
-                        <b>Pass</b> = force pass with missing
+                        <b>Approve</b> = all items present | 
+                        <b>Confirm</b> = partial (status: pending) | 
+                        <b>Pass</b> = force pass with missing (status: in progress)
                     </small>
                 </div>
 

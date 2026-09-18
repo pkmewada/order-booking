@@ -1,5 +1,72 @@
 <?php require_once __DIR__ . '/includes/header.php'; ?>
 
+<style>
+    #refreshCuttingBtn {
+        background-color: #161617 !important;
+        border-color: #161617 !important;
+        color: #fff !important;
+    }
+    #refreshCuttingBtn:hover { background-color: #2b2b2d !important; border-color: #2b2b2d !important; }
+
+    /* ========== TABLE 1: Approved Items ========== */
+    #approvedItemsList td, #approvedItemsList th {
+        vertical-align: middle !important;
+    }
+    #approvedItemsList .piece-line {
+        font-size: 13px;
+        color: #18243d;
+        line-height: 1.8;
+        white-space: nowrap;
+    }
+    #approvedItemsList .piece-line .piece-num { font-weight: 700; }
+
+    #approvedItemsList .avail-line {
+        font-size: 12px;
+        line-height: 1.9;
+        white-space: nowrap;
+    }
+    #approvedItemsList .avail-line .avail-item { font-weight: 600; }
+    #approvedItemsList .avail-line .avail-yes { color: #065f46; }
+    #approvedItemsList .avail-line .avail-no  { color: #b91c1c; }
+
+    #approvedItemsList .status-line { margin-bottom: 4px; }
+    #approvedItemsList .status-line:last-child { margin-bottom: 0; }
+
+    #approvedItemsList .action-line { margin-bottom: 6px; }
+    #approvedItemsList .action-line:last-child { margin-bottom: 0; }
+
+    /* ========== TABLE 2: Cutting Assignments ========== */
+    .progress-bar-container {
+        width: 80px; height: 6px;
+        background-color: #e9ecef;
+        border-radius: 3px;
+        overflow: hidden;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    .progress-bar-fill {
+        height: 100%;
+        background-color: #28a745;
+        transition: width 0.5s ease;
+    }
+    #cuttingMastersList td { vertical-align: middle !important; }
+
+    .delivery-date-badge { font-size: 12px; padding: 4px 8px; border-radius: 4px; white-space: nowrap; display: inline-block; }
+    .delivery-ontrack { background-color: #d4edda; color: #155724; }
+    .delivery-due-today { background-color: #fff3cd; color: #856404; }
+    .delivery-overdue { background-color: #f8d7da; color: #721c24; }
+    .delivery-badge-secondary { background-color: #e9ecef; color: #6c757d; }
+
+    /* ========== Assign modal ========== */
+    .assignment-row td { vertical-align: middle; padding: 6px 8px; }
+    #rowsContainer .table th {
+        background: #f8f9fa; font-weight: 600; font-size: 12px;
+        text-transform: uppercase; letter-spacing: 0.5px;
+        padding: 8px 10px; border-bottom: 2px solid #dee2e6;
+    }
+    #rowsContainer .table td { padding: 6px 8px; vertical-align: middle; }
+</style>
+
 <div class="main-content app-content">
     <div class="container-fluid">
 
@@ -13,37 +80,41 @@
                     </ol>
                 </nav>
             </div>
-            <button class="btn btn-primary" id="assignCuttingBtn">
-                <i class="bx bx-plus align-middle"></i> Assign Cutting Master
-            </button>
+            <div class="d-flex gap-2">
+                
+                <button class="btn btn-dark" id="assignCuttingBtn">
+                    <i class="bx bx-plus align-middle me-1"></i> Assign Cutting Master
+                </button>
+                <button class="btn btn-primary" id="refreshCuttingBtn">
+                    <i class="bx bx-refresh me-1"></i>
+                </button>
+            </div>
         </div>
 
-        <!-- TABLE 1: Approved Items from Batch Approval -->
+        <!-- ============ TABLE 1: APPROVED ITEMS (READY FOR CUTTING) ============ -->
         <div class="row">
             <div class="col-xl-12">
                 <div class="card custom-card">
                     <div class="card-header">
                         <div class="card-title">
-                            <i class="bx bx-check-circle text-success me-2"></i> Approved Items (Ready for Cutting)
+                            <i class="bx bx-check-circle text-success me-2"></i> Approved Items — Ready for Cutting
                         </div>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
-                            <table class="table table-bordered text-nowrap">
+                            <table class="table table-bordered text-nowrap w-100">
                                 <thead>
                                     <tr>
-                                        <th>#</th>
-                                        <th>Photo</th>
                                         <th>Batch ID</th>
+                                        <th>Photo</th>
                                         <th>Brand</th>
                                         <th>Design</th>
                                         <th>Color</th>
                                         <th>Piece</th>
                                         <th>Item</th>
                                         <th>Available Items</th>
-                                        <th>Qty</th>
+                                        <th>Quantity</th>
                                         <th>Priority</th>
-                                        <th>Source</th>
                                         <th>Status</th>
                                         <th>Action</th>
                                     </tr>
@@ -56,7 +127,7 @@
             </div>
         </div>
 
-        <!-- TABLE 2: Cutting Assignments -->
+        <!-- ============ TABLE 2: CUTTING ASSIGNMENTS ============ -->
         <div class="row">
             <div class="col-xl-12">
                 <div class="card custom-card">
@@ -67,7 +138,7 @@
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
-                            <table class="table table-bordered text-nowrap">
+                            <table class="table table-bordered text-nowrap w-100">
                                 <thead>
                                     <tr>
                                         <th>#</th>
@@ -155,22 +226,6 @@
 </div>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
-
-<style>
-    .progress-bar-container { width: 80px; height: 6px; background-color: #e9ecef; border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; }
-    .progress-bar-fill { height: 100%; background-color: #28a745; transition: width 0.5s ease; }
-    .assignment-row td { vertical-align: middle; padding: 6px 8px; }
-    #rowsContainer .table th { background: #f8f9fa; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 10px; border-bottom: 2px solid #dee2e6; }
-    #rowsContainer .table td { padding: 6px 8px; vertical-align: middle; }
-    .btn-pass { background-color: #17a2b8; color: white; }
-    .btn-pass:hover { background-color: #138496; color: white; }
-    .delivery-date-badge { font-size: 12px; padding: 4px 8px; border-radius: 4px; white-space: nowrap; display: inline-block; }
-    .delivery-ontrack { background-color: #d4edda; color: #155724; }
-    .delivery-due-today { background-color: #fff3cd; color: #856404; }
-    .delivery-overdue { background-color: #f8d7da; color: #721c24; }
-    .delivery-badge-secondary { background-color: #e9ecef; color: #6c757d; }
-    .item-chip { display: inline-block; background: #f1f5fb; color: #18243d; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin: 2px 2px 0 0; }
-</style>
 
 <script src="assets/js/cutting-manager.js"></script>
 </body>

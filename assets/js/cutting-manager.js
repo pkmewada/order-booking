@@ -6,13 +6,22 @@ $(document).ready(function () {
     const CUTTING_NEXT_ID_KEY = "cuttingNextId";
     const SUB_BATCH_COUNTERS_KEY = "cuttingSubBatchCounters";
 
+    const PLACEHOLDER_IMG =
+        "data:image/svg+xml;utf8," +
+        encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">' +
+            '<rect width="100%" height="100%" fill="#f1f3f8"/>' +
+            '<text x="50%" y="55%" font-family="Arial" font-size="11" fill="#9aa6c2" text-anchor="middle">No Image</text>' +
+            '</svg>'
+        );
+
     let approvedPool = [];
     let cuttingData = [];
     let nextId = 1;
     let subBatchCounters = {};
     let currentEditingId = null;
 
-    /* HELPERS */
+    /* ================= HELPERS ================= */
     function escapeHtml(value) {
         return String(value ?? "")
             .replace(/&/g, "&amp;")
@@ -54,6 +63,38 @@ $(document).ready(function () {
         localStorage.setItem(SUB_BATCH_COUNTERS_KEY, JSON.stringify(subBatchCounters));
     }
 
+    function generateSubBatchId(batchId, pieceCount, index) {
+        let formatted = batchId;
+        if (!formatted.toString().includes("BATCH-")) {
+            formatted = `BATCH-${String(batchId).padStart(4, "0")}`;
+        }
+        const num = index + 1;
+        if (pieceCount === 1) return `${formatted}-C${num}`;
+        if (pieceCount === 2) {
+            return num % 2 === 1
+                ? `${formatted}-U${Math.ceil(num / 2)}`
+                : `${formatted}-L${num / 2}`;
+        }
+        if (pieceCount === 3) {
+            const group = Math.ceil(num / 3);
+            const pos = ((num - 1) % 3) + 1;
+            if (pos === 1) return `${formatted}-U${group}`;
+            if (pos === 2) return `${formatted}-J${group}`;
+            return `${formatted}-L${group}`;
+        }
+        return `${formatted}-C${num}`;
+    }
+
+    function getStatusBadgeHtml(item) {
+        if (item.status === "assigned") {
+            return `<span class="badge bg-primary">Assigned</span>`;
+        }
+        if (item.mode === "in_progress") {
+            return `<span class="badge bg-warning text-dark">In Progress</span>`;
+        }
+        return `<span class="badge bg-success">Pass</span>`;
+    }
+
     function formatDateDisplay(dateString) {
         if (!dateString) return 'Not Set';
         const d = new Date(dateString);
@@ -72,102 +113,133 @@ $(document).ready(function () {
         return 'delivery-ontrack';
     }
 
-    function generateSubBatchId(batchId, pieceCount, index) {
-        let formatted = batchId;
-        if (!formatted.toString().includes("BATCH-")) {
-            formatted = `BATCH-${String(batchId).padStart(4, "0")}`;
-        }
-        const num = index + 1;
-        if (pieceCount === 1) return `${formatted}-C${num}`;
-        if (pieceCount === 2) return num % 2 === 1 ? `${formatted}-U${Math.ceil(num/2)}` : `${formatted}-L${num/2}`;
-        if (pieceCount === 3) {
-            const group = Math.ceil(num / 3);
-            const pos = ((num - 1) % 3) + 1;
-            if (pos === 1) return `${formatted}-U${group}`;
-            if (pos === 2) return `${formatted}-J${group}`;
-            return `${formatted}-L${group}`;
-        }
-        return `${formatted}-C${num}`;
-    }
-
-    /* RENDER TABLE 1: APPROVED ITEMS */
+    /* ================= TABLE 1: APPROVED ITEMS (MERGED) ================= */
     function renderApprovedTable() {
         const tbody = $("#approvedItemsList");
         tbody.empty();
 
         if (!approvedPool.length) {
-            tbody.html(`<tr><td colspan="14" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No approved items yet.</td></tr>`);
-            return;
-        }
-
-        approvedPool.forEach((item, idx) => {
-            const photo = item.photo || "";
-            const photoHtml = photo
-                ? `<img src="${escapeHtml(photo)}" style="width:45px;height:45px;object-fit:cover;border-radius:5px;" onerror="this.style.display='none';">`
-                : `<span class="text-muted">-</span>`;
-
-            const items = Array.isArray(item.availableItems) ? item.availableItems : [];
-            const itemsHtml = items.map(m => `<span class="item-chip">${escapeHtml(m)}</span>`).join("") || "-";
-
-            const source = item.fromRequirement
-                ? `<span class="badge bg-info">Req: ${escapeHtml(item.fromRequirement)}</span>`
-                : `<span class="badge bg-success">Batch Approval</span>`;
-
-            const statusBadge = item.status === "assigned"
-                ? `<span class="badge bg-primary">Assigned</span>`
-                : `<span class="badge bg-warning text-dark">Pending</span>`;
-
-            tbody.append(`
+            tbody.html(`
                 <tr>
-                    <td>${idx + 1}</td>
-                    <td>${photoHtml}</td>
-                    <td><strong>${escapeHtml(item.batchId || "-")}</strong></td>
-                    <td>${escapeHtml(item.brand || "-")}</td>
-                    <td>${escapeHtml(item.designNumber || "-")}</td>
-                    <td>${escapeHtml(item.color || "-")}</td>
-                    <td>${escapeHtml(item.pieceNumber || "-")} (${escapeHtml(item.pieceItem || "-")})</td>
-                    <td>${escapeHtml(item.pieceItem || "-")}</td>
-                    <td style="max-width:200px; white-space:normal;">${itemsHtml}</td>
-                    <td>${escapeHtml(item.quantity || 0)}</td>
-                    <td>${escapeHtml(item.priority || "-")}</td>
-                    <td>${source}</td>
-                    <td>${statusBadge}</td>
-                    <td>
-                        <button class="btn btn-sm btn-primary assign-from-pool-btn" data-pool-id="${item.id}" title="Assign to Cutting">
-                            <i class="bx bx-plus"></i> Assign
-                        </button>
+                    <td colspan="12" class="text-center text-muted py-4">
+                        <i class="bx bx-info-circle me-1"></i> No approved items yet.
                     </td>
                 </tr>
             `);
+            return;
+        }
+
+        // Group by batchId
+        const grouped = {};
+        approvedPool.forEach(item => {
+            const key = String(item.batchId);
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(item);
+        });
+
+        Object.keys(grouped).forEach(batchId => {
+            const items = grouped[batchId].slice().sort((a, b) => Number(a.pieceNumber) - Number(b.pieceNumber));
+            const first = items[0];
+            const rowspan = items.length;
+
+            const photo = first.photo || "";
+            const photoSrc = photo ? escapeHtml(photo) : PLACEHOLDER_IMG;
+
+            const batchCols = `
+                <td rowspan="${rowspan}"><strong>${escapeHtml(first.batchId || "-")}</strong></td>
+                <td rowspan="${rowspan}">
+                    <img src="${photoSrc}" alt="Batch" style="width:55px;height:55px;object-fit:cover;border-radius:6px;" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}';">
+                </td>
+                <td rowspan="${rowspan}">${escapeHtml(first.brand || "-")}</td>
+                <td rowspan="${rowspan}">${escapeHtml(first.designNumber || "-")}</td>
+                <td rowspan="${rowspan}">${escapeHtml(first.color || "-")}</td>
+            `;
+
+            const qtyPriorityCols = `
+                <td rowspan="${rowspan}">${escapeHtml(first.quantity || 0)}</td>
+                <td rowspan="${rowspan}">${escapeHtml(first.priority || "-")}</td>
+            `;
+
+            items.forEach((it, idx) => {
+                // Build ✅/❌ list — use itemAvailability as source of truth
+                const materials = Array.isArray(it.materials) && it.materials.length
+                    ? it.materials
+                    : (Array.isArray(it.availableItems) ? it.availableItems : []);
+                const availability = it.itemAvailability || {};
+
+                const availHtml = materials.length
+                    ? materials.map(m => {
+                        // ✅ only if explicitly marked yes
+                        const isYes = availability[m] === "yes";
+                        return `<div class="avail-line"><span class="avail-item ${isYes ? 'avail-yes' : 'avail-no'}">${escapeHtml(m)} ${isYes ? "✅" : "❌"}</span></div>`;
+                    }).join("")
+                    : `<div class="avail-line text-muted">-</div>`;
+
+                const pieceLine = `<div class="piece-line"><span class="piece-num">${escapeHtml(it.pieceNumber)} Piece</span></div>`;
+                const itemLine = `<div class="piece-line">${escapeHtml(it.pieceItem || "-")}</div>`;
+                const statusLine = `<div class="status-line">${getStatusBadgeHtml(it)}</div>`;
+                const actionLine = `
+                    <div class="action-line">
+                        <button class="btn btn-sm btn-primary assign-from-pool-btn"
+                                data-pool-id="${it.id}"
+                                title="Assign Piece ${escapeHtml(it.pieceNumber)}"
+                                ${it.status === "assigned" ? "disabled" : ""}>
+                            <i class="bx bx-plus"></i> Assign
+                        </button>
+                    </div>
+                `;
+
+                tbody.append(`
+                    <tr>
+                        ${idx === 0 ? batchCols : ""}
+                        <td>${pieceLine}</td>
+                        <td>${itemLine}</td>
+                        <td>${availHtml}</td>
+                        ${idx === 0 ? qtyPriorityCols : ""}
+                        <td>${statusLine}</td>
+                        <td>${actionLine}</td>
+                    </tr>
+                `);
+            });
         });
     }
 
-    /* RENDER TABLE 2: CUTTING ASSIGNMENTS */
+    /* ================= TABLE 2: CUTTING ASSIGNMENTS ================= */
     function renderCuttingTable() {
         const tbody = $("#cuttingMastersList");
         tbody.empty();
 
         if (!cuttingData.length) {
-            tbody.html(`<tr><td colspan="14" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No cutting assignments yet.</td></tr>`);
+            tbody.html(`
+                <tr>
+                    <td colspan="14" class="text-center text-muted py-4">
+                        <i class="bx bx-info-circle me-1"></i> No cutting assignments yet.
+                    </td>
+                </tr>
+            `);
             return;
         }
 
         const grouped = {};
         cuttingData.forEach(item => {
-            if (!grouped[item.batchId]) grouped[item.batchId] = [];
-            grouped[item.batchId].push(item);
+            const key = String(item.batchId);
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(item);
         });
 
         let serial = 0;
         Object.keys(grouped).forEach(batchId => {
             const items = grouped[batchId];
             serial++;
+
             items.forEach((item, idx) => {
                 const progress = item.progress || 0;
                 const progressPct = item.quantity > 0 ? Math.round((progress / item.quantity) * 100) : 0;
                 const remaining = item.quantity - progress;
 
-                const priorityClass = item.priority === 'High' ? 'text-danger' : item.priority === 'Medium' ? 'text-warning' : 'text-secondary';
+                const priorityClass = item.priority === 'High' ? 'text-danger'
+                                    : item.priority === 'Medium' ? 'text-warning'
+                                    : 'text-secondary';
 
                 let deliveryHtml = `<span class="text-muted">Not Set</span>`;
                 if (item.deliveryDate) {
@@ -177,14 +249,19 @@ $(document).ready(function () {
 
                 let statusText = "Pending";
                 let statusClass = "text-warning";
-                if (progress === item.quantity) { statusText = "Complete ✅"; statusClass = "text-success"; }
-                else if (progress > 0) { statusText = "In Progress"; statusClass = "text-primary"; }
+                if (progress === item.quantity && item.quantity > 0) {
+                    statusText = "Complete ✅";
+                    statusClass = "text-success";
+                } else if (progress > 0) {
+                    statusText = "In Progress";
+                    statusClass = "text-primary";
+                }
 
                 tbody.append(`
                     <tr>
                         <td>${idx === 0 ? serial : ""}</td>
                         <td>${idx === 0 ? escapeHtml(item.batchId) : ""}</td>
-                        <td>${escapeHtml(item.subBatch || "-")}</td>
+                        <td><span class="fw-semibold text-primary">${escapeHtml(item.subBatch || "-")}</span></td>
                         <td>${idx === 0 ? escapeHtml(item.brand || "") : ""}</td>
                         <td>${escapeHtml(item.pieceType || "-")}</td>
                         <td>${escapeHtml(item.worker || "-")}</td>
@@ -210,7 +287,7 @@ $(document).ready(function () {
         });
     }
 
-    /* POPULATE BATCH SELECT (from approved pool) */
+    /* ================= POPULATE BATCH SELECT ================= */
     function populateBatchSelect() {
         const select = $("#batchSelect");
         select.empty();
@@ -224,7 +301,6 @@ $(document).ready(function () {
         }
 
         available.forEach(item => {
-            const items = (item.availableItems || []).join(", ");
             select.append(`
                 <option value="${item.id}"
                     data-batch-id="${escapeHtml(item.batchId)}"
@@ -239,7 +315,7 @@ $(document).ready(function () {
         });
     }
 
-    /* GENERATE MODAL ROWS */
+    /* ================= GENERATE MODAL ROWS ================= */
     function generateTableRows(poolItem, remaining) {
         const container = $("#rowsContainer");
         container.empty();
@@ -256,7 +332,7 @@ $(document).ready(function () {
                         <i class="bx bx-layer me-2"></i>
                         <strong>${escapeHtml(poolItem.batchId)}</strong> — Piece ${poolItem.pieceNumber} (${escapeHtml(poolItem.pieceItem)})
                         <br>
-                        <small class="text-muted">Available Items: ${(poolItem.availableItems || []).join(", ")}</small>
+                        <small class="text-muted">Available Items: ${(poolItem.availableItems || []).join(", ") || "-"}</small>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label mb-0">Split Count (Rows)</label>
@@ -277,7 +353,11 @@ $(document).ready(function () {
 
             if (count < 1) count = 1;
             if (count > remaining) {
-                Swal.fire({ icon: 'warning', title: 'Too Many Rows', text: `Cannot create ${count} rows for only ${remaining} remaining pieces.` });
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Too Many Rows',
+                    text: `Cannot create ${count} rows for only ${remaining} remaining pieces.`
+                });
                 return;
             }
 
@@ -312,30 +392,44 @@ $(document).ready(function () {
 
                 tbody.append(`
                     <tr class="assignment-row">
-                        <td><span class="sub-batch-label fw-semibold text-primary">${escapeHtml(subBatch)}</span>
-                            <input type="hidden" class="sub-batch-input" value="${escapeHtml(subBatch)}"></td>
+                        <td>
+                            <span class="sub-batch-label fw-semibold text-primary">${escapeHtml(subBatch)}</span>
+                            <input type="hidden" class="sub-batch-input" value="${escapeHtml(subBatch)}">
+                        </td>
                         <td>
                             <select class="form-select form-select-sm worker-select" required>
                                 <option value="">Select Worker</option>
-                                <option>Ahmad Khan</option><option>Bilal Ahmed</option><option>Danish Ali</option>
-                                <option>Faisal Khan</option><option>Usman Malik</option><option>Ali Ahmed</option>
-                                <option>Imran Khan</option><option>Saeed Ahmad</option><option>Zafar Iqbal</option>
+                                <option>Ahmad Khan</option>
+                                <option>Bilal Ahmed</option>
+                                <option>Danish Ali</option>
+                                <option>Faisal Khan</option>
+                                <option>Usman Malik</option>
+                                <option>Ali Ahmed</option>
+                                <option>Imran Khan</option>
+                                <option>Saeed Ahmad</option>
+                                <option>Zafar Iqbal</option>
                                 <option>Rashid Mahmood</option>
                             </select>
                         </td>
                         <td><input type="number" class="form-control form-control-sm quantity-input" value="${qty}" min="1"></td>
                         <td>
                             <select class="form-select form-select-sm size-select">
-                                <option value="S">S</option><option value="M" selected>M</option>
-                                <option value="L">L</option><option value="XL">XL</option>
+                                <option value="S">S</option>
+                                <option value="M" selected>M</option>
+                                <option value="L">L</option>
+                                <option value="XL">XL</option>
                             </select>
                         </td>
                         <td>
                             <select class="form-select form-select-sm priority-select">
-                                <option value="Low">Low</option><option value="Medium" selected>Medium</option><option value="High">High</option>
+                                <option value="Low">Low</option>
+                                <option value="Medium" selected>Medium</option>
+                                <option value="High">High</option>
                             </select>
                         </td>
-                        <td><input type="date" class="form-control form-control-sm delivery-date-input" value="${defaultDateStr}"></td>
+                        <td>
+                            <input type="date" class="form-control form-control-sm delivery-date-input" value="${defaultDateStr}">
+                        </td>
                     </tr>
                 `);
             }
@@ -349,37 +443,44 @@ $(document).ready(function () {
         });
     }
 
-    /* EVENT: Assign from Approved Pool */
+    /* ================= EVENT: Assign from row ================= */
     $(document).on("click", ".assign-from-pool-btn", function () {
         const poolId = Number($(this).data("pool-id"));
         const item = approvedPool.find(p => Number(p.id) === poolId);
         if (!item) return;
 
-        // Preload batch select with this item
+        if (item.status === "assigned") {
+            Swal.fire({ icon: 'info', title: 'Already Assigned', text: 'This item has already been assigned.' });
+            return;
+        }
+
         populateBatchSelect();
         $("#batchSelect").val(item.id).trigger("change");
-
         $("#assignModal").modal("show");
     });
 
+    /* ================= EVENT: Open Assign Modal (top button) ================= */
     $("#assignCuttingBtn").click(function () {
         populateBatchSelect();
         $("#rowsContainer").empty();
         $("#assignModal").modal("show");
     });
 
+    /* ================= EVENT: Batch Select Change ================= */
     $("#batchSelect").change(function () {
         const poolId = Number($(this).val());
-        if (!poolId) { $("#rowsContainer").empty(); return; }
+        if (!poolId) {
+            $("#rowsContainer").empty();
+            return;
+        }
 
         const item = approvedPool.find(p => Number(p.id) === poolId);
         if (!item) return;
 
-        const remaining = item.quantity || 0;
-        generateTableRows(item, remaining);
+        generateTableRows(item, item.quantity || 0);
     });
 
-    /* SAVE ASSIGNMENT */
+    /* ================= SAVE ASSIGNMENT ================= */
     $("#saveAssignBtn").click(function () {
         const poolId = Number($("#batchSelect").val());
         if (!poolId) {
@@ -401,13 +502,21 @@ $(document).ready(function () {
             const priority = $(this).find(".priority-select").val();
             const deliveryDate = $(this).find(".delivery-date-input").val();
 
-            if (!worker || quantity < 1 || !deliveryDate) { valid = false; return false; }
+            if (!worker || quantity < 1 || !deliveryDate) {
+                valid = false;
+                return false;
+            }
 
             rows.push({ subBatch, worker, quantity, size, priority, deliveryDate });
         });
 
         if (!valid) {
             Swal.fire({ icon: 'warning', title: 'Incomplete', text: 'Please fill all fields.' });
+            return;
+        }
+
+        if (!rows.length) {
+            Swal.fire({ icon: 'warning', title: 'No Rows', text: 'Please add at least one assignment row.' });
             return;
         }
 
@@ -431,7 +540,6 @@ $(document).ready(function () {
             });
         });
 
-        // Mark pool item as assigned
         const idx = approvedPool.findIndex(p => Number(p.id) === poolId);
         if (idx !== -1) {
             approvedPool[idx].status = "assigned";
@@ -454,7 +562,7 @@ $(document).ready(function () {
         });
     });
 
-    /* UPDATE PROGRESS */
+    /* ================= UPDATE PROGRESS ================= */
     $(document).on("click", ".progress-btn", function () {
         const id = Number($(this).data("id"));
         const item = cuttingData.find(d => Number(d.id) === id);
@@ -488,7 +596,7 @@ $(document).ready(function () {
         Swal.fire({ icon: 'success', title: 'Updated', timer: 1200, showConfirmButton: false });
     });
 
-    /* DELETE */
+    /* ================= DELETE ================= */
     $(document).on("click", ".delete-cutting-btn", function () {
         const id = Number($(this).data("id"));
         const item = cuttingData.find(d => Number(d.id) === id);
@@ -510,7 +618,15 @@ $(document).ready(function () {
         });
     });
 
-    /* INIT */
+    /* ================= REFRESH ================= */
+    $("#refreshCuttingBtn").click(function () {
+        loadData();
+        renderApprovedTable();
+        renderCuttingTable();
+        Swal.fire({ icon: "success", title: "Refreshed", timer: 1000, showConfirmButton: false });
+    });
+
+    /* ================= INIT ================= */
     loadData();
     renderApprovedTable();
     renderCuttingTable();
