@@ -3,6 +3,7 @@ $(document).ready(function () {
 
     const REQUIREMENT_STORAGE_KEY = "requirementData";
     const BATCH_STORAGE_KEY = "batchData";
+    const APPROVED_BATCH_STORAGE_KEY = "approvedBatchData";
     const APPROVED_POOL_KEY = "approvedPool";
 
     function escapeHtml(value) {
@@ -40,6 +41,143 @@ $(document).ready(function () {
         };
         const s = map[status] || map.pending;
         return `<span class="badge ${s.cls}">${s.label}</span>`;
+    }
+
+    /* ============================================================
+     * CORE: Build merged availability from all sources
+     * Rule: "yes" is STICKY (never overwritten by "no")
+     * ============================================================ */
+    function buildMergedAvailability(pieceAvailability, batchId, pieceNumber, fullMaterials, extraOverrides) {
+        const merged = {};
+
+        // From piece's current stored availability
+        Object.entries(pieceAvailability || {}).forEach(([k, v]) => {
+            if (v === "yes") merged[k] = "yes";
+            else if (merged[k] === undefined) merged[k] = v;
+        });
+
+        // From ALL requirements (past + present)
+        const allReqs = readStorage(REQUIREMENT_STORAGE_KEY).filter(r =>
+            String(r.batchId) === String(batchId) &&
+            Number(r.pieceNumber) === Number(pieceNumber)
+        );
+        allReqs.forEach(r => {
+            Object.entries(r.itemAvailability || {}).forEach(([k, v]) => {
+                if (v === "yes") merged[k] = "yes";
+                else if (v === "no" && merged[k] !== "yes") merged[k] = "no";
+            });
+        });
+
+        // Overrides
+        Object.entries(extraOverrides || {}).forEach(([k, v]) => {
+            if (v === "yes") merged[k] = "yes";
+            else if (merged[k] !== "yes") merged[k] = "no";
+        });
+
+        // Fill missing with "no"
+        fullMaterials.forEach(m => {
+            if (merged[m] === undefined) merged[m] = "no";
+        });
+
+        return merged;
+    }
+
+    function getPieceFullMaterials(batchId, pieceNumber, reqMaterials) {
+        let full = [];
+        const approvedBatchData = readStorage(APPROVED_BATCH_STORAGE_KEY);
+        const bIdx = approvedBatchData.findIndex(b => String(b.batchId) === String(batchId));
+        if (bIdx !== -1) {
+            const batch = approvedBatchData[bIdx];
+            const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
+            const pieceIdx = pieces.findIndex(p => Number(p.number) === Number(pieceNumber));
+            if (pieceIdx !== -1 && Array.isArray(pieces[pieceIdx].materials) && pieces[pieceIdx].materials.length) {
+                full = [...pieces[pieceIdx].materials];
+            }
+        }
+        if (!full.length && Array.isArray(reqMaterials)) full = [...reqMaterials];
+        return full;
+    }
+
+    /**
+     * Apply merged availability to the piece in both storages.
+     * Recompute status: all yes → pass; some yes → in_progress; none → pending.
+     */
+    function applyMergedToPiece(batchId, pieceNumber, mergedAvailability, fullMaterials) {
+        const yesCount = fullMaterials.filter(m => mergedAvailability[m] === "yes").length;
+
+        let newStatus;
+        if (fullMaterials.length > 0 && yesCount === fullMaterials.length) newStatus = "pass";
+        else if (yesCount > 0) newStatus = "in_progress";
+        else newStatus = "pending";
+
+        [APPROVED_BATCH_STORAGE_KEY, BATCH_STORAGE_KEY].forEach(key => {
+            const batchData = readStorage(key);
+            const bIdx = batchData.findIndex(b => String(b.batchId) === String(batchId));
+            if (bIdx === -1) return;
+
+            const batch = batchData[bIdx];
+            const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
+            const pieceIdx = pieces.findIndex(p => Number(p.number) === Number(pieceNumber));
+            if (pieceIdx === -1) return;
+
+            const piece = pieces[pieceIdx];
+            const approval = piece.approval || {};
+
+            const finalMaterials = fullMaterials.length
+                ? fullMaterials
+                : (Array.isArray(piece.materials) && piece.materials.length ? piece.materials : []);
+
+            pieces[pieceIdx] = {
+                ...piece,
+                materials: finalMaterials,
+                approval: {
+                    ...approval,
+                    status: newStatus,
+                    itemAvailability: mergedAvailability,
+                    availableItems: finalMaterials.filter(m => mergedAvailability[m] === "yes"),
+                    missingItems: finalMaterials.filter(m => mergedAvailability[m] !== "yes"),
+                    syncedAt: new Date().toLocaleString("en-GB")
+                }
+            };
+
+            batchData[bIdx] = { ...batch, pieces };
+            saveStorage(key, batchData);
+        });
+    }
+
+    function syncRequirementTickToBatch(req, item, checked) {
+        const fullMaterials = getPieceFullMaterials(req.batchId, req.pieceNumber, req.materials);
+
+        const merged = buildMergedAvailability(
+            null, // Don't pass piece availability directly — buildMerged reads from storage if needed
+            req.batchId,
+            req.pieceNumber,
+            fullMaterials,
+            { [item]: checked ? "yes" : "no" }
+        );
+
+        // Also merge from piece's own stored availability
+        const approvedBatchData = readStorage(APPROVED_BATCH_STORAGE_KEY);
+        const bIdx = approvedBatchData.findIndex(b => String(b.batchId) === String(req.batchId));
+        if (bIdx !== -1) {
+            const batch = approvedBatchData[bIdx];
+            const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
+            const pieceIdx = pieces.findIndex(p => Number(p.number) === Number(req.pieceNumber));
+            if (pieceIdx !== -1) {
+                const pieceAvail = pieces[pieceIdx].approval?.itemAvailability || {};
+                Object.entries(pieceAvail).forEach(([k, v]) => {
+                    if (v === "yes") merged[k] = "yes";
+                    else if (merged[k] !== "yes" && merged[k] === undefined) merged[k] = v;
+                });
+            }
+        }
+
+        // Ensure full materials all have a value
+        fullMaterials.forEach(m => {
+            if (merged[m] === undefined) merged[m] = "no";
+        });
+
+        applyMergedToPiece(req.batchId, req.pieceNumber, merged, fullMaterials);
     }
 
     function renderRequirements() {
@@ -158,6 +296,7 @@ $(document).ready(function () {
         }
     }
 
+    /* ============== CHECKBOX TOGGLE ============== */
     $(document).on("change", ".req-item-check", function () {
         const reqId = Number($(this).data("req-id"));
         const item = $(this).data("item");
@@ -169,7 +308,21 @@ $(document).ready(function () {
         if (!req.itemAvailability) req.itemAvailability = {};
         req.itemAvailability[item] = checked ? "yes" : "no";
 
+        const missing = Array.isArray(req.missingItems) ? req.missingItems : [];
+        const receivedCount = missing.filter(m => req.itemAvailability[m] === "yes").length;
+
+        if (receivedCount === missing.length && missing.length > 0) {
+            req.status = "pending";
+        } else if (receivedCount > 0) {
+            req.status = "partial";
+        } else {
+            req.status = "pending";
+        }
+
         saveStorage(REQUIREMENT_STORAGE_KEY, requirements);
+
+        // Sync to piece
+        syncRequirementTickToBatch(req, item, checked);
 
         const $row = $(this).closest(".req-item-row");
         $row.toggleClass("received", checked);
@@ -180,9 +333,13 @@ $(document).ready(function () {
             $row.append('<span class="req-missing-badge ms-auto">Missing</span>');
         }
 
+        const $card = $(`.requirement-card[data-req-id="${reqId}"]`);
+        $card.find(".badge").replaceWith(getStatusBadge(req.status));
+
         checkMergeButton(reqId);
     });
 
+    /* ============== MERGE AND PASS ============== */
     $(document).on("click", ".req-merge-pass-btn", function () {
         const reqId = Number($(this).data("req-id"));
         mergeAndPass(reqId);
@@ -227,46 +384,63 @@ $(document).ready(function () {
         }).then(function (result) {
             if (!result.isConfirmed) return;
 
-            const baseMaterials = Array.isArray(req.materials) ? req.materials : [];
+            /* ---- STEP 1: Full material list ---- */
+            const trueFullMaterials = getPieceFullMaterials(req.batchId, req.pieceNumber, req.materials);
 
-            // ---- Build the FINAL full availability map for this piece ----
-            // Start with what's saved (checked = yes, unchecked = no)
-            // Then override: every receivedItem → yes; every remainingItem → no
-            const finalAvailability = { ...(req.itemAvailability || {}) };
-            receivedItems.forEach(m => { finalAvailability[m] = "yes"; });
-            remainingItems.forEach(m => { finalAvailability[m] = "no"; });
+            /* ---- STEP 2: Build merged availability with overrides ---- */
+            const overrides = {};
+            receivedItems.forEach(m => { overrides[m] = "yes"; });
+            remainingItems.forEach(m => { overrides[m] = "no"; });
 
-            // Available = every material where availability == yes
-            const finalAvailableItems = baseMaterials.filter(m => finalAvailability[m] === "yes");
+            // Read piece's current availability
+            const approvedBatchData = readStorage(APPROVED_BATCH_STORAGE_KEY);
+            const bIdx = approvedBatchData.findIndex(b => String(b.batchId) === String(req.batchId));
+            let pieceAvailability = {};
+            if (bIdx !== -1) {
+                const batch = approvedBatchData[bIdx];
+                const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
+                const pieceIdx = pieces.findIndex(p => Number(p.number) === Number(req.pieceNumber));
+                if (pieceIdx !== -1) pieceAvailability = pieces[pieceIdx].approval?.itemAvailability || {};
+            }
 
+            const finalAvailability = buildMergedAvailability(
+                pieceAvailability,
+                req.batchId,
+                req.pieceNumber,
+                trueFullMaterials,
+                overrides
+            );
+
+            const availableItems = trueFullMaterials.filter(m => finalAvailability[m] === "yes");
+
+            /* ---- STEP 3: Push to Cutting pool ---- */
             const pool = readStorage(APPROVED_POOL_KEY);
-
-            // Find existing pool entry for THIS piece only
             const existingIdx = pool.findIndex(p =>
                 String(p.batchId) === String(req.batchId) &&
                 Number(p.pieceNumber) === Number(req.pieceNumber)
             );
 
             if (existingIdx !== -1) {
-                // Merge into existing pool entry for this piece
-                const existingEntry = pool[existingIdx];
-                const mergedMaterials = [...new Set([...(existingEntry.materials || []), ...baseMaterials])];
-                const mergedAvailability = { ...(existingEntry.itemAvailability || {}), ...finalAvailability };
-                const mergedAvailable = mergedMaterials.filter(m => mergedAvailability[m] === "yes");
+                const prev = pool[existingIdx];
+                const mergedAvail = { ...(prev.itemAvailability || {}) };
+                Object.entries(finalAvailability).forEach(([k, v]) => {
+                    if (v === "yes") mergedAvail[k] = "yes";
+                    else if (mergedAvail[k] !== "yes") mergedAvail[k] = "no";
+                });
+                const mergedMaterials = [...new Set([...(prev.materials || []), ...trueFullMaterials])];
+                const mergedAvailable = mergedMaterials.filter(m => mergedAvail[m] === "yes");
 
                 pool[existingIdx] = {
-                    ...existingEntry,
+                    ...prev,
                     materials: mergedMaterials,
-                    itemAvailability: mergedAvailability,
+                    itemAvailability: mergedAvail,
                     availableItems: mergedAvailable,
                     mode: "pass",
                     status: "pending_cutting",
                     updatedAt: new Date().toLocaleString("en-GB")
                 };
             } else {
-                // Create new pool entry for this piece
                 const nextId = pool.length ? Math.max(...pool.map(p => Number(p.id) || 0)) + 1 : 1;
-
                 pool.push({
                     id: nextId,
                     batchId: req.batchId,
@@ -279,8 +453,8 @@ $(document).ready(function () {
                     quantity: req.quantity,
                     priority: req.priority || "Medium",
                     photo: req.photo || "",
-                    availableItems: finalAvailableItems,
-                    materials: baseMaterials.length ? baseMaterials : finalAvailableItems,
+                    availableItems: availableItems,
+                    materials: trueFullMaterials,
                     itemAvailability: finalAvailability,
                     additionalWorks: req.additionalWorks || [],
                     fromRequirement: req.requirementId,
@@ -289,16 +463,14 @@ $(document).ready(function () {
                     createdAt: new Date().toLocaleString("en-GB")
                 });
             }
-
             saveStorage(APPROVED_POOL_KEY, pool);
 
-            // ---- Update requirement ----
+            /* ---- STEP 4: Update requirement ---- */
             if (isPartial) {
-                // Remove received items from requirement, keep remaining
+                // Keep partial requirement active with remaining items
                 requirements[reqIndex] = {
                     ...req,
                     missingItems: remainingItems,
-                    // Keep availability map for remaining items only
                     itemAvailability: remainingItems.reduce((acc, m) => {
                         acc[m] = finalAvailability[m] || "no";
                         return acc;
@@ -307,16 +479,21 @@ $(document).ready(function () {
                     updatedAt: new Date().toLocaleString("en-GB")
                 };
             } else {
+                // CRITICAL: DO NOT DELETE - keep in storage so its history
+                // is available for future merges. Just mark completed.
                 requirements[reqIndex] = {
                     ...req,
+                    // Keep the ORIGINAL missingItems list so merge logic can use it
+                    missingItems: [...missing],
+                    itemAvailability: { ...finalAvailability },
                     status: "completed",
                     completedAt: new Date().toLocaleString("en-GB")
                 };
             }
             saveStorage(REQUIREMENT_STORAGE_KEY, requirements);
 
-            // ---- Update batch piece status ----
-            updateBatchPieceStatus(req, isPartial, remainingItems, finalAvailability);
+            /* ---- STEP 5: Apply merged state to piece ---- */
+            applyMergedToPiece(req.batchId, req.pieceNumber, finalAvailability, trueFullMaterials);
 
             renderRequirements();
 
@@ -333,38 +510,23 @@ $(document).ready(function () {
         });
     }
 
-    function updateBatchPieceStatus(req, isPartial, remainingItems, finalAvailability) {
-        const batchData = readStorage(BATCH_STORAGE_KEY);
-        const bIdx = batchData.findIndex(b => String(b.batchId) === String(req.batchId));
-        if (bIdx === -1) return;
-
-        const batch = batchData[bIdx];
-        const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
-        const pieceIdx = pieces.findIndex(p => Number(p.number) === Number(req.pieceNumber));
-        if (pieceIdx === -1) return;
-
-        const piece = pieces[pieceIdx];
-
-        pieces[pieceIdx] = {
-            ...piece,
-            approval: {
-                ...(piece.approval || {}),
-                status: isPartial ? "in_progress" : "pass",
-                itemAvailability: finalAvailability,
-                missingItems: isPartial ? remainingItems : [],
-                mergedAt: new Date().toLocaleString("en-GB")
-            }
-        };
-
-        batchData[bIdx] = { ...batch, pieces };
-        saveStorage(BATCH_STORAGE_KEY, batchData);
-    }
-
     $("#refreshReqBtn").on("click", function () {
         loadRequirements();
         renderRequirements();
         Swal.fire({ icon: "success", title: "Refreshed", timer: 1000, showConfirmButton: false });
     });
+
+    window.addEventListener("focus", function () {
+        loadRequirements();
+        renderRequirements();
+    });
+
+    setInterval(function () {
+        const prev = JSON.stringify(requirements);
+        loadRequirements();
+        const now = JSON.stringify(requirements);
+        if (prev !== now) renderRequirements();
+    }, 1500);
 
     loadRequirements();
     renderRequirements();

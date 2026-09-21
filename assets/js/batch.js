@@ -3,6 +3,7 @@ $(document).ready(function () {
 
     const BATCH_STORAGE_KEY = "batchData";
     const BOM_STORAGE_KEY = "bomMasterData";
+    const APPROVED_BATCH_STORAGE_KEY = "approvedBatchData";
 
     let batchData = [];
     let bomData = [];
@@ -508,6 +509,8 @@ $(document).ready(function () {
 
             priority: priority,
 
+            status: "pending", // pending or approved
+
             pieces: pieces.map((piece, index) => ({
                 number: getPieceNumber(piece, index),
                 item: getPieceItem(piece),
@@ -645,6 +648,14 @@ $(document).ready(function () {
 
                             <button
                                 type="button"
+                                class="btn btn-sm btn-success pass-batch-btn"
+                                data-id="${escapeHtml(batch.id)}"
+                                title="Pass">
+                                <i class="bx bx-check"></i>
+                            </button>
+
+                            <button
+                                type="button"
                                 class="btn btn-sm btn-danger delete-batch-btn"
                                 data-id="${escapeHtml(batch.id)}"
                                 title="Delete">
@@ -694,6 +705,76 @@ $(document).ready(function () {
         fillDesignData();
 
         batchModal.show();
+    });
+
+    // --------------------------------------------------
+    // PASS (APPROVE) BATCH
+    // --------------------------------------------------
+
+    $(document).on("click", ".pass-batch-btn", function () {
+        const id = Number($(this).data("id"));
+
+        const batch = batchData.find(item => Number(item.id) === id);
+
+        if (!batch) return;
+
+        // Prevent double approval
+        if (batch.status === "approved") {
+            Swal.fire({
+                icon: "info",
+                title: "Already Approved",
+                text: `${batch.batchId} is already approved.`,
+                timer: 1500,
+                showConfirmButton: false
+            });
+            return;
+        }
+
+        Swal.fire({
+            title: "Approve Batch?",
+            text: `${batch.batchId} will be moved to Batch Approval.`,
+            icon: "question",
+            showCancelButton: true,
+            confirmButtonText: "Yes, Pass",
+            cancelButtonText: "Cancel",
+            confirmButtonColor: "#198754"
+        }).then(function (result) {
+            if (!result.isConfirmed) return;
+
+            // Mark as approved
+            batch.status = "approved";
+
+            // Save to approved batch storage
+            let approvedBatches = readStorage(APPROVED_BATCH_STORAGE_KEY);
+
+            // Avoid duplicate entries
+            const alreadyApproved = approvedBatches.some(
+                item => Number(item.id) === id
+            );
+
+            if (!alreadyApproved) {
+                approvedBatches.push({ ...batch });
+            }
+
+            if (!saveStorage(APPROVED_BATCH_STORAGE_KEY, approvedBatches)) {
+                return;
+            }
+
+            // Update main batch storage
+            if (!saveStorage(BATCH_STORAGE_KEY, batchData)) {
+                return;
+            }
+
+            renderTable();
+
+            Swal.fire({
+                icon: "success",
+                title: "Batch Approved",
+                text: `${batch.batchId} has been sent to Batch Approval.`,
+                timer: 1800,
+                showConfirmButton: false
+            });
+        });
     });
 
     // --------------------------------------------------

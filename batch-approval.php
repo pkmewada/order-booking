@@ -12,36 +12,23 @@
         align-items: start;
         margin-bottom: 16px;
     }
-
     @media (max-width: 992px) { .batch-top-row { grid-template-columns: 1fr; } }
 
     .batch-photo-box {
-        border: 1px solid #e2e7f1;
-        border-radius: 8px;
-        background: #f8f9fa;
-        padding: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        aspect-ratio: 4 / 5;
-        width: 100%;
+        border: 1px solid #e2e7f1; border-radius: 8px; background: #f8f9fa;
+        padding: 6px; display: flex; align-items: center; justify-content: center;
+        overflow: hidden; aspect-ratio: 4 / 5; width: 100%;
     }
-
     .batch-photo-box img { width: 100%; height: 100%; display: block; border-radius: 6px; object-fit: cover; }
 
     .batch-info-box {
-        border: 1px solid #e2e7f1;
-        border-radius: 8px;
-        padding: 12px 14px;
-        height: 100%;
-        overflow-y: auto;
+        border: 1px solid #e2e7f1; border-radius: 8px; padding: 12px 14px;
+        height: 100%; overflow-y: auto;
     }
-
     .batch-info-box h6 { margin-bottom: 10px; color: #18243d; font-size: 15px; font-weight: 700; }
     .batch-info-box .table { margin-bottom: 0; background: #fff; }
-    .batch-info-box .table th { font-size: 13px; width: 42%; background: #ffffff; vertical-align: middle; padding: 8px 10px; font-weight: 600; color: #18243d; }
-    .batch-info-box .table td { font-size: 13px; vertical-align: middle; background: #ffffff; padding: 8px 10px; color: #333; }
+    .batch-info-box .table th { font-size: 13px; width: 42%; vertical-align: middle; padding: 8px 10px; font-weight: 600; color: #18243d; }
+    .batch-info-box .table td { font-size: 13px; vertical-align: middle; padding: 8px 10px; color: #333; }
 
     .batch-flow-box { border: 1px solid #e2e7f1; border-radius: 8px; background: #fff; padding: 12px 14px; height: 100%; overflow-y: auto; }
     .batch-flow-box h6 { margin-bottom: 10px; color: #18243d; font-size: 15px; font-weight: 700; }
@@ -63,10 +50,15 @@
 
     .piece-card { border: 1px solid #e2e7f1; border-radius: 10px; background: #fff; padding: 12px; display: flex; flex-direction: column; gap: 10px; transition: box-shadow .15s ease; }
     .piece-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.07); }
+    .piece-card.locked { background: #f9fafb; opacity: 0.9; }
     .piece-card .piece-card-header { display: flex; align-items: center; justify-content: space-between; gap: 6px; border-bottom: 1px dashed #eef1f7; padding-bottom: 8px; }
     .piece-card .piece-card-title { font-weight: 600; font-size: 14px; color: #18243d; }
     .piece-card .piece-card-item { font-size: 12px; color: #6b7280; margin-top: 2px; }
-    .piece-card .piece-card-status .badge { font-size: 10px; padding: 3px 7px; }
+
+    .status-text { font-size: 12px; font-weight: 600; }
+    .status-text.pending { color: #b45309; }
+    .status-text.in_progress { color: #1d4ed8; }
+    .status-text.pass { color: #15803d; }
 
     .work-text { font-size: 12px; color: #333; line-height: 1.5; }
     .work-text .work-empty { color: #9ca3af; font-size: 11px; }
@@ -95,49 +87,36 @@
     .piece-card .piece-card-actions .btn { font-size: 11px; padding: 4px 8px; flex: 1 1 calc(33.33% - 4px); min-width: 70px; }
     .piece-card .piece-remarks { font-size: 11px; padding: 4px 6px; border-radius: 6px; }
 
-    /* ========== TABLE: Piece Type + Status ========== */
-    #approvalTableBody td, #approvalTableBody th {
-        vertical-align: middle !important;
-        padding: 8px 12px;
+    .approve-all-wrap { margin-top: 18px; display: flex; justify-content: flex-end; }
+    .approve-all-btn {
+        background-color: #198754 !important; border-color: #198754 !important;
+        color: #fff !important; font-weight: 600; padding: 8px 22px;
     }
+    .approve-all-btn:disabled {
+        background-color: #cbd5e1 !important; border-color: #cbd5e1 !important;
+        color: #64748b !important; cursor: not-allowed;
+    }
+    .approve-all-btn:not(:disabled):hover { background-color: #157347 !important; border-color: #157347 !important; }
 
-    /* Piece column — each piece on its own line, dashed separators */
-    .piece-cell-lines {
-        display: flex;
-        flex-direction: column;
-        gap: 0;
-    }
+    #approvalTableBody td, #approvalTableBody th { vertical-align: middle !important; padding: 8px 12px; }
+
+    .piece-cell-lines { display: flex; flex-direction: column; gap: 0; }
     .piece-line {
-        font-size: 13px;
-        color: #18243d;
-        line-height: 1.6;
-        white-space: nowrap;
-        padding: 6px 0;
-        border-bottom: 1px dashed #eef1f7;
+        font-size: 13px; color: #18243d; line-height: 1.6; white-space: nowrap;
+        padding: 6px 0; border-bottom: 1px dashed #eef1f7;
     }
     .piece-line:first-child { padding-top: 0; }
     .piece-line:last-child { padding-bottom: 0; border-bottom: none; }
     .piece-line .piece-num { font-weight: 700; color: #161617; }
     .piece-line .piece-item-text { font-weight: 400; color: #333; }
 
-    /* Status column — one badge per piece, dashed separators matching Piece column */
-    .status-cell-lines {
-        display: flex;
-        flex-direction: column;
-        gap: 0;
-        align-items: flex-start;
-    }
+    .status-cell-lines { display: flex; flex-direction: column; gap: 0; align-items: flex-start; }
     .status-line {
-        line-height: 1.6;
-        padding: 6px 0;
-        border-bottom: 1px dashed #eef1f7;
-        display: flex;
-        align-items: center;
-        min-height: 24px;
+        line-height: 1.6; padding: 6px 0; border-bottom: 1px dashed #eef1f7;
+        display: flex; align-items: center; min-height: 24px;
     }
     .status-line:first-child { padding-top: 0; }
     .status-line:last-child { padding-bottom: 0; border-bottom: none; }
-    .status-line .badge { font-size: 11px; padding: 4px 9px; }
 </style>
 
 <div class="main-content app-content">
@@ -204,7 +183,6 @@
     </div>
 </div>
 
-<!-- Approval Modal -->
 <div class="modal fade" id="approvalModal" tabindex="-1" aria-labelledby="approvalModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -241,13 +219,19 @@
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                     <h6 class="mb-0">Piece-wise Item Availability</h6>
                     <small class="text-muted" style="font-size:11px;">
-                        <b>Approve</b> = all items present | 
-                        <b>Confirm</b> = partial (status: pending) | 
-                        <b>Pass</b> = force pass with missing (status: in progress)
+                        <b>Approve</b> = all items present → Pass to Cutting |
+                        <b>Confirm</b> = partial → Requirement (Pending) |
+                        <b>Pass</b> = partial → Cutting + Requirement (In Progress)
                     </small>
                 </div>
 
                 <div id="approvalPiecesContainer" class="piece-cards-grid"></div>
+
+                <div class="approve-all-wrap">
+                    <button type="button" class="btn approve-all-btn" id="approveAllBtn" disabled>
+                        <i class="bx bx-check-double me-1"></i> Approve All Pieces
+                    </button>
+                </div>
             </div>
         </div>
     </div>

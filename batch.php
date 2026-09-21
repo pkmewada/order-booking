@@ -77,6 +77,19 @@
         color: #fff !important;
     }
 
+    .pass-batch-btn {
+        background-color: #198754 !important;
+        border-color: #198754 !important;
+        color: #fff !important;
+    }
+
+    .pass-batch-btn:hover,
+    .pass-batch-btn:focus {
+        background-color: #157347 !important;
+        border-color: #157347 !important;
+        color: #fff !important;
+    }
+
     #batchForm .btn-primary {
         background-color: #161617 !important;
         border-color: #161617 !important;

@@ -56,7 +56,7 @@
                 </nav>
             </div>
             <button type="button" class="btn btn-primary" id="refreshReqBtn">
-                <i class="bx bx-refresh me-1"></i> 
+                <i class="bx bx-refresh me-1"></i>
             </button>
         </div>
 

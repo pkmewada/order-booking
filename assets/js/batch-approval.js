@@ -4,6 +4,7 @@ $(document).ready(function () {
     const BATCH_STORAGE_KEY = "batchData";
     const REQUIREMENT_STORAGE_KEY = "requirementData";
     const APPROVED_POOL_KEY = "approvedPool";
+    const APPROVED_BATCH_STORAGE_KEY = "approvedBatchData";
 
     const PLACEHOLDER_IMG =
         "data:image/svg+xml;utf8," +
@@ -50,14 +51,14 @@ $(document).ready(function () {
 
     function normalize(value) { return String(value ?? "").trim().toLowerCase(); }
 
-    function getStatusBadge(status) {
-        const statuses = {
-            pending: { label: "Pending", className: "bg-warning text-dark" },
-            in_progress: { label: "In Progress", className: "bg-primary" },
-            pass: { label: "Pass", className: "bg-success" }
+    function statusText(status) {
+        const map = {
+            pending: { label: "Pending", cls: "pending" },
+            in_progress: { label: "In Progress", cls: "in_progress" },
+            pass: { label: "Pass", cls: "pass" }
         };
-        const data = statuses[status] || statuses.pending;
-        return `<span class="badge ${data.className}">${data.label}</span>`;
+        const s = map[status] || map.pending;
+        return `<span class="status-text ${s.cls}">${s.label}</span>`;
     }
 
     function showMessage(type, message) {
@@ -83,14 +84,118 @@ $(document).ready(function () {
         })).filter(w => w.workType || w.stage);
     }
 
-    function getPieceStatus(piece) {
-        return piece?.approval?.status || "pending";
+    function getPieceStatus(piece) { return piece?.approval?.status || "pending"; }
+    function isPieceLocked(piece) { return !!(piece?.approval?.locked); }
+
+    /* ============================================================
+     * CRITICAL: Build the MERGED availability for a piece from:
+     *   1) piece.approval.itemAvailability (current stored state)
+     *   2) ALL requirements (completed AND active) for this piece
+     *   3) extra overrides
+     * Rule: "yes" is STICKY — NEVER overwritten by "no"
+     * ============================================================ */
+    function buildMergedAvailability(pieceAvailability, batchId, pieceNumber, fullMaterials, extraOverrides) {
+        const merged = {};
+
+        // ---- 1) From piece's current stored availability ----
+        Object.entries(pieceAvailability || {}).forEach(([k, v]) => {
+            if (v === "yes") merged[k] = "yes";
+            else if (merged[k] === undefined) merged[k] = v;
+        });
+
+        // ---- 2) From ALL requirements (past + present, completed included) ----
+        const allReqs = readStorage(REQUIREMENT_STORAGE_KEY).filter(r =>
+            String(r.batchId) === String(batchId) &&
+            Number(r.pieceNumber) === Number(pieceNumber)
+        );
+        allReqs.forEach(r => {
+            Object.entries(r.itemAvailability || {}).forEach(([k, v]) => {
+                if (v === "yes") merged[k] = "yes";
+                else if (v === "no" && merged[k] !== "yes") merged[k] = "no";
+            });
+            // Also process the missingItems list to ensure they're marked
+            (r.missingItems || []).forEach(m => {
+                if (merged[m] === undefined) merged[m] = "no";
+            });
+        });
+
+        // ---- 3) Extra overrides (highest priority, but never downgrade yes→no) ----
+        Object.entries(extraOverrides || {}).forEach(([k, v]) => {
+            if (v === "yes") merged[k] = "yes";
+            else if (merged[k] !== "yes") merged[k] = "no";
+        });
+
+        // ---- 4) Fill missing materials with "no" ----
+        fullMaterials.forEach(m => {
+            if (merged[m] === undefined) merged[m] = "no";
+        });
+
+        return merged;
     }
 
-    function loadData() { batchData = readStorage(BATCH_STORAGE_KEY); }
+    function deriveStatus(mergedAvailability, fullMaterials) {
+        if (!fullMaterials.length) return "pending";
+        const yesCount = fullMaterials.filter(m => mergedAvailability[m] === "yes").length;
+        if (yesCount === fullMaterials.length) return "pass";
+        if (yesCount > 0) return "in_progress";
+        return "pending";
+    }
 
-    /* ================= TABLE RENDER ================= */
+    /**
+     * Recompute piece state from merged availability.
+     * Applied to every loaded piece to ensure consistency.
+     */
+    function normalizeBatchPieces() {
+        batchData = batchData.map(batch => {
+            const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
+            const newPieces = pieces.map((piece, index) => {
+                const pieceNumber = getPieceNumber(piece, index);
+                const allMaterials = getPieceMaterials(piece);
+                if (!allMaterials.length) return piece;
+
+                const mode = piece.approval?.mode;
+                if (mode !== "confirm" && mode !== "pass") return piece;
+
+                const merged = buildMergedAvailability(
+                    piece.approval?.itemAvailability,
+                    batch.batchId,
+                    pieceNumber,
+                    allMaterials
+                );
+                const newStatus = deriveStatus(merged, allMaterials);
+
+                return {
+                    ...piece,
+                    materials: allMaterials,
+                    approval: {
+                        ...piece.approval,
+                        status: newStatus,
+                        itemAvailability: merged,
+                        availableItems: allMaterials.filter(m => merged[m] === "yes"),
+                        missingItems: allMaterials.filter(m => merged[m] !== "yes")
+                    }
+                };
+            });
+            return { ...batch, pieces: newPieces };
+        });
+        saveStorage(APPROVED_BATCH_STORAGE_KEY, batchData);
+    }
+
+    /* ================= LOAD ================= */
+    function loadData() {
+        let approved = readStorage(APPROVED_BATCH_STORAGE_KEY);
+        if (approved.length) { batchData = approved; }
+        else {
+            const mainBatch = readStorage(BATCH_STORAGE_KEY);
+            batchData = mainBatch.filter(b => b.status === "approved");
+        }
+        normalizeBatchPieces();
+    }
+
+    /* ================= TABLE ================= */
     function renderTable() {
+        loadData();
+
         const tbody = $("#approvalTableBody");
         tbody.empty();
 
@@ -115,7 +220,7 @@ $(document).ready(function () {
         });
 
         if (!filtered.length) {
-            tbody.html(`<tr><td colspan="10" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No batches found.</td></tr>`);
+            tbody.html(`<tr><td colspan="10" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No approved batches found.</td></tr>`);
             return;
         }
 
@@ -126,9 +231,7 @@ $(document).ready(function () {
 
             const photoSrc = batch.photo ? escapeHtml(batch.photo) : PLACEHOLDER_IMG;
 
-            // Piece Type column — one line per piece with dashed separators
             let pieceTypeHtml = "";
-            // Status column — one badge per piece aligned with the piece lines
             let statusHtml = "";
 
             pieces.forEach((piece, index) => {
@@ -142,16 +245,13 @@ $(document).ready(function () {
                         ${itemName ? `<span class="piece-item-text"> (${escapeHtml(itemName)})</span>` : ""}
                     </div>
                 `;
-
-                statusHtml += `<div class="status-line">${getStatusBadge(pieceStatus)}</div>`;
+                statusHtml += `<div class="status-line">${statusText(pieceStatus)}</div>`;
             });
 
             tbody.append(`
                 <tr>
                     <td><strong>${escapeHtml(batch.batchId || "-")}</strong></td>
-                    <td>
-                        <img src="${photoSrc}" alt="Batch" style="width:55px;height:55px;object-fit:cover;border-radius:6px;" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}';">
-                    </td>
+                    <td><img src="${photoSrc}" alt="Batch" style="width:55px;height:55px;object-fit:cover;border-radius:6px;" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}';"></td>
                     <td>${escapeHtml(batch.brand || "-")}</td>
                     <td>${escapeHtml(batch.designNumber || "-")}</td>
                     <td>${escapeHtml(batch.color || "-")}</td>
@@ -209,18 +309,33 @@ $(document).ready(function () {
                     </div>
                     <div class="batch-flow-track">
             `;
-
             nodes.forEach(function (node, i) {
                 if (i > 0) html += `<span class="batch-flow-connector"></span>`;
                 html += node.type === "fixed"
                     ? `<span class="batch-flow-node batch-fixed-node"><strong>${escapeHtml(node.label)}</strong></span>`
                     : `<span class="batch-flow-node"><strong>${escapeHtml(node.label)}</strong></span>`;
             });
-
             html += `</div></div>`;
             container.append(html);
         });
         box.show();
+    }
+
+    function computeAvailability(pieceNumber, materials, piece) {
+        const locked = isPieceLocked(piece);
+        const stored = piece?.approval?.itemAvailability || {};
+
+        const availability = {};
+        materials.forEach(mat => {
+            if (locked) {
+                availability[mat] = stored[mat] || "no";
+            } else {
+                const $row = $(`.item-list-row[data-piece="${pieceNumber}"][data-item="${mat}"]`);
+                const checked = $row.find(".piece-item-checkbox").is(":checked");
+                availability[mat] = checked ? "yes" : "no";
+            }
+        });
+        return availability;
     }
 
     /* ================= PIECE CARDS ================= */
@@ -246,6 +361,7 @@ $(document).ready(function () {
             const availability = approval.itemAvailability || {};
             const pieceStatus = approval.status || "pending";
             const remarks = approval.remarks || "";
+            const locked = isPieceLocked(piece);
 
             let itemRows = "";
             if (materials.length) {
@@ -254,12 +370,10 @@ $(document).ready(function () {
                     const chkId = `chk_${pieceNumber}_${matIndex}`;
                     itemRows += `
                         <label class="item-list-row ${isChecked ? "checked-row" : ""}"
-                               data-piece="${pieceNumber}"
-                               data-item="${escapeHtml(mat)}"
-                               for="${chkId}">
+                               data-piece="${pieceNumber}" data-item="${escapeHtml(mat)}" for="${chkId}">
                             <input type="checkbox" class="piece-item-checkbox"
-                                id="${chkId}" data-piece="${pieceNumber}"
-                                data-item="${escapeHtml(mat)}" ${isChecked ? "checked" : ""}>
+                                id="${chkId}" data-piece="${pieceNumber}" data-item="${escapeHtml(mat)}"
+                                ${isChecked ? "checked" : ""} ${locked ? "disabled" : ""}>
                             <span class="item-name">${escapeHtml(mat)}</span>
                         </label>
                     `;
@@ -272,25 +386,21 @@ $(document).ready(function () {
                 ? works.map(w => `<div>${escapeHtml(w.workType || "-")}${w.stage ? `<span class="text-muted"> — ${escapeHtml(w.stage)}</span>` : ""}</div>`).join("")
                 : `<span class="work-empty">None</span>`;
 
-            const statusHtml = getStatusBadge(pieceStatus);
-            const isDone = pieceStatus === "pass" || pieceStatus === "in_progress";
-
             const totalMats = materials.length;
             const yesCount = materials.filter(m => availability[m] === "yes").length;
             const noCount = materials.filter(m => availability[m] === "no").length;
             const allYesChecked = totalMats > 0 && yesCount === totalMats;
             const allNoChecked = totalMats > 0 && noCount === totalMats;
             const toggleName = `toggle_${pieceNumber}`;
-            const approveDisabled = (!allYesChecked || isDone) ? "disabled" : "";
 
             container.append(`
-                <div class="piece-card" data-piece="${pieceNumber}">
+                <div class="piece-card ${locked ? 'locked' : ''}" data-piece="${pieceNumber}">
                     <div class="piece-card-header">
                         <div>
                             <div class="piece-card-title">Piece ${escapeHtml(pieceNumber)}</div>
                             ${itemName ? `<div class="piece-card-item">${escapeHtml(itemName)}</div>` : ""}
                         </div>
-                        <div class="piece-card-status">${statusHtml}</div>
+                        <div class="piece-card-status">${statusText(pieceStatus)}</div>
                     </div>
 
                     <div>
@@ -301,7 +411,7 @@ $(document).ready(function () {
                     <div>
                         <div class="item-list-top">
                             <span class="item-list-label">Item List</span>
-                            <div class="all-toggle" ${isDone ? 'style="opacity:.5;pointer-events:none;"' : ""}>
+                            <div class="all-toggle" ${(locked || allYesChecked) ? 'style="display:none;"' : ""}>
                                 <input type="radio" name="${toggleName}" id="allYes_${pieceNumber}" class="all-toggle-radio" value="yes" data-piece="${pieceNumber}" ${allYesChecked ? "checked" : ""}>
                                 <label for="allYes_${pieceNumber}" class="all-yes-label">All Yes</label>
                                 <input type="radio" name="${toggleName}" id="allNo_${pieceNumber}" class="all-toggle-radio" value="no" data-piece="${pieceNumber}" ${allNoChecked ? "checked" : ""}>
@@ -311,27 +421,75 @@ $(document).ready(function () {
                         <div class="item-list-rows">${itemRows}</div>
                     </div>
 
-                    <textarea class="form-control piece-remarks" rows="1" data-piece="${pieceNumber}" placeholder="Remarks..." ${isDone ? "readonly" : ""}>${escapeHtml(remarks)}</textarea>
+                    <textarea class="form-control piece-remarks" rows="1" data-piece="${pieceNumber}" placeholder="Remarks..." ${locked ? "readonly" : ""}>${escapeHtml(remarks)}</textarea>
 
-                    <div class="piece-card-actions">
-                        <button type="button" class="btn btn-success approve-piece-btn" data-piece="${pieceNumber}" ${approveDisabled}>
-                            <i class="bx bx-check-circle me-1"></i> Approve
-                        </button>
-                        <button type="button" class="btn btn-info confirm-piece-btn" data-piece="${pieceNumber}" ${isDone ? "disabled" : ""}>
-                            <i class="bx bx-time-five me-1"></i> Confirm
-                        </button>
-                        <button type="button" class="btn btn-warning pass-piece-btn" data-piece="${pieceNumber}" ${isDone ? "disabled" : ""}>
-                            <i class="bx bx-right-arrow-alt me-1"></i> Pass
-                        </button>
-                    </div>
+                    <div class="piece-card-actions" data-piece="${pieceNumber}"></div>
                 </div>
             `);
+
+            renderPieceActions(pieceNumber, locked, allYesChecked);
         });
+
+        updateApproveAllState();
+    }
+
+    function renderPieceActions(pieceNumber, locked, allYesChecked) {
+        const $actions = $(`.piece-card-actions[data-piece="${pieceNumber}"]`);
+        $actions.empty();
+
+        if (locked) return;
+
+        if (allYesChecked) {
+            $actions.html(`
+                <button type="button" class="btn btn-success approve-piece-btn" data-piece="${pieceNumber}">
+                    <i class="bx bx-check-circle me-1"></i> Approve
+                </button>
+            `);
+        } else {
+            $actions.html(`
+                <button type="button" class="btn btn-success approve-piece-btn" data-piece="${pieceNumber}" disabled>
+                    <i class="bx bx-check-circle me-1"></i> Approve
+                </button>
+                <button type="button" class="btn btn-info confirm-piece-btn" data-piece="${pieceNumber}">
+                    <i class="bx bx-time-five me-1"></i> Confirm
+                </button>
+                <button type="button" class="btn btn-warning pass-piece-btn" data-piece="${pieceNumber}">
+                    <i class="bx bx-right-arrow-alt me-1"></i> Pass
+                </button>
+            `);
+        }
+    }
+
+    /* ================= APPROVE ALL STATE ================= */
+    function updateApproveAllState() {
+        const batch = getCurrentBatch();
+        if (!batch) { $("#approveAllBtn").prop("disabled", true); return; }
+
+        const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
+        let allReady = pieces.length > 0;
+
+        pieces.forEach((piece, index) => {
+            if (isPieceLocked(piece)) { allReady = false; return; }
+            const pieceNumber = getPieceNumber(piece, index);
+            const materials = getPieceMaterials(piece);
+            if (!materials.length) { allReady = false; return; }
+
+            const yesCount = materials.filter(m => {
+                const $row = $(`.item-list-row[data-piece="${pieceNumber}"][data-item="${m}"]`);
+                if ($row.length) return $row.find(".piece-item-checkbox").is(":checked");
+                return false;
+            }).length;
+
+            if (yesCount !== materials.length) allReady = false;
+        });
+
+        $("#approveAllBtn").prop("disabled", !allReady);
     }
 
     /* ================= OPEN MODAL ================= */
     function openApprovalModal(batchId) {
         currentBatchId = batchId;
+        loadData();
         const batch = getCurrentBatch();
         if (!batch) return;
 
@@ -357,19 +515,6 @@ $(document).ready(function () {
     }
 
     /* ================= CHECKBOX & TOGGLE ================= */
-    function refreshApproveState(pieceNumber) {
-        const $card = $(`.piece-card[data-piece="${pieceNumber}"]`);
-        const total = $card.find(".piece-item-checkbox").length;
-        const checked = $card.find(".piece-item-checkbox:checked").length;
-        const $approveBtn = $card.find(".approve-piece-btn");
-        const badge = $card.find(".piece-card-status .badge");
-        const isDone = badge.hasClass("bg-success") || badge.hasClass("bg-primary");
-
-        if (!isDone) {
-            $approveBtn.prop("disabled", !(total > 0 && checked === total));
-        }
-    }
-
     $(document).on("change", ".piece-item-checkbox", function () {
         const $row = $(this).closest(".item-list-row");
         if ($(this).is(":checked")) $row.addClass("checked-row");
@@ -377,6 +522,8 @@ $(document).ready(function () {
 
         const pieceNumber = $(this).data("piece");
         const $card = $(`.piece-card[data-piece="${pieceNumber}"]`);
+        if ($card.hasClass("locked")) return;
+
         const total = $card.find(".piece-item-checkbox").length;
         const checked = $card.find(".piece-item-checkbox:checked").length;
 
@@ -388,36 +535,27 @@ $(document).ready(function () {
             $card.find(".all-toggle-radio").prop("checked", false);
         }
 
-        refreshApproveState(pieceNumber);
+        const allYesChecked = total > 0 && checked === total;
+        renderPieceActions(pieceNumber, false, allYesChecked);
+        updateApproveAllState();
     });
 
     $(document).on("change", ".all-toggle-radio", function () {
         const pieceNumber = $(this).data("piece");
+        const $card = $(`.piece-card[data-piece="${pieceNumber}"]`);
+        if ($card.hasClass("locked")) return;
+
         const val = $(this).val();
         $(`.item-list-row[data-piece="${pieceNumber}"]`).each(function () {
             const $row = $(this);
             const $chk = $row.find(".piece-item-checkbox");
-            if (val === "yes") {
-                $chk.prop("checked", true);
-                $row.addClass("checked-row");
-            } else {
-                $chk.prop("checked", false);
-                $row.removeClass("checked-row");
-            }
+            if (val === "yes") { $chk.prop("checked", true); $row.addClass("checked-row"); }
+            else { $chk.prop("checked", false); $row.removeClass("checked-row"); }
         });
-        refreshApproveState(pieceNumber);
+        const allYesChecked = val === "yes";
+        renderPieceActions(pieceNumber, false, allYesChecked);
+        updateApproveAllState();
     });
-
-    /* ================= COLLECT AVAILABILITY ================= */
-    function collectAvailability(pieceNumber, materials) {
-        const availability = {};
-        materials.forEach(mat => {
-            const $row = $(`.item-list-row[data-piece="${pieceNumber}"][data-item="${mat}"]`);
-            const checked = $row.find(".piece-item-checkbox").is(":checked");
-            availability[mat] = checked ? "yes" : "no";
-        });
-        return availability;
-    }
 
     /* ================= PROCESS PIECE ================= */
     function processPiece(pieceNumber, mode) {
@@ -429,28 +567,30 @@ $(document).ready(function () {
         if (pieceIndex === -1) return;
 
         const piece = pieces[pieceIndex];
-        const materials = getPieceMaterials(piece);
 
-        if (!materials.length) {
-            showMessage("warning", "This piece has no item list.");
+        if (isPieceLocked(piece)) {
+            showMessage("info", "This piece is already locked.");
             return;
         }
 
-        const availability = collectAvailability(pieceNumber, materials);
+        const materials = getPieceMaterials(piece);
+        if (!materials.length) { showMessage("warning", "This piece has no item list."); return; }
+
+        const availability = computeAvailability(pieceNumber, materials, piece);
         const availableItems = materials.filter(m => availability[m] === "yes");
         const missingItems = materials.filter(m => availability[m] === "no");
         const remarks = $(`.piece-remarks[data-piece="${pieceNumber}"]`).val().trim();
 
         if (mode === "approve" && missingItems.length) {
-            showMessage("warning", "Approve ke liye saare items present hone chahiye.");
+            showMessage("warning", "Approve requires all items present.");
             return;
         }
         if (mode === "confirm") {
-            if (!availableItems.length) { showMessage("warning", "Kam se kam ek item present hona chahiye."); return; }
-            if (!missingItems.length) { showMessage("info", "Sab items present hain — Approve use karein."); return; }
+            if (!availableItems.length) { showMessage("warning", "At least one item must be present."); return; }
+            if (!missingItems.length) { showMessage("info", "All items present — use Approve."); return; }
         }
         if (mode === "pass" && !availableItems.length) {
-            showMessage("warning", "Kam se kam ek item present hona chahiye pass karne ke liye.");
+            showMessage("warning", "At least one item must be present to Pass.");
             return;
         }
 
@@ -458,11 +598,11 @@ $(document).ready(function () {
 
         if (mode === "approve") {
             titleText = `Approve Piece ${pieceNumber}?`;
-            htmlText = `<div class="text-start"><p><strong>All ${availableItems.length} items present ✅</strong></p><p class="text-success">Direct <strong>Pass</strong> to Cutting Manager.</p></div>`;
+            htmlText = `<div class="text-start"><p><strong>All ${availableItems.length} items present ✅</strong></p><p class="text-success">Pass to Cutting (Status: <b>Pass</b>)</p></div>`;
             confirmText = "Yes, Approve & Pass";
         } else if (mode === "confirm") {
             titleText = `Confirm Piece ${pieceNumber}?`;
-            htmlText = `<div class="text-start"><p><strong>${availableItems.length} items present</strong></p><p><strong>${missingItems.length} items pending</strong></p><hr><p class="text-muted mb-0">Status <strong>Pending</strong> rahega. Kuch bhi Cutting ya Requirement mein nahi jayega.</p></div>`;
+            htmlText = `<div class="text-start"><p><strong>${availableItems.length} items present</strong></p><p><strong>${missingItems.length} items missing</strong> → Requirement</p><hr><p class="text-muted mb-0">Status <b>Pending</b>. Nothing goes to Cutting.</p></div>`;
             confirmText = "Yes, Confirm";
         } else {
             titleText = `Force Pass Piece ${pieceNumber}?`;
@@ -472,12 +612,8 @@ $(document).ready(function () {
         }
 
         Swal.fire({
-            title: titleText,
-            html: htmlText,
-            icon: "question",
-            showCancelButton: true,
-            confirmButtonText: confirmText,
-            cancelButtonText: "Cancel",
+            title: titleText, html: htmlText, icon: "question",
+            showCancelButton: true, confirmButtonText: confirmText, cancelButtonText: "Cancel",
             confirmButtonColor: confirmColor
         }).then(function (result) {
             if (!result.isConfirmed) return;
@@ -490,6 +626,7 @@ $(document).ready(function () {
             const updatedPieces = [...pieces];
             updatedPieces[pieceIndex] = {
                 ...piece,
+                materials: materials,
                 approval: {
                     status: newStatus,
                     itemAvailability: availability,
@@ -497,6 +634,7 @@ $(document).ready(function () {
                     missingItems: missingItems,
                     remarks: remarks,
                     mode: mode,
+                    locked: true,
                     updatedAt: new Date().toLocaleString("en-GB")
                 }
             };
@@ -504,19 +642,23 @@ $(document).ready(function () {
             updateBatchPieces(batch, updatedPieces);
 
             if (mode === "approve") {
-                pushToApprovedPool(batch, updatedPieces[pieceIndex], pieceNumber, availableItems, "pass", availability);
+                pushToApprovedPool(batch, updatedPieces[pieceIndex], pieceNumber, availableItems, "pass", availability, materials);
             } else if (mode === "pass") {
-                pushToApprovedPool(batch, updatedPieces[pieceIndex], pieceNumber, availableItems, "in_progress", availability);
+                pushToApprovedPool(batch, updatedPieces[pieceIndex], pieceNumber, availableItems, "in_progress", availability, materials);
                 if (missingItems.length) {
-                    createRequirement(batch, updatedPieces[pieceIndex], pieceNumber, missingItems, availability);
+                    createRequirement(batch, updatedPieces[pieceIndex], pieceNumber, missingItems, availability, materials);
                 }
+            } else if (mode === "confirm") {
+                createRequirement(batch, updatedPieces[pieceIndex], pieceNumber, missingItems, availability, materials);
             }
 
-            approvalModal.hide();
+            loadData();
+            const freshBatch = getCurrentBatch();
+            if (freshBatch) renderApprovalPieces(freshBatch);
             renderTable();
 
             if (mode === "confirm") {
-                Swal.fire({ icon: "info", title: "Confirmed — Pending", text: "Status Pending hai.", timer: 2500, showConfirmButton: false });
+                Swal.fire({ icon: "info", title: "Confirmed — Pending", text: "Requirement created. Nothing passed to Cutting.", timer: 2500, showConfirmButton: false });
             } else if (mode === "pass" && missingItems.length) {
                 Swal.fire({
                     icon: "success", title: "Passed (In Progress)",
@@ -529,9 +671,82 @@ $(document).ready(function () {
         });
     }
 
-    $(document).on("click", ".approve-piece-btn", function () { processPiece(Number($(this).data("piece")), "approve"); });
+    $(document).on("click", ".approve-piece-btn", function () {
+        if ($(this).prop("disabled")) return;
+        processPiece(Number($(this).data("piece")), "approve");
+    });
     $(document).on("click", ".confirm-piece-btn", function () { processPiece(Number($(this).data("piece")), "confirm"); });
     $(document).on("click", ".pass-piece-btn", function () { processPiece(Number($(this).data("piece")), "pass"); });
+
+    /* ================= APPROVE ALL ================= */
+    $(document).on("click", "#approveAllBtn", function () {
+        const batch = getCurrentBatch();
+        if (!batch) return;
+
+        const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
+        const readyPieces = [];
+
+        pieces.forEach((piece, index) => {
+            if (isPieceLocked(piece)) return;
+            const pieceNumber = getPieceNumber(piece, index);
+            const materials = getPieceMaterials(piece);
+            if (!materials.length) return;
+
+            const availability = computeAvailability(pieceNumber, materials, piece);
+            const allYes = materials.every(m => availability[m] === "yes");
+            if (allYes) readyPieces.push({ piece, index, materials, availability });
+        });
+
+        if (!readyPieces.length) {
+            showMessage("warning", "No pieces are ready to approve.");
+            return;
+        }
+
+        Swal.fire({
+            title: "Approve All Ready Pieces?",
+            html: `<div class="text-start"><p><strong>${readyPieces.length}</strong> pieces will be approved and passed to Cutting.</p></div>`,
+            icon: "question",
+            showCancelButton: true,
+            confirmButtonText: "Yes, Approve All",
+            cancelButtonText: "Cancel",
+            confirmButtonColor: "#198754"
+        }).then(function (result) {
+            if (!result.isConfirmed) return;
+
+            const updatedPieces = [...pieces];
+
+            readyPieces.forEach(({ piece, index, materials, availability }) => {
+                const pieceNumber = getPieceNumber(piece, index);
+                const availableItems = materials.filter(m => availability[m] === "yes");
+
+                updatedPieces[index] = {
+                    ...piece,
+                    materials: materials,
+                    approval: {
+                        status: "pass",
+                        itemAvailability: availability,
+                        availableItems: availableItems,
+                        missingItems: [],
+                        remarks: piece.approval?.remarks || "",
+                        mode: "approve",
+                        locked: true,
+                        updatedAt: new Date().toLocaleString("en-GB")
+                    }
+                };
+
+                pushToApprovedPool(batch, updatedPieces[index], pieceNumber, availableItems, "pass", availability, materials);
+            });
+
+            updateBatchPieces(batch, updatedPieces);
+
+            loadData();
+            const freshBatch = getCurrentBatch();
+            if (freshBatch) renderApprovalPieces(freshBatch);
+            renderTable();
+
+            Swal.fire({ icon: "success", title: "Approved", text: `${readyPieces.length} pieces approved & passed.`, timer: 2000, showConfirmButton: false });
+        });
+    });
 
     /* ================= UPDATE BATCH ================= */
     function updateBatchPieces(batch, updatedPieces) {
@@ -542,27 +757,39 @@ $(document).ready(function () {
             pieces: updatedPieces,
             updatedAt: new Date().toLocaleString("en-GB")
         };
-        saveStorage(BATCH_STORAGE_KEY, batchData);
+        saveStorage(APPROVED_BATCH_STORAGE_KEY, batchData);
     }
 
     /* ================= PUSH TO APPROVED POOL ================= */
-    function pushToApprovedPool(batch, piece, pieceNumber, availableItems, mode, availability) {
+    function pushToApprovedPool(batch, piece, pieceNumber, availableItems, mode, availability, allMaterials) {
         const pool = readStorage(APPROVED_POOL_KEY);
-        const allMaterials = getPieceMaterials(piece);
+        const materials = allMaterials || getPieceMaterials(piece);
 
-        // Check if there is already an entry for THIS specific piece
         const existingIdx = pool.findIndex(p =>
             String(p.batchId) === String(batch.batchId) &&
             Number(p.pieceNumber) === Number(pieceNumber)
         );
 
         if (existingIdx !== -1) {
-            pool[existingIdx].availableItems = [...new Set([...(pool[existingIdx].availableItems || []), ...availableItems])];
-            pool[existingIdx].materials = [...new Set([...(pool[existingIdx].materials || []), ...allMaterials])];
-            pool[existingIdx].itemAvailability = { ...(pool[existingIdx].itemAvailability || {}), ...availability };
-            pool[existingIdx].mode = mode;
-            pool[existingIdx].status = "pending_cutting";
-            pool[existingIdx].updatedAt = new Date().toLocaleString("en-GB");
+            // MERGE: never lose previously passed items ("yes" sticky)
+            const prev = pool[existingIdx];
+            const mergedAvailability = { ...(prev.itemAvailability || {}) };
+            Object.entries(availability).forEach(([k, v]) => {
+                if (v === "yes") mergedAvailability[k] = "yes";
+                else if (mergedAvailability[k] !== "yes") mergedAvailability[k] = "no";
+            });
+            const mergedMaterials = [...new Set([...(prev.materials || []), ...materials])];
+            const mergedAvailable = mergedMaterials.filter(m => mergedAvailability[m] === "yes");
+
+            pool[existingIdx] = {
+                ...prev,
+                materials: mergedMaterials,
+                itemAvailability: mergedAvailability,
+                availableItems: mergedAvailable,
+                mode: mode,
+                status: "pending_cutting",
+                updatedAt: new Date().toLocaleString("en-GB")
+            };
             saveStorage(APPROVED_POOL_KEY, pool);
             return pool[existingIdx];
         }
@@ -582,7 +809,7 @@ $(document).ready(function () {
             priority: batch.priority || "Medium",
             photo: batch.photo || "",
             availableItems: [...availableItems],
-            materials: allMaterials,
+            materials: materials,
             itemAvailability: { ...availability },
             additionalWorks: getPieceWorks(piece),
             mode: mode,
@@ -596,10 +823,10 @@ $(document).ready(function () {
     }
 
     /* ================= CREATE REQUIREMENT ================= */
-    function createRequirement(batch, piece, pieceNumber, missingItems, availability) {
+    function createRequirement(batch, piece, pieceNumber, missingItems, availability, allMaterials) {
         const requirementData = readStorage(REQUIREMENT_STORAGE_KEY);
+        const materials = allMaterials || getPieceMaterials(piece);
 
-        // Find existing requirement for THIS specific piece
         const existingIdx = requirementData.findIndex(r =>
             String(r.batchId) === String(batch.batchId) &&
             Number(r.pieceNumber) === Number(pieceNumber) &&
@@ -609,12 +836,13 @@ $(document).ready(function () {
         if (existingIdx !== -1) {
             const existing = requirementData[existingIdx];
             const mergedMissing = [...new Set([...(existing.missingItems || []), ...missingItems])];
-
             requirementData[existingIdx] = {
                 ...existing,
                 missingItems: mergedMissing,
                 itemAvailability: { ...(existing.itemAvailability || {}), ...availability },
+                materials: materials,
                 remarks: piece?.approval?.remarks || existing.remarks,
+                status: "pending",
                 updatedAt: new Date().toLocaleString("en-GB")
             };
             saveStorage(REQUIREMENT_STORAGE_KEY, requirementData);
@@ -636,7 +864,7 @@ $(document).ready(function () {
             quantity: batch.quantity || 0,
             priority: batch.priority || "Medium",
             photo: batch.photo || "",
-            materials: getPieceMaterials(piece),
+            materials: materials,
             additionalWorks: getPieceWorks(piece),
             missingItems: [...missingItems],
             itemAvailability: { ...availability },
@@ -660,7 +888,18 @@ $(document).ready(function () {
     $("#refreshApprovalBtn").on("click", function () {
         loadData();
         renderTable();
+        if (currentBatchId) {
+            const b = getCurrentBatch();
+            if (b) { renderFlowChart(b); renderApprovalPieces(b); }
+        }
         Swal.fire({ icon: "success", title: "Refreshed", timer: 1200, showConfirmButton: false });
+    });
+
+    approvalModalElement.addEventListener("show.bs.modal", function () {
+        if (!currentBatchId) return;
+        loadData();
+        const b = getCurrentBatch();
+        if (b) { renderFlowChart(b); renderApprovalPieces(b); }
     });
 
     $("#approvalModal").on("hidden.bs.modal", function () {
@@ -669,6 +908,28 @@ $(document).ready(function () {
         $("#batchFlowChart").empty();
         $("#batchFlowBox").hide();
     });
+
+    window.addEventListener("focus", function () {
+        loadData();
+        if (currentBatchId) {
+            const b = getCurrentBatch();
+            if (b) { renderFlowChart(b); renderApprovalPieces(b); }
+        }
+        renderTable();
+    });
+
+    setInterval(function () {
+        const prev = JSON.stringify(batchData);
+        loadData();
+        const now = JSON.stringify(batchData);
+        if (prev !== now) {
+            if (currentBatchId) {
+                const b = getCurrentBatch();
+                if (b) { renderFlowChart(b); renderApprovalPieces(b); }
+            }
+            renderTable();
+        }
+    }, 1500);
 
     loadData();
     renderTable();
