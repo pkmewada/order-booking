@@ -189,6 +189,42 @@ $(document).ready(function () {
         ) + 1;
     }
 
+    /* ======================================================
+       COLOR → HEX MAP  (same as BOM Master)
+       ====================================================== */
+
+    function getColorHex(colorName) {
+
+        const map = {
+            "Red":     "#e53935",
+            "Blue":    "#1e88e5",
+            "Green":   "#43a047",
+            "Yellow":  "#fdd835",
+            "Black":   "#161617",
+            "White":   "#ffffff",
+            "Orange":  "#fb8c00",
+            "Purple":  "#8e24aa",
+            "Pink":    "#ec407a",
+            "Brown":   "#6d4c41"
+        };
+
+        return map[colorName] || "#161617";
+    }
+
+    /* ======================================================
+       PRIORITY → CSS CLASS
+       ====================================================== */
+
+    function getPriorityClass(priority) {
+        const p = normalize(priority);
+
+        if (p === "high") return "priority-high";
+        if (p === "medium") return "priority-medium";
+        if (p === "low") return "priority-low";
+
+        return "";
+    }
+
     // --------------------------------------------------
     // DATA LOAD
     // --------------------------------------------------
@@ -509,7 +545,8 @@ $(document).ready(function () {
 
             priority: priority,
 
-            status: "pending", // pending or approved
+            // Preserve existing status on edit
+            status: oldBatch ? oldBatch.status : "pending",
 
             pieces: pieces.map((piece, index) => ({
                 number: getPieceNumber(piece, index),
@@ -601,6 +638,25 @@ $(document).ready(function () {
         filteredBatches.forEach(batch => {
             const photo = batch.photo || "assets/images/default.jpg";
 
+            const colorHex = getColorHex(batch.color);
+
+            const priorityClass = getPriorityClass(batch.priority);
+
+            const isApproved = batch.status === "approved";
+
+            // Pass button only if not approved
+            const passButtonHtml = isApproved
+                ? ""
+                : `
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-success pass-batch-btn"
+                        data-id="${escapeHtml(batch.id)}"
+                        title="Pass">
+                        <i class="bx bx-check"></i>
+                    </button>
+                `;
+
             tbody.append(`
                 <tr>
 
@@ -621,11 +677,22 @@ $(document).ready(function () {
 
                     <td>${escapeHtml(batch.designNumber || "-")}</td>
 
-                    <td>${escapeHtml(batch.color || "-")}</td>
+                    <td>
+                        <span
+                            class="color-badge"
+                            style="background:${colorHex};"
+                        >
+                            ${escapeHtml(batch.color || "-")}
+                        </span>
+                    </td>
 
                     <td>${escapeHtml(batch.quantity || "0")}</td>
 
-                    <td>${escapeHtml(batch.priority || "-")}</td>
+                    <td>
+                        <span class="priority-badge ${priorityClass}">
+                            ${escapeHtml(batch.priority || "-")}
+                        </span>
+                    </td>
 
                     <td>
                         <div class="d-flex gap-1 flex-wrap">
@@ -646,13 +713,7 @@ $(document).ready(function () {
                                 <i class="bx bx-edit"></i>
                             </button>
 
-                            <button
-                                type="button"
-                                class="btn btn-sm btn-success pass-batch-btn"
-                                data-id="${escapeHtml(batch.id)}"
-                                title="Pass">
-                                <i class="bx bx-check"></i>
-                            </button>
+                            ${passButtonHtml}
 
                             <button
                                 type="button"

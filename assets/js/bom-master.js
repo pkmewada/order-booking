@@ -406,9 +406,9 @@ $(document).ready(function () {
                                 data-piece="${i}"
                             >
                                 ${optionList(
-                                    ITEMS,
-                                    oldPiece.item || ""
-                                )}
+                ITEMS,
+                oldPiece.item || ""
+            )}
                             </select>
 
                         </div>
@@ -422,9 +422,9 @@ $(document).ready(function () {
                             <div class="item-list-options">
 
                                 ${createMaterialListHtml(
-                                    i,
-                                    selectedMaterials
-                                )}
+                i,
+                selectedMaterials
+            )}
 
                             </div>
 
@@ -1155,8 +1155,8 @@ $(document).ready(function () {
     );
 
     /* ======================================================
-       RENDER BOM TABLE
-       ====================================================== */
+    RENDER BOM TABLE
+    ====================================================== */
 
     function renderTable() {
 
@@ -1199,15 +1199,15 @@ $(document).ready(function () {
         if (!filtered.length) {
 
             tbody.html(`
-                <tr>
-                    <td
-                        colspan="6"
-                        class="text-center text-muted py-5"
-                    >
-                        No BOM records found.
-                    </td>
-                </tr>
-            `);
+            <tr>
+                <td
+                    colspan="6"
+                    class="text-center text-muted py-5"
+                >
+                    No BOM records found.
+                </td>
+            </tr>
+        `);
 
             updateBrandFilter();
 
@@ -1219,78 +1219,107 @@ $(document).ready(function () {
             const photoHtml = bom.photo
 
                 ? `
-                    <img
-                        src="${escapeHtml(bom.photo)}"
-                        alt="BOM Photo"
-                        style="
-                            width:60px;
-                            height:60px;
-                            object-fit:cover;
-                            border-radius:7px;
-                        "
-                    >
-                `
+                <img
+                    src="${escapeHtml(bom.photo)}"
+                    alt="BOM Photo"
+                    style="
+                        width:60px;
+                        height:60px;
+                        object-fit:cover;
+                        border-radius:7px;
+                    "
+                >
+            `
 
                 : `<span class="text-muted">No Photo</span>`;
 
             tbody.append(`
 
-                <tr>
+            <tr>
 
-                    <td>${escapeHtml(bom.brand)}</td>
+                <td>${escapeHtml(bom.brand)}</td>
 
-                    <td>${escapeHtml(bom.designNumber)}</td>
+                <td>${escapeHtml(bom.designNumber)}</td>
 
-                    <td>${escapeHtml(bom.color)}</td>
+                <td>
+                    <span
+                        class="badge color-badge"
+                        style="background:${getColorHex(bom.color)};"
+                    >
+                        ${escapeHtml(bom.color)}
+                    </span>
+                </td>
 
-                    <td>${photoHtml}</td>
+                <td>${photoHtml}</td>
 
-                    <td>
-                        <span class="badge bg-primary">
-                            ${bom.pieceCount} Pic
-                        </span>
-                    </td>
+                <td>
+                    <span class="piece-bold">
+                        ${bom.pieceCount} Pic
+                    </span>
+                </td>
 
-                    <td>
+                <td>
 
-                        <div class="d-flex gap-1">
+                    <div class="d-flex gap-1">
 
-                            <button
-                                type="button"
-                                class="btn btn-sm btn-info view-bom-btn"
-                                data-id="${bom.id}"
-                                title="View"
-                            >
-                                <i class="bx bx-show"></i>
-                            </button>
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-info view-bom-btn"
+                            data-id="${bom.id}"
+                            title="View"
+                        >
+                            <i class="bx bx-show"></i>
+                        </button>
 
-                            <button
-                                type="button"
-                                class="btn btn-sm btn-primary edit-bom-btn"
-                                data-id="${bom.id}"
-                                title="Edit"
-                            >
-                                <i class="bx bx-edit"></i>
-                            </button>
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-primary edit-bom-btn"
+                            data-id="${bom.id}"
+                            title="Edit"
+                        >
+                            <i class="bx bx-edit"></i>
+                        </button>
 
-                            <button
-                                type="button"
-                                class="btn btn-sm btn-danger delete-bom-btn"
-                                data-id="${bom.id}"
-                                title="Delete"
-                            >
-                                <i class="bx bx-trash"></i>
-                            </button>
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-danger delete-bom-btn"
+                            data-id="${bom.id}"
+                            title="Delete"
+                        >
+                            <i class="bx bx-trash"></i>
+                        </button>
 
-                        </div>
+                    </div>
 
-                    </td>
+                </td>
 
-                </tr>
-            `);
+            </tr>
+        `);
         });
 
         updateBrandFilter();
+    }
+
+    /* ======================================================
+       COLOR → HEX MAP
+       ====================================================== */
+
+    function getColorHex(colorName) {
+
+        const map = {
+            "Red": "#e53935",
+            "Blue": "#1e88e5",
+            "Green": "#43a047",
+            "Yellow": "#fdd835",
+            "Black": "#161617",
+            "White": "#ffffff",
+            "Orange": "#fb8c00",
+            "Purple": "#8e24aa",
+            "Pink": "#ec407a",
+            "Brown": "#6d4c41"
+        };
+
+        return map[colorName] || "#161617";
     }
 
     /* ======================================================

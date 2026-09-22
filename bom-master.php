@@ -23,7 +23,7 @@ include __DIR__ . "/includes/header.php";
         color: #000 !important;
     }
 
-    .page-header-breadcrumb .breadcrumb-item + .breadcrumb-item::before {
+    .page-header-breadcrumb .breadcrumb-item+.breadcrumb-item::before {
         color: #161617 !important;
     }
 
@@ -78,8 +78,13 @@ include __DIR__ . "/includes/header.php";
     }
 
     @keyframes spinRefresh {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
+        from {
+            transform: rotate(0deg);
+        }
+
+        to {
+            transform: rotate(360deg);
+        }
     }
 
     #pieceConfigTable th {
@@ -189,7 +194,7 @@ include __DIR__ . "/includes/header.php";
         padding: 0;
     }
 
-    .piece-work-container > .additional-work-row:first-child {
+    .piece-work-container>.additional-work-row:first-child {
         margin-top: 0;
     }
 
@@ -368,6 +373,32 @@ include __DIR__ . "/includes/header.php";
             flex-wrap: wrap;
         }
     }
+
+    /* Color badge — own colour per row */
+    .color-badge {
+        display: inline-block;
+        padding: 5px 12px;
+        border-radius: 6px;
+        color: #fff !important;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    /* Yellow & White need dark text */
+    .color-badge[style*="#fdd835"],
+    .color-badge[style*="#ffffff"] {
+        color: #161617 !important;
+        border: 1px solid #cfd6e4;
+    }
+
+    /* Piece — simple bold */
+    .piece-bold {
+        font-weight: 600;
+        color: #161617;
+        font-size: 14px;
+    }
 </style>
 
 <div class="main-content app-content">
@@ -392,17 +423,17 @@ include __DIR__ . "/includes/header.php";
             </div>
 
             <div class="d-flex gap-2">
-               
+
 
                 <button type="button" class="btn btn-primary" id="createBomBtn">
                     <i class="bx bx-plus align-middle"></i>
                     Create BOM Master
                 </button>
 
-                 <button type="button" class="btn" id="refreshBomBtn" title="Refresh">
+                <button type="button" class="btn" id="refreshBomBtn" title="Refresh">
                     <i class="bx bx-refresh align-middle"></i>
                 </button>
-                
+
             </div>
         </div>
 

@@ -51,14 +51,47 @@ $(document).ready(function () {
 
     function normalize(value) { return String(value ?? "").trim().toLowerCase(); }
 
+    /* ======================================================
+       COLOR → HEX MAP  (same as BOM Master / Batch)
+       ====================================================== */
+    function getColorHex(colorName) {
+        const map = {
+            "Red":     "#e53935",
+            "Blue":    "#1e88e5",
+            "Green":   "#43a047",
+            "Yellow":  "#fdd835",
+            "Black":   "#161617",
+            "White":   "#ffffff",
+            "Orange":  "#fb8c00",
+            "Purple":  "#8e24aa",
+            "Pink":    "#ec407a",
+            "Brown":   "#6d4c41"
+        };
+        return map[colorName] || "#161617";
+    }
+
+    /* ======================================================
+       PRIORITY → CSS CLASS  (same as batch.php)
+       ====================================================== */
+    function getPriorityClass(priority) {
+        const p = normalize(priority);
+        if (p === "high") return "priority-high";
+        if (p === "medium") return "priority-medium";
+        if (p === "low") return "priority-low";
+        return "";
+    }
+
+    /* ======================================================
+       STATUS BADGE (updated)
+       ====================================================== */
     function statusText(status) {
         const map = {
-            pending: { label: "Pending", cls: "pending" },
+            pending:     { label: "Pending",     cls: "pending" },
             in_progress: { label: "In Progress", cls: "in_progress" },
-            pass: { label: "Pass", cls: "pass" }
+            pass:        { label: "Pass",        cls: "pass" }
         };
         const s = map[status] || map.pending;
-        return `<span class="status-text ${s.cls}">${s.label}</span>`;
+        return `<span class="status-badge ${s.cls}">${s.label}</span>`;
     }
 
     function showMessage(type, message) {
@@ -97,13 +130,11 @@ $(document).ready(function () {
     function buildMergedAvailability(pieceAvailability, batchId, pieceNumber, fullMaterials, extraOverrides) {
         const merged = {};
 
-        // ---- 1) From piece's current stored availability ----
         Object.entries(pieceAvailability || {}).forEach(([k, v]) => {
             if (v === "yes") merged[k] = "yes";
             else if (merged[k] === undefined) merged[k] = v;
         });
 
-        // ---- 2) From ALL requirements (past + present, completed included) ----
         const allReqs = readStorage(REQUIREMENT_STORAGE_KEY).filter(r =>
             String(r.batchId) === String(batchId) &&
             Number(r.pieceNumber) === Number(pieceNumber)
@@ -113,19 +144,16 @@ $(document).ready(function () {
                 if (v === "yes") merged[k] = "yes";
                 else if (v === "no" && merged[k] !== "yes") merged[k] = "no";
             });
-            // Also process the missingItems list to ensure they're marked
             (r.missingItems || []).forEach(m => {
                 if (merged[m] === undefined) merged[m] = "no";
             });
         });
 
-        // ---- 3) Extra overrides (highest priority, but never downgrade yes→no) ----
         Object.entries(extraOverrides || {}).forEach(([k, v]) => {
             if (v === "yes") merged[k] = "yes";
             else if (merged[k] !== "yes") merged[k] = "no";
         });
 
-        // ---- 4) Fill missing materials with "no" ----
         fullMaterials.forEach(m => {
             if (merged[m] === undefined) merged[m] = "no";
         });
@@ -141,10 +169,6 @@ $(document).ready(function () {
         return "pending";
     }
 
-    /**
-     * Recompute piece state from merged availability.
-     * Applied to every loaded piece to ensure consistency.
-     */
     function normalizeBatchPieces() {
         batchData = batchData.map(batch => {
             const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
@@ -248,16 +272,27 @@ $(document).ready(function () {
                 statusHtml += `<div class="status-line">${statusText(pieceStatus)}</div>`;
             });
 
+            const colorHex = getColorHex(batch.color);
+            const priorityClass = getPriorityClass(batch.priority);
+
             tbody.append(`
                 <tr>
                     <td><strong>${escapeHtml(batch.batchId || "-")}</strong></td>
                     <td><img src="${photoSrc}" alt="Batch" style="width:55px;height:55px;object-fit:cover;border-radius:6px;" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}';"></td>
                     <td>${escapeHtml(batch.brand || "-")}</td>
                     <td>${escapeHtml(batch.designNumber || "-")}</td>
-                    <td>${escapeHtml(batch.color || "-")}</td>
+                    <td>
+                        <span class="color-badge" style="background:${colorHex};">
+                            ${escapeHtml(batch.color || "-")}
+                        </span>
+                    </td>
                     <td><div class="piece-cell-lines">${pieceTypeHtml}</div></td>
                     <td>${escapeHtml(batch.quantity || "0")}</td>
-                    <td>${escapeHtml(batch.priority || "-")}</td>
+                    <td>
+                        <span class="priority-badge ${priorityClass}">
+                            ${escapeHtml(batch.priority || "-")}
+                        </span>
+                    </td>
                     <td><div class="status-cell-lines">${statusHtml}</div></td>
                     <td>
                         <button type="button" class="btn btn-sm btn-primary open-approval-btn" data-id="${escapeHtml(batch.id)}">
@@ -771,7 +806,6 @@ $(document).ready(function () {
         );
 
         if (existingIdx !== -1) {
-            // MERGE: never lose previously passed items ("yes" sticky)
             const prev = pool[existingIdx];
             const mergedAvailability = { ...(prev.itemAvailability || {}) };
             Object.entries(availability).forEach(([k, v]) => {

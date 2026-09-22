@@ -206,6 +206,48 @@
         filter: invert(1);
         opacity: 1;
     }
+
+    /* ---------- Color badge (same as BOM Master) ---------- */
+    .color-badge {
+        display: inline-block;
+        padding: 5px 12px;
+        border-radius: 6px;
+        color: #fff !important;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .color-badge[style*="#fdd835"],
+    .color-badge[style*="#ffffff"] {
+        color: #161617 !important;
+        border: 1px solid #cfd6e4;
+    }
+
+    /* ---------- Priority badge ---------- */
+    .priority-badge {
+        display: inline-block;
+        padding: 5px 12px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        color: #fff !important;
+    }
+
+    .priority-badge.priority-high {
+        background: #dc3545;
+    }
+
+    .priority-badge.priority-medium {
+        background: #1e88e5;
+    }
+
+    .priority-badge.priority-low {
+        background: #fdd835;
+        color: #161617 !important;
+    }
 </style>
 
 <div class="main-content app-content">

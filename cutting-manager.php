@@ -7,6 +7,7 @@
         color: #fff !important;
     }
     #refreshCuttingBtn:hover { background-color: #2b2b2d !important; border-color: #2b2b2d !important; }
+
     #bulkAssignBtn {
         background-color: #161617 !important;
         border-color: #161617 !important;
@@ -71,93 +72,208 @@
     }
     #rowsContainer .table td { padding: 6px 8px; vertical-align: middle; }
 
-    /* Bulk modal */
+    /* ---------- Color badge ---------- */
+    .color-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 6px;
+        color: #fff !important;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .color-badge[style*="#fdd835"],
+    .color-badge[style*="#ffffff"] {
+        color: #161617 !important;
+        border: 1px solid #cfd6e4;
+    }
+
+    /* ---------- Priority badge ---------- */
+    .priority-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        color: #fff !important;
+    }
+    .priority-badge.priority-high   { background: #dc3545; }
+    .priority-badge.priority-medium { background: #1e88e5; }
+    .priority-badge.priority-low    { background: #fdd835; color: #161617 !important; }
+
+    /* ---------- Status badge ---------- */
+    .status-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        color: #fff !important;
+    }
+    .status-badge.pending     { background: #fdd835; color: #161617 !important; }
+    .status-badge.in_progress { background: #1e88e5; }
+    .status-badge.passed      { background: #198754; }
+
+    .pass-row-btn {
+        background-color: #198754 !important;
+        border-color: #198754 !important;
+        color: #fff !important;
+    }
+    .pass-row-btn:hover:not(:disabled) {
+        background-color: #157347 !important;
+        border-color: #157347 !important;
+    }
+    .pass-row-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .qty-pair {
+        font-size: 13px; font-weight: 600; color: #18243d;
+        white-space: nowrap;
+    }
+    .qty-pair .qty-total { color: #6b7280; font-weight: 500; }
+    .qty-pair .qty-sep { color: #9ca3af; margin: 0 2px; }
+    .qty-pair .qty-assigned { color: #15803d; font-weight: 700; }
+    .qty-pair .qty-assigned.zero { color: #9ca3af; font-weight: 500; }
+
+    /* ---------- BULK MODAL ---------- */
     #bulkAssignModal .modal-dialog { max-width: 100%; width: 100%; height: 100%; margin: 0; }
     #bulkAssignModal .modal-content { height: 100vh; border-radius: 0; border: none; }
-    #bulkAssignModal .modal-body { overflow-y: auto; padding: 16px 20px; }
+    #bulkAssignModal .modal-body { overflow-y: auto; padding: 12px 20px; }
 
     .bulk-toolbar {
         position: sticky; top: 0; z-index: 10;
         background: #fff; border-bottom: 1px solid #e2e7f1;
-        padding: 12px 0; margin-bottom: 16px;
-        display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+        padding: 8px 0; margin-bottom: 10px;
+        display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
     }
+    .bulk-toolbar label { font-size: 12px; }
 
     .bulk-item-card {
         border: 1px solid #e2e7f1; border-radius: 10px; background: #fff;
-        padding: 12px; margin-bottom: 16px;
+        padding: 10px; margin-bottom: 12px;
     }
     .bulk-item-header {
-        display: flex; align-items: flex-start; gap: 12px;
-        border-bottom: 1px dashed #eef1f7; padding-bottom: 12px; margin-bottom: 12px;
+        display: flex; align-items: center; gap: 10px;
+        border-bottom: 1px dashed #eef1f7; padding-bottom: 8px; margin-bottom: 8px;
+        flex-wrap: wrap;
     }
-    .bulk-item-title { font-weight: 600; font-size: 14px; color: #18243d; }
-    .bulk-item-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+    .bulk-item-title { font-weight: 600; font-size: 13px; color: #18243d; }
+    .bulk-item-sub { font-size: 11px; color: #6b7280; margin-top: 2px; }
 
     .bulk-qty-summary {
-        display: flex; gap: 10px; margin-top: 6px;
+        display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap;
     }
     .bulk-qty-pill {
-        display: inline-flex; align-items: center; gap: 6px;
-        padding: 3px 10px; border-radius: 999px;
-        font-size: 11px; font-weight: 600;
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 2px 8px; border-radius: 999px;
+        font-size: 10px; font-weight: 600;
     }
     .bulk-qty-pill.total { background: #eef2ff; color: #3730a3; }
     .bulk-qty-pill.assigned { background: #d1fae5; color: #065f46; }
     .bulk-qty-pill.remaining { background: #fef3c7; color: #92400e; }
+    .bulk-qty-pill.helper { background: #f1f5f9; color: #475569; font-weight: 500; }
 
-    /* Fixed layout — Copy column tight */
-    .split-row-table { width: 100%; font-size: 13px; margin-bottom: 0; table-layout: fixed; }
+    /* ---------- Split table ---------- */
+    .split-row-table {
+        width: 100%;
+        font-size: 12px;
+        margin-bottom: 0;
+        table-layout: fixed;
+        border-collapse: collapse;
+    }
     .split-row-table th {
-        background: #f8f9fa; font-weight: 600; font-size: 11px;
+        background: #f8f9fa; font-weight: 600; font-size: 10px;
         text-transform: uppercase; letter-spacing: 0.4px;
-        padding: 6px 8px; border-bottom: 1px solid #e9edf5;
+        padding: 8px 8px; border-bottom: 1px solid #e9edf5;
         color: #4b5563;
+        vertical-align: middle;
     }
     .split-row-table td {
-        padding: 5px 8px; vertical-align: middle;
+        padding: 6px 8px; vertical-align: middle;
         border-bottom: 1px solid #f1f3f9;
+        overflow: hidden;
     }
     .split-row-table tr:last-child td { border-bottom: none; }
-    .split-row-table input, .split-row-table select { font-size: 12px; padding: 4px 6px; height: auto; }
+    .split-row-table input, .split-row-table select {
+        font-size: 12px; padding: 4px 8px; height: auto;
+        max-width: 100%;
+    }
 
-    /* Copy column at far right — tight 50px */
+    /* Colgroup widths */
+    .split-row-table col.col-sub { width: 13%; }
+    .split-row-table col.col-piece { width: 11%; }
+    .split-row-table col.col-worker { width: 24%; }
+    .split-row-table col.col-qty { width: 10%; }
+    .split-row-table col.col-priority { width: 13%; }
+    .split-row-table col.col-date { width: 24%; }
+    .split-row-table col.col-copy { width: 5%; }
+
     .split-row-table th.copy-header-cell {
-        width: 50px;
-    }
-    .split-row-table td.copy-col-cell {
-        padding: 0 !important;
-        vertical-align: middle !important;
-        border-bottom: 1px solid #f1f3f9 !important;
-        width: 50px;
         text-align: center;
+        padding: 8px 4px;
+        font-size: 10px;
+        color: #4b5563;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        vertical-align: middle;
+        background: #f8f9fa;
     }
 
+    /* Copy button cell — align top */
+    .split-row-table td.copy-col-cell {
+        width: 5%;
+        text-align: center;
+        vertical-align: top;
+        padding: 6px 4px;
+        background: #fff;
+        border-left: 1px solid #f1f3f9;
+    }
+    .copy-body-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 4px;
+        padding-top: 2px;
+    }
+
+    /* Copy button — compact 30x26 */
     .copy-row-side-btn {
         background-color: #198754 !important;
         border: 1px solid #198754 !important;
         color: #fff !important;
-        font-size: 12px !important;
-        padding: 4px 8px !important;
-        font-weight: 600;
-        border-radius: 6px;
+        font-size: 11px !important;
+        padding: 0 !important;
+        font-weight: 700;
+        border-radius: 5px;
         white-space: nowrap;
-        min-width: 34px;
+        line-height: 1;
+        box-shadow: 0 1px 3px rgba(25,135,84,0.25);
+        transition: background-color .12s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 26px;
     }
+    .copy-row-side-btn i { font-size: 14px; }
     .copy-row-side-btn:disabled {
         background-color: #f3f4f6 !important;
         border-color: #e5e7eb !important;
         color: #9ca3af !important;
         cursor: not-allowed;
+        box-shadow: none;
     }
     .copy-row-side-btn:not(:disabled):hover {
         background-color: #157347 !important;
         border-color: #157347 !important;
     }
 
-    .multi-select-wrap { position: relative; flex: 1 1 420px; max-width: 560px; }
+    .multi-select-wrap { position: relative; flex: 1 1 420px; max-width: 640px; }
     .multi-select-box {
-        min-height: 42px; padding: 6px 10px;
+        min-height: 38px; padding: 5px 10px;
         border: 1px solid #dfe5f1; border-radius: 8px; background: #fff;
         display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
         cursor: pointer; transition: all .15s ease;
@@ -210,17 +326,6 @@
         padding: 3px 8px !important;
     }
     .bulk-global-split { font-size: 12px !important; }
-
-    /* Pass-to-stitching button in modal */
-    .pass-stitching-modal-btn {
-        background-color: #198754 !important;
-        border-color: #198754 !important;
-        color: #fff !important;
-    }
-    .pass-stitching-modal-btn:hover {
-        background-color: #157347 !important;
-        border-color: #157347 !important;
-    }
 </style>
 
 <div class="main-content app-content">
@@ -355,7 +460,7 @@
 <div class="modal fade" id="bulkAssignModal" tabindex="-1" aria-labelledby="bulkAssignModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header">
+            <div class="modal-header py-2">
                 <h5 class="modal-title" id="bulkAssignModalLabel">
                     <i class="bx bx-layer-plus me-1"></i> Bulk Assign Cutting Master
                 </h5>
@@ -363,7 +468,7 @@
             </div>
             <div class="modal-body">
                 <div class="bulk-toolbar">
-                    <label class="mb-0 fw-semibold" style="font-size:13px;">Select Batches:</label>
+                    <label class="mb-0 fw-semibold">Select Batches:</label>
                     <div class="multi-select-wrap" id="multiSelectWrap">
                         <div class="multi-select-box" id="multiSelectBox">
                             <span class="placeholder" id="multiSelectPlaceholder">Click to choose batches...</span>
@@ -381,9 +486,9 @@
 
                 <div id="bulkItemsContainer"></div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="saveBulkAssignBtn">
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="saveBulkAssignBtn">
                     <i class="bx bx-save me-1"></i> Assign Selected
                 </button>
             </div>
@@ -402,29 +507,41 @@
             <div class="modal-body">
                 <div class="mb-3"><label class="form-label">Sub-Batch</label><input type="text" class="form-control" id="progressSubBatch" readonly></div>
                 <div class="mb-3"><label class="form-label">Worker</label><input type="text" class="form-control" id="progressWorker" readonly></div>
-                <div class="mb-3"><label class="form-label">Total Quantity</label><input type="text" class="form-control" id="progressTotal" readonly></div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Total Assigned</label>
+                        <input type="text" class="form-control" id="progressTotal" readonly>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Already Passed</label>
+                        <input type="text" class="form-control" id="progressPassed" readonly>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Remaining</label>
+                        <input type="text" class="form-control" id="progressRemaining" readonly>
+                    </div>
+                </div>
 
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">Status</label>
+                        <label class="form-label">Update Type</label>
                         <select class="form-select" id="progressTypeSelect">
-                            <option value="completed" selected>Completed</option>
-                            <option value="damage">Damage</option>
+                            <option value="completed" selected>Completed (+)</option>
+                            <option value="damage">Damage (+)</option>
                         </select>
-                        <small class="text-muted">Damage qty moves to Repair</small>
+                        <small class="text-muted">Damage moves to Repair &amp; reduces total</small>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">Quantity</label>
-                        <input type="number" class="form-control" id="progressQty" min="0">
-                        <small class="text-muted">Max: <span id="progressMax">0</span></small>
+                        <label class="form-label">Add Quantity (+)</label>
+                        <input type="number" class="form-control" id="progressQty" min="0" value="0">
+                        <small class="text-muted">Max addable: <span id="progressMax">0</span></small>
                     </div>
                 </div>
+
+                <div class="alert alert-info mb-0" id="progressLivePreview" style="font-size:13px;"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn pass-stitching-modal-btn" id="passStitchingFromModalBtn" style="display:none;">
-                    <i class="bx bx-right-arrow-alt"></i> Pass to Stitching
-                </button>
                 <button type="button" class="btn btn-primary" id="updateProgressBtn">
                     <i class="bx bx-save"></i> Update
                 </button>

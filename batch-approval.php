@@ -55,10 +55,19 @@
     .piece-card .piece-card-title { font-weight: 600; font-size: 14px; color: #18243d; }
     .piece-card .piece-card-item { font-size: 12px; color: #6b7280; margin-top: 2px; }
 
-    .status-text { font-size: 12px; font-weight: 600; }
-    .status-text.pending { color: #b45309; }
-    .status-text.in_progress { color: #1d4ed8; }
-    .status-text.pass { color: #15803d; }
+    /* ---------- Status badges (updated) ---------- */
+    .status-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        color: #fff !important;
+    }
+    .status-badge.pending    { background: #fdd835; color: #161617 !important; }
+    .status-badge.in_progress { background: #1e88e5; }
+    .status-badge.pass       { background: #198754; }
 
     .work-text { font-size: 12px; color: #333; line-height: 1.5; }
     .work-text .work-empty { color: #9ca3af; font-size: 11px; }
@@ -117,6 +126,37 @@
     }
     .status-line:first-child { padding-top: 0; }
     .status-line:last-child { padding-bottom: 0; border-bottom: none; }
+
+    /* ---------- Color badge (11px, own colour) ---------- */
+    .color-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 6px;
+        color: #fff !important;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .color-badge[style*="#fdd835"],
+    .color-badge[style*="#ffffff"] {
+        color: #161617 !important;
+        border: 1px solid #cfd6e4;
+    }
+
+    /* ---------- Priority badge (same as batch.php) ---------- */
+    .priority-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        color: #fff !important;
+    }
+    .priority-badge.priority-high   { background: #dc3545; }
+    .priority-badge.priority-medium { background: #1e88e5; }
+    .priority-badge.priority-low    { background: #fdd835; color: #161617 !important; }
 </style>
 
 <div class="main-content app-content">
