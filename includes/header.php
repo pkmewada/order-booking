@@ -1013,7 +1013,7 @@
                                         </li>
 
                                         <li class="slide">
-                                            <a href="Digital-print" class="side-menu__item">
+                                            <a href="Digital-Print" class="side-menu__item">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
                                                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                                     stroke-linejoin="round">
@@ -1026,7 +1026,7 @@
                                         </li>
 
                                         <li class="slide">
-                                            <a href="Screen-print" class="side-menu__item">
+                                            <a href="Screen-Print" class="side-menu__item">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
                                                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                                     stroke-linejoin="round">
