@@ -205,6 +205,30 @@ $(document).ready(function () {
     }
 
     /* ======================================================
+       DUPLICATE DESIGN NUMBER CHECK
+       ====================================================== */
+
+    function isDesignNumberDuplicate(designNumber, editId) {
+        const design = String(designNumber || "")
+            .trim()
+            .toLowerCase();
+
+        if (!design) return false;
+
+        return bomData.some(function (bom) {
+
+            // Skip the record currently being edited
+            if (editId && Number(bom.id) === Number(editId)) {
+                return false;
+            }
+
+            return String(bom.designNumber || "")
+                .trim()
+                .toLowerCase() === design;
+        });
+    }
+
+    /* ======================================================
        ITEM LIST — 6 COLUMNS (ONE ROW)
        ====================================================== */
 
@@ -666,6 +690,34 @@ $(document).ready(function () {
     });
 
     /* ======================================================
+       LIVE DUPLICATE CHECK ON DESIGN NUMBER
+       ====================================================== */
+
+    $(document).on("input blur", "#designNumber", function () {
+
+        const value = $(this).val().trim();
+        const editId = $("#editId").val();
+
+        // Remove existing warning
+        $(this).removeClass("is-invalid");
+        $("#designNumberError").remove();
+
+        if (!value) return;
+
+        if (isDesignNumberDuplicate(value, editId)) {
+
+            $(this).addClass("is-invalid");
+
+            $(this).after(`
+                <div id="designNumberError" class="text-danger small mt-1">
+                    <i class="bx bx-error-circle"></i>
+                    Design Number "${escapeHtml(value)}" already exists.
+                </div>
+            `);
+        }
+    });
+
+    /* ======================================================
        RESET FORM
        ====================================================== */
 
@@ -684,6 +736,10 @@ $(document).ready(function () {
         $("#photoUpload").val("");
 
         $("#photoPreview").empty();
+
+        // Clear duplicate warning
+        $("#designNumber").removeClass("is-invalid");
+        $("#designNumberError").remove();
 
         $(".piece-radio").prop(
             "checked",
@@ -753,12 +809,29 @@ $(document).ready(function () {
 
         const pieceCount = getPieceCount();
 
+        const editId = $("#editId").val();
+
         if (!brand || !design || !color) {
 
             alertMsg(
                 "Please fill Brand, Design Number and Color.",
                 "warning"
             );
+
+            return false;
+        }
+
+        // 🔴 DUPLICATE DESIGN NUMBER CHECK
+        if (isDesignNumberDuplicate(design, editId)) {
+
+            alertMsg(
+                `Design Number "${design}" already exists. Please use a unique Design Number.`,
+                "error"
+            );
+
+            $("#designNumber")
+                .addClass("is-invalid")
+                .focus();
 
             return false;
         }
@@ -828,7 +901,16 @@ $(document).ready(function () {
 
     $("#saveBomBtn").on("click", function () {
 
-        if (!validateForm()) return;
+        const btn = $(this);
+
+        // Prevent double-click double save
+        if (btn.data("saving")) return;
+        btn.data("saving", true);
+
+        if (!validateForm()) {
+            btn.data("saving", false);
+            return;
+        }
 
         const editId = $("#editId").val();
 
@@ -855,7 +937,10 @@ $(document).ready(function () {
                 Number(item.id) === Number(editId)
             );
 
-            if (index === -1) return;
+            if (index === -1) {
+                btn.data("saving", false);
+                return;
+            }
 
             bomData[index] = {
                 ...bomData[index],
@@ -863,7 +948,10 @@ $(document).ready(function () {
                 updatedAt: getToday()
             };
 
-            if (!saveData()) return;
+            if (!saveData()) {
+                btn.data("saving", false);
+                return;
+            }
 
             alertMsg("BOM updated successfully.", "success");
 
@@ -892,6 +980,8 @@ $(document).ready(function () {
 
                 nextId--;
 
+                btn.data("saving", false);
+
                 return;
             }
 
@@ -900,6 +990,8 @@ $(document).ready(function () {
                 "success"
             );
         }
+
+        btn.data("saving", false);
 
         renderTable();
 
@@ -938,6 +1030,10 @@ $(document).ready(function () {
             currentPhoto = bom.photo || "";
 
             renderPhotoPreview(currentPhoto);
+
+            // Clear any stale duplicate warning
+            $("#designNumber").removeClass("is-invalid");
+            $("#designNumberError").remove();
 
             $(".piece-radio").prop(
                 "checked",
@@ -1592,7 +1688,7 @@ $(document).ready(function () {
         // Brand copied from source
         $("#brandSelect").val(source.brand || "");
 
-        // Design Number kept EMPTY for user to type new
+        // Design Number kept EMPTY for user to type NEW unique value
         $("#designNumber").val("");
 
         // Color kept EMPTY for user to pick new
@@ -1602,6 +1698,10 @@ $(document).ready(function () {
         currentPhoto = "";
         $("#photoUpload").val("");
         $("#photoPreview").empty();
+
+        // Clear any stale duplicate warning
+        $("#designNumber").removeClass("is-invalid");
+        $("#designNumberError").remove();
 
         // Piece count from source
         $(".piece-radio").prop("checked", false);
@@ -1626,9 +1726,14 @@ $(document).ready(function () {
         $("#sameBomModal").modal("hide");
 
         alertMsg(
-            "Flow copy ho gaya. Ab naya Design Number, Color aur Photo manually fill karein.",
+            "Flow copied successfully. Please enter a NEW unique Design Number, Color and Photo.",
             "success"
         );
+
+        // Focus design number field for quick entry
+        setTimeout(function () {
+            $("#designNumber").focus();
+        }, 400);
     });
 
     /* ======================================================

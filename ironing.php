@@ -1,19 +1,18 @@
 <?php require_once __DIR__ . '/includes/header.php'; ?>
 
 <style>
-    #refreshStitchingBtn {
+    #refreshIroningBtn {
         background-color: #161617 !important;
         border-color: #161617 !important;
         color: #fff !important;
     }
-    #refreshStitchingBtn:hover {
+    #refreshIroningBtn:hover {
         background-color: #2b2b2d !important;
         border-color: #2b2b2d !important;
     }
 
     #availableList td, #availableList th,
-    #inhouseList td, #inhouseList th,
-    #outsourceList td, #outsourceList th {
+    #ironingList td, #ironingList th {
         vertical-align: middle !important;
     }
 
@@ -143,32 +142,29 @@
 <div class="main-content app-content">
     <div class="container-fluid">
 
-        <!-- PAGE HEADER -->
         <div class="my-4 page-header-breadcrumb d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div>
-                <h1 class="page-title fw-medium fs-18 mb-2">Stitching Manager</h1>
+                <h1 class="page-title fw-medium fs-18 mb-2">Ironing Manager</h1>
                 <nav>
                     <ol class="breadcrumb mb-0">
                         <li class="breadcrumb-item"><a href="javascript:void(0);">Production</a></li>
-                        <li class="breadcrumb-item active">Stitching Manager</li>
+                        <li class="breadcrumb-item active">Ironing Manager</li>
                     </ol>
                 </nav>
             </div>
-            <button type="button" class="btn btn-primary" id="refreshStitchingBtn">
+            <button type="button" class="btn btn-primary" id="refreshIroningBtn">
                 <i class="bx bx-refresh me-1"></i>
             </button>
         </div>
 
-        <!-- ============================== -->
-        <!-- TABLE 1: AVAILABLE (from pool) -->
-        <!-- ============================== -->
+        <!-- TABLE 1: AVAILABLE -->
         <div class="row">
             <div class="col-xl-12">
                 <div class="card custom-card">
                     <div class="card-header">
                         <div class="card-title">
                             <i class="bx bx-check-circle text-success me-2"></i>
-                            Approved Items — Ready for Stitching
+                            Approved Items — Ready for Ironing
                         </div>
                     </div>
                     <div class="card-body">
@@ -198,16 +194,14 @@
             </div>
         </div>
 
-        <!-- ============================== -->
-        <!-- TABLE 2: IN-HOUSE              -->
-        <!-- ============================== -->
+        <!-- TABLE 2: IRONING ASSIGNMENTS -->
         <div class="row">
             <div class="col-xl-12">
                 <div class="card custom-card">
                     <div class="card-header">
                         <div class="card-title">
-                            <i class="bx bx-home text-primary me-2"></i>
-                            In-House Stitching Assignments
+                            <i class="bx bx-cut text-primary me-2"></i>
+                            Ironing Assignments
                         </div>
                     </div>
                     <div class="card-body">
@@ -231,52 +225,10 @@
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody id="inhouseList"></tbody>
+                                <tbody id="ironingList"></tbody>
                             </table>
                         </div>
-                        <div class="pagination-wrap" id="inhousePagination"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ============================== -->
-        <!-- TABLE 3: OUTSOURCE             -->
-        <!-- ============================== -->
-        <div class="row">
-            <div class="col-xl-12">
-                <div class="card custom-card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="bx bx-building text-warning me-2"></i>
-                            Outsource Stitching Assignments
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-bordered text-nowrap w-100">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Batch ID</th>
-                                        <th>Sub-Batch</th>
-                                        <th>Brand</th>
-                                        <th>Piece Type</th>
-                                        <th>Firm</th>
-                                        <th>Quantity</th>
-                                        <th>Progress</th>
-                                        <th>Damage</th>
-                                        <th>Remaining</th>
-                                        <th>Priority</th>
-                                        <th>Delivery Date</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="outsourceList"></tbody>
-                            </table>
-                        </div>
-                        <div class="pagination-wrap" id="outsourcePagination"></div>
+                        <div class="pagination-wrap" id="ironingPagination"></div>
                     </div>
                 </div>
             </div>
@@ -285,14 +237,12 @@
     </div>
 </div>
 
-<!-- ============================== -->
-<!-- ASSIGN MODAL                    -->
-<!-- ============================== -->
+<!-- ASSIGN MODAL -->
 <div class="modal fade" id="assignModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Assign Stitching (In-House / Outsource)</h5>
+                <h5 class="modal-title">Assign Ironing Worker</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -316,9 +266,7 @@
     </div>
 </div>
 
-<!-- ============================== -->
-<!-- UPDATE PROGRESS MODAL           -->
-<!-- ============================== -->
+<!-- UPDATE PROGRESS MODAL -->
 <div class="modal fade" id="progressModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -332,7 +280,7 @@
                     <input type="text" class="form-control" id="progressSubBatch" readonly>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">Worker / Firm</label>
+                    <label class="form-label">Worker</label>
                     <input type="text" class="form-control" id="progressWorker" readonly>
                 </div>
                 <div class="row">
@@ -375,14 +323,12 @@
     </div>
 </div>
 
-<!-- ============================== -->
-<!-- VIEW DETAIL MODAL               -->
-<!-- ============================== -->
+<!-- VIEW DETAIL MODAL -->
 <div class="modal fade" id="viewDetailModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Stitching Details</h5>
+                <h5 class="modal-title">Ironing Details</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="viewDetailBody"></div>
@@ -398,6 +344,6 @@
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
-<script src="assets/js/stitching-manager.js"></script>
+<script src="assets/js/ironing.js"></script>
 </body>
 </html>

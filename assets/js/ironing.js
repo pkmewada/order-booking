@@ -2,9 +2,9 @@ $(document).ready(function () {
     "use strict";
 
     const APPROVED_POOL_KEY = "approvedPool";
-    const STITCHING_DATA_KEY = "stitchingData";
-    const STITCHING_NEXT_ID_KEY = "stitchingNextId";
-    const STITCHING_HISTORY_KEY = "stitchingHistory";
+    const IRONING_DATA_KEY = "ironingData";
+    const IRONING_NEXT_ID_KEY = "ironingNextId";
+    const IRONING_HISTORY_KEY = "ironingHistory";
 
     const ROWS_PER_PAGE = 10;
 
@@ -23,20 +23,14 @@ $(document).ready(function () {
         "Zafar Iqbal", "Rashid Mahmood"
     ];
 
-    const FIRMS = [
-        "Ahmad Tailors", "Bilal Garments", "Danish Fabrics", "Faisal Stitching", "Usman Enterprises",
-        "Ali Industries", "Imran Textiles", "Saeed Garments", "Zafar Fabrics", "Rashid Tailors"
-    ];
-
     let approvedPool = [];
-    let stitchingData = [];
+    let ironingData = [];
     let nextId = 1;
     let currentEditingId = null;
     let currentViewingId = null;
 
     let availablePage = 1;
-    let inhousePage = 1;
-    let outsourcePage = 1;
+    let ironingPage = 1;
 
     /* ================= HELPERS ================= */
     function escapeHtml(value) {
@@ -57,16 +51,16 @@ $(document).ready(function () {
         catch (e) { return false; }
     }
     function loadData() {
-        // 🆕 Only pieces with currentStage.type === "stitching"
+        // 🆕 Only pieces with currentStage.type === "ironing"
         approvedPool = readStorage(APPROVED_POOL_KEY).filter(p =>
-            p.currentStage && p.currentStage.type === "stitching"
+            p.currentStage && p.currentStage.type === "ironing"
         );
-        stitchingData = readStorage(STITCHING_DATA_KEY);
-        nextId = Number(localStorage.getItem(STITCHING_NEXT_ID_KEY)) || 1;
+        ironingData = readStorage(IRONING_DATA_KEY);
+        nextId = Number(localStorage.getItem(IRONING_NEXT_ID_KEY)) || 1;
     }
     function saveData() {
-        saveStorage(STITCHING_DATA_KEY, stitchingData);
-        localStorage.setItem(STITCHING_NEXT_ID_KEY, String(nextId));
+        saveStorage(IRONING_DATA_KEY, ironingData);
+        localStorage.setItem(IRONING_NEXT_ID_KEY, String(nextId));
     }
 
     /* ============================================================
@@ -74,19 +68,19 @@ $(document).ready(function () {
        ============================================================ */
     function pushHistory(entry) {
         try {
-            const history = readStorage(STITCHING_HISTORY_KEY);
+            const history = readStorage(IRONING_HISTORY_KEY);
             history.push({
                 id: Date.now() + Math.floor(Math.random() * 1000),
                 at: new Date().toLocaleString("en-GB"),
                 ...entry
             });
-            saveStorage(STITCHING_HISTORY_KEY, history);
+            saveStorage(IRONING_HISTORY_KEY, history);
         } catch (e) {}
     }
 
-    function getHistoryForAssignment(stitchId) {
-        return readStorage(STITCHING_HISTORY_KEY)
-            .filter(h => Number(h.stitchId) === Number(stitchId))
+    function getHistoryForAssignment(ironId) {
+        return readStorage(IRONING_HISTORY_KEY)
+            .filter(h => Number(h.ironId) === Number(ironId))
             .sort((a, b) => String(a.at).localeCompare(String(b.at)));
     }
 
@@ -94,13 +88,12 @@ $(document).ready(function () {
         return String(name || "").trim().replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "Piece";
     }
 
-    function peekNextSubBatchId(batchId, pieceName, splitIndex, type) {
+    function peekNextSubBatchId(batchId, pieceName, splitIndex) {
         let formatted = String(batchId || "");
         if (!formatted.includes("BATCH-")) formatted = `BATCH-${String(batchId).padStart(3, "0")}`;
         const safePiece = sanitizePieceName(pieceName);
-        const sNumber = Number(splitIndex || 0) + 1;
-        const suffix = type === "outsource" ? "OS" : "IH";
-        return `${formatted}-${safePiece}-${suffix}${sNumber}`;
+        const iNumber = Number(splitIndex || 0) + 1;
+        return `${formatted}-${safePiece}-IR${iNumber}`;
     }
 
     function formatDateDisplay(dateString) {
@@ -123,7 +116,7 @@ $(document).ready(function () {
 
     function defaultDeliveryDate() {
         const d = new Date();
-        d.setDate(d.getDate() + 14);
+        d.setDate(d.getDate() + 7);
         return d.toISOString().split('T')[0];
     }
 
@@ -149,7 +142,7 @@ $(document).ready(function () {
         return "";
     }
 
-    function computeStitchingStatus(item) {
+    function computeIroningStatus(item) {
         if (item.stopped) return "stopped";
         const qty = item.quantity || 0, damage = item.damage || 0;
         const progress = item.progress || 0, passedQty = item.passedQty || 0;
@@ -196,18 +189,9 @@ $(document).ready(function () {
 
     function getBusyWorkersExcluding(poolId) {
         const busy = new Set();
-        stitchingData.forEach(row => {
+        ironingData.forEach(row => {
             if (Number(row.poolId) !== Number(poolId)) {
                 if (!isFullyPassed(row) && !row.stopped) busy.add(row.worker);
-            }
-        });
-        return busy;
-    }
-    function getBusyFirmsExcluding(poolId) {
-        const busy = new Set();
-        stitchingData.forEach(row => {
-            if (Number(row.poolId) !== Number(poolId)) {
-                if (!isFullyPassed(row) && !row.stopped && row.firm) busy.add(row.firm);
             }
         });
         return busy;
@@ -215,7 +199,7 @@ $(document).ready(function () {
 
     function getPoolTotal(item) { return Number(item.quantity) || 0; }
     function getPoolAssigned(item) {
-        return stitchingData
+        return ironingData
             .filter(d => Number(d.poolId) === Number(item.id))
             .reduce((s, d) => s + (Number(d.quantity) || 0), 0);
     }
@@ -230,7 +214,7 @@ $(document).ready(function () {
         const available = approvedPool.filter(p => getPoolRemaining(p) > 0);
 
         if (!available.length) {
-            tbody.html(`<tr><td colspan="11" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No approved items available for stitching.</td></tr>`);
+            tbody.html(`<tr><td colspan="11" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No approved items available for ironing.</td></tr>`);
             $("#availablePagination").empty();
             return;
         }
@@ -303,23 +287,23 @@ $(document).ready(function () {
             (p) => { availablePage = p; renderAvailableTable(); }, "items");
     }
 
-    /* ================= COMMON TABLE RENDER HELPER ================= */
-    function renderStitchingTableRows($tbody, filterType, page, setPage) {
-        const rows = stitchingData.filter(item =>
-            item.type === filterType && !isFullyPassed(item)
-        );
+    /* ================= TABLE 2: IRONING ASSIGNMENTS ================= */
+    function renderIroningTable() {
+        const tbody = $("#ironingList");
+        tbody.empty();
+        const visibleRows = ironingData.filter(item => !isFullyPassed(item));
 
-        if (!rows.length) {
-            const msg = filterType === "inhouse" ? "No in-house stitching assignments yet." : "No outsource stitching assignments yet.";
-            $tbody.html(`<tr><td colspan="14" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> ${msg}</td></tr>`);
-            return { totalPages: 1, totalItems: 0, pagerId: filterType === "inhouse" ? "#inhousePagination" : "#outsourcePagination" };
+        if (!visibleRows.length) {
+            tbody.html(`<tr><td colspan="14" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No ironing assignments yet.</td></tr>`);
+            $("#ironingPagination").empty();
+            return;
         }
 
-        const totalItems = rows.length;
+        const totalItems = visibleRows.length;
         const totalPages = Math.max(1, Math.ceil(totalItems / ROWS_PER_PAGE));
-        if (page > totalPages) page = totalPages;
-        const startIdx = (page - 1) * ROWS_PER_PAGE;
-        const pageItems = rows.slice(startIdx, startIdx + ROWS_PER_PAGE);
+        if (ironingPage > totalPages) ironingPage = totalPages;
+        const startIdx = (ironingPage - 1) * ROWS_PER_PAGE;
+        const pageItems = visibleRows.slice(startIdx, startIdx + ROWS_PER_PAGE);
 
         const grouped = {};
         pageItems.forEach(item => {
@@ -331,7 +315,7 @@ $(document).ready(function () {
         let serial = startIdx;
         Object.keys(grouped).forEach(batchId => {
             const items = grouped[batchId];
-            const firstOfBatch = (startIdx === 0 || rows[startIdx - 1]?.batchId !== batchId);
+            const firstOfBatch = (startIdx === 0 || visibleRows[startIdx - 1]?.batchId !== batchId);
             if (firstOfBatch) serial++;
 
             items.forEach((item, idx) => {
@@ -350,7 +334,7 @@ $(document).ready(function () {
                     deliveryHtml = `<span class="badge ${cls} delivery-date-badge">${formatDateDisplay(item.deliveryDate)}</span>`;
                 }
 
-                const statusKey = computeStitchingStatus(item);
+                const statusKey = computeIroningStatus(item);
                 let statusHtml = "";
                 if (statusKey === "stopped") statusHtml = `<span class="status-badge stopped">Stopped</span>`;
                 else if (statusKey === "pending") statusHtml = `<span class="status-badge pending">Pending</span>`;
@@ -366,21 +350,21 @@ $(document).ready(function () {
 
                 const editBtnHtml = `<button class="btn btn-sm btn-primary progress-btn" data-id="${item.id}" title="Edit / Update Progress" ${isStopped ? "disabled" : ""}><i class="bx bx-edit"></i></button>`;
                 const passBtnHtml = progress > 0
-                    ? `<button class="btn btn-sm pass-row-btn pass-row-action-btn" data-id="${item.id}" title="Pass" ${canPass ? "" : "disabled"}><i class="bx bx-right-arrow-alt"></i></button>`
+                    ? `<button class="btn btn-sm pass-row-btn pass-row-action-btn" data-id="${item.id}" title="Pass to Packing" ${canPass ? "" : "disabled"}><i class="bx bx-right-arrow-alt"></i></button>`
                     : "";
                 const stopBtnHtml = isUntouched(item)
                     ? `<button class="btn btn-sm stop-row-btn stop-row-action-btn" data-id="${item.id}" title="Stop"><i class="bx bx-stop"></i></button>`
                     : "";
                 const viewBtnHtml = `<button class="btn btn-sm view-row-btn view-row-action-btn" data-id="${item.id}" title="View"><i class="bx bx-show"></i></button>`;
 
-                $tbody.append(`
+                tbody.append(`
                     <tr>
                         <td>${isFirst ? serial : ""}</td>
                         <td>${isFirst ? escapeHtml(item.batchId) : ""}</td>
                         <td><span class="fw-semibold text-primary">${escapeHtml(item.subBatch || "-")}</span></td>
                         <td>${escapeHtml(item.brand || "-")}</td>
                         <td>${escapeHtml(item.pieceType || "-")}</td>
-                        <td>${escapeHtml(item.worker || item.firm || "-")}</td>
+                        <td>${escapeHtml(item.worker || "-")}</td>
                         <td>${qtyHtml}</td>
                         <td><div class="d-flex align-items-center gap-2"><span>${progress}</span><div class="progress-bar-container"><div class="progress-bar-fill" style="width:${progressPct}%;"></div></div></div></td>
                         <td>${damageHtml}</td>
@@ -401,28 +385,11 @@ $(document).ready(function () {
             });
         });
 
-        return { totalPages, totalItems, startIdx };
+        buildPager($("#ironingPagination"), ironingPage, totalPages, totalItems, ROWS_PER_PAGE,
+            (p) => { ironingPage = p; renderIroningTable(); }, "assignments");
     }
 
-    function renderInhouseTable() {
-        const tbody = $("#inhouseList");
-        tbody.empty();
-        const result = renderStitchingTableRows(tbody, "inhouse", inhousePage, (p) => { inhousePage = p; });
-        if (result.totalItems === 0) { $("#inhousePagination").empty(); return; }
-        buildPager($("#inhousePagination"), inhousePage, result.totalPages, result.totalItems, ROWS_PER_PAGE,
-            (p) => { inhousePage = p; renderInhouseTable(); }, "assignments");
-    }
-
-    function renderOutsourceTable() {
-        const tbody = $("#outsourceList");
-        tbody.empty();
-        const result = renderStitchingTableRows(tbody, "outsource", outsourcePage, (p) => { outsourcePage = p; });
-        if (result.totalItems === 0) { $("#outsourcePagination").empty(); return; }
-        buildPager($("#outsourcePagination"), outsourcePage, result.totalPages, result.totalItems, ROWS_PER_PAGE,
-            (p) => { outsourcePage = p; renderOutsourceTable(); }, "assignments");
-    }
-
-    /* ================= SINGLE ASSIGN MODAL ================= */
+    /* ================= ASSIGN MODAL ================= */
     function populateBatchSelect() {
         const select = $("#batchSelect");
         select.empty();
@@ -446,16 +413,11 @@ $(document).ready(function () {
         const designNumber = poolItem.designNumber || "-";
 
         const workersInPool = new Set();
-        const firmsInPool = new Set();
-        stitchingData.forEach(row => {
-            if (Number(row.poolId) === Number(poolItem.id)) {
-                if (row.type === "inhouse" && row.worker) workersInPool.add(row.worker);
-                if (row.type === "outsource" && row.firm) firmsInPool.add(row.firm);
-            }
+        ironingData.forEach(row => {
+            if (Number(row.poolId) === Number(poolItem.id) && row.worker) workersInPool.add(row.worker);
         });
 
         const busyWorkers = getBusyWorkersExcluding(poolItem.id);
-        const busyFirms = getBusyFirmsExcluding(poolItem.id);
 
         let workerOpts = "";
         WORKERS.forEach(w => {
@@ -468,16 +430,7 @@ $(document).ready(function () {
             if (!workersInPool.has(w) && busyWorkers.has(w)) workerOpts += `<option value="${escapeHtml(w)}" disabled>${escapeHtml(w)} (busy)</option>`;
         });
 
-        let firmOpts = "";
-        FIRMS.forEach(f => {
-            if (firmsInPool.has(f)) firmOpts += `<option value="${escapeHtml(f)}" data-in-pool="1">${escapeHtml(f)} (continuing)</option>`;
-        });
-        FIRMS.forEach(f => {
-            if (!firmsInPool.has(f) && !busyFirms.has(f)) firmOpts += `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`;
-        });
-        FIRMS.forEach(f => {
-            if (!firmsInPool.has(f) && busyFirms.has(f)) firmOpts += `<option value="${escapeHtml(f)}" disabled>${escapeHtml(f)} (busy)</option>`;
-        });
+        const defaultWorker = workersInPool.size === 1 ? Array.from(workersInPool)[0] : "";
 
         container.append(`
             <div class="alert alert-primary mb-3">
@@ -513,12 +466,11 @@ $(document).ready(function () {
                     <table class="table table-bordered table-sm mb-0">
                         <thead>
                             <tr>
-                                <th style="width:15%;">Sub-Batch</th>
-                                <th style="width:12%;">Type</th>
-                                <th style="width:20%;">Worker / Firm</th>
-                                <th style="width:11%;">Quantity</th>
+                                <th style="width:18%;">Sub-Batch ID</th>
+                                <th style="width:22%;">Worker Name</th>
+                                <th style="width:12%;">Quantity</th>
                                 <th style="width:14%;">Priority</th>
-                                <th style="width:20%;">Delivery Date</th>
+                                <th style="width:34%;">Delivery Date</th>
                             </tr>
                         </thead>
                         <tbody id="assignmentTableBody"></tbody>
@@ -530,27 +482,12 @@ $(document).ready(function () {
             const defaultDateStr = defaultDeliveryDate();
 
             for (let i = 0; i < count; i++) {
+                const subBatch = peekNextSubBatchId(poolItem.batchId, poolItem.pieceItem, i);
                 const autoQty = autoQtys[i];
-                const subBatchIH = peekNextSubBatchId(poolItem.batchId, poolItem.pieceItem, i, "inhouse");
-                const subBatchOS = peekNextSubBatchId(poolItem.batchId, poolItem.pieceItem, i, "outsource");
-
                 tbody.append(`
                     <tr class="assignment-row">
-                        <td>
-                            <span class="sub-batch-label fw-semibold text-primary sub-batch-display">${escapeHtml(subBatchIH)}</span>
-                            <input type="hidden" class="sub-batch-input-ih" value="${escapeHtml(subBatchIH)}">
-                            <input type="hidden" class="sub-batch-input-os" value="${escapeHtml(subBatchOS)}">
-                        </td>
-                        <td>
-                            <select class="form-select form-select-sm type-select">
-                                <option value="inhouse" selected>In-House</option>
-                                <option value="outsource">Outsource</option>
-                            </select>
-                        </td>
-                        <td>
-                            <select class="form-select form-select-sm worker-select">${workerOpts}</select>
-                            <select class="form-select form-select-sm firm-select" style="display:none;">${firmOpts}</select>
-                        </td>
+                        <td><span class="sub-batch-label fw-semibold text-primary">${escapeHtml(subBatch)}</span><input type="hidden" class="sub-batch-input" value="${escapeHtml(subBatch)}"></td>
+                        <td><select class="form-select form-select-sm worker-select" required><option value="">Select Worker</option>${workerOpts}</select></td>
                         <td><input type="number" class="form-control form-control-sm quantity-input" value="${autoQty}" min="1" max="${remaining}"></td>
                         <td>
                             <select class="form-select form-select-sm priority-select">
@@ -564,17 +501,7 @@ $(document).ready(function () {
                 `);
             }
 
-            // Type toggle
-            tbody.find(".type-select").on("change", function () {
-                const $row = $(this).closest("tr");
-                const isOutsource = $(this).val() === "outsource";
-                $row.find(".firm-select").toggle(isOutsource);
-                $row.find(".worker-select").toggle(!isOutsource);
-                const $sub = $row.find(".sub-batch-display");
-                const $ih = $row.find(".sub-batch-input-ih").val();
-                const $os = $row.find(".sub-batch-input-os").val();
-                $sub.text(isOutsource ? $os : $ih);
-            });
+            if (defaultWorker) tbody.find(".worker-select").val(defaultWorker);
         }
 
         renderRows(1);
@@ -613,19 +540,13 @@ $(document).ready(function () {
         const rows = [];
         let valid = true;
         $(".assignment-row").each(function () {
-            const type = $(this).find(".type-select").val();
-            const subBatch = type === "outsource" ? $(this).find(".sub-batch-input-os").val() : $(this).find(".sub-batch-input-ih").val();
-            const worker = type === "inhouse" ? $(this).find(".worker-select").val() : "";
-            const firm = type === "outsource" ? $(this).find(".firm-select").val() : "";
+            const subBatch = $(this).find(".sub-batch-input").val();
+            const worker = $(this).find(".worker-select").val();
             const quantity = parseInt($(this).find(".quantity-input").val()) || 0;
             const priority = $(this).find(".priority-select").val();
             const deliveryDate = $(this).find(".delivery-date-input").val();
-
-            if (type === "inhouse" && !worker) { valid = false; return false; }
-            if (type === "outsource" && !firm) { valid = false; return false; }
-            if (quantity < 1 || !deliveryDate) { valid = false; return false; }
-
-            rows.push({ type, subBatch, worker, firm, quantity, priority, deliveryDate });
+            if (!worker || quantity < 1 || !deliveryDate) { valid = false; return false; }
+            rows.push({ subBatch, worker, quantity, priority, deliveryDate });
         });
 
         if (!valid) { Swal.fire({ icon: 'warning', title: 'Incomplete', text: 'Fill all fields.' }); return; }
@@ -638,38 +559,32 @@ $(document).ready(function () {
         let addedNew = 0, mergedExisting = 0;
 
         rows.forEach(row => {
-            const keyMatch = row.type === "inhouse"
-                ? (d) => d.type === "inhouse" && d.worker === row.worker
-                : (d) => d.type === "outsource" && d.firm === row.firm;
-
-            const existingIdx = stitchingData.findIndex(d =>
-                Number(d.poolId) === Number(poolItem.id) && keyMatch(d)
+            const existingIdx = ironingData.findIndex(d =>
+                Number(d.poolId) === Number(poolItem.id) && d.worker === row.worker
             );
 
             if (existingIdx !== -1) {
-                stitchingData[existingIdx].quantity += row.quantity;
+                ironingData[existingIdx].quantity += row.quantity;
                 mergedExisting++;
                 pushHistory({
-                    stitchId: stitchingData[existingIdx].id,
+                    ironId: ironingData[existingIdx].id,
                     batchId: poolItem.batchId,
-                    subBatch: stitchingData[existingIdx].subBatch,
-                    action: `Additional ${row.quantity} pcs to ${row.worker || row.firm}`,
+                    subBatch: ironingData[existingIdx].subBatch,
+                    action: `Additional ${row.quantity} pcs to ${row.worker}`,
                     by: "Manager"
                 });
             } else {
                 const newId = nextId++;
-                stitchingData.push({
+                ironingData.push({
                     id: newId,
                     poolId: poolItem.id,
-                    type: row.type,
                     batchId: poolItem.batchId,
                     brand: poolItem.brand,
                     designNumber: poolItem.designNumber,
                     color: poolItem.color,
                     pieceType: `Piece ${poolItem.pieceNumber} (${poolItem.pieceItem})`,
                     pieceNumber: poolItem.pieceNumber,
-                    worker: row.worker || "",
-                    firm: row.firm || "",
+                    worker: row.worker,
                     quantity: row.quantity,
                     priority: row.priority,
                     subBatch: row.subBatch,
@@ -681,10 +596,10 @@ $(document).ready(function () {
                     photo: poolItem.photo || ""
                 });
                 pushHistory({
-                    stitchId: newId,
+                    ironId: newId,
                     batchId: poolItem.batchId,
                     subBatch: row.subBatch,
-                    action: `Assigned ${row.quantity} pcs to ${row.worker || row.firm} (${row.type})`,
+                    action: `Assigned ${row.quantity} pcs to ${row.worker}`,
                     by: "Manager"
                 });
                 addedNew++;
@@ -693,8 +608,7 @@ $(document).ready(function () {
 
         saveData();
         renderAvailableTable();
-        renderInhouseTable();
-        renderOutsourceTable();
+        renderIroningTable();
         $("#assignModal").modal("hide");
 
         let msg = "";
@@ -727,13 +641,13 @@ $(document).ready(function () {
     $(document).on("click", ".progress-btn", function () {
         if ($(this).prop("disabled")) return;
         const id = Number($(this).data("id"));
-        const item = stitchingData.find(d => Number(d.id) === id);
+        const item = ironingData.find(d => Number(d.id) === id);
         if (!item) return;
         if (isFullyPassed(item)) { Swal.fire({ icon: 'info', title: 'Fully Passed' }); return; }
 
         currentEditingId = id;
         $("#progressSubBatch").val(item.subBatch);
-        $("#progressWorker").val(item.worker || item.firm || "-");
+        $("#progressWorker").val(item.worker);
         $("#progressTypeSelect").val("completed");
         $("#progressQty").val(0);
         refreshProgressNumbers(item);
@@ -741,7 +655,7 @@ $(document).ready(function () {
     });
 
     $(document).on("input change", "#progressQty, #progressTypeSelect", function () {
-        const item = stitchingData.find(d => Number(d.id) === currentEditingId);
+        const item = ironingData.find(d => Number(d.id) === currentEditingId);
         if (!item) return;
         const type = $("#progressTypeSelect").val();
         const addQty = parseInt($("#progressQty").val()) || 0;
@@ -762,7 +676,7 @@ $(document).ready(function () {
     });
 
     $("#updateProgressBtn").click(function () {
-        const item = stitchingData.find(d => Number(d.id) === currentEditingId);
+        const item = ironingData.find(d => Number(d.id) === currentEditingId);
         if (!item) return;
         const type = $("#progressTypeSelect").val();
         const addQty = parseInt($("#progressQty").val()) || 0;
@@ -777,10 +691,10 @@ $(document).ready(function () {
 
         if (type === "completed") {
             item.progress = existingProgress + addQty;
-            pushHistory({ stitchId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Progress +${addQty} (total ${item.progress})`, by: "Manager" });
+            pushHistory({ ironId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Progress +${addQty} (total ${item.progress})`, by: "Manager" });
         } else {
             item.damage = existingDamage + addQty;
-            pushHistory({ stitchId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Damage +${addQty} (total ${item.damage})`, by: "Manager" });
+            pushHistory({ ironId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Damage +${addQty} (total ${item.damage})`, by: "Manager" });
         }
 
         const finalEff = Math.max(0, item.quantity - (item.damage || 0));
@@ -789,55 +703,67 @@ $(document).ready(function () {
 
         if (finalEff > 0 && finalProgress >= finalEff && finalPassed < finalProgress) {
             const autoPassQty = finalProgress - finalPassed;
-            pushRowToNextStage(item, autoPassQty);
+            pushRowToPacking(item, autoPassQty);
             item.passedQty = finalProgress;
-            pushHistory({ stitchId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Auto-passed ${autoPassQty} pcs`, by: "System" });
+            pushHistory({ ironId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Auto-passed ${autoPassQty} pcs to Packing`, by: "System" });
             saveData();
-            renderInhouseTable();
-            renderOutsourceTable();
+            renderIroningTable();
             $("#progressModal").modal("hide");
-            Swal.fire({ icon: 'success', title: 'Auto-Passed', text: `${finalProgress} pcs completed & auto-passed.`, timer: 2200, showConfirmButton: false });
+            Swal.fire({ icon: 'success', title: 'Auto-Passed to Packing', text: `${finalProgress} pcs completed & auto-passed.`, timer: 2200, showConfirmButton: false });
             return;
         }
 
         saveData();
-        renderInhouseTable();
-        renderOutsourceTable();
+        renderIroningTable();
         $("#progressModal").modal("hide");
         Swal.fire({ icon: 'success', title: 'Updated', timer: 1200, showConfirmButton: false });
     });
 
-    /* ================= PASS TO NEXT STAGE ================= */
-    function pushRowToNextStage(item, qty) {
+    /* ================= PASS TO PACKING ================= */
+    function pushRowToPacking(item, qty) {
+        // Ironing is usually the last stage. Push to packing_pool.
+        const packingPool = readStorage("packingPool");
+        packingPool.push({
+            id: Date.now() + Math.floor(Math.random() * 1000),
+            batchId: item.batchId,
+            brand: item.brand,
+            designNumber: item.designNumber,
+            color: item.color,
+            pieceType: item.pieceType,
+            pieceNumber: item.pieceNumber,
+            subBatch: item.subBatch,
+            worker: item.worker,
+            quantity: qty,
+            priority: item.priority,
+            deliveryDate: item.deliveryDate,
+            photo: item.photo || "",
+            status: "pending_packing",
+            createdAt: new Date().toLocaleString("en-GB")
+        });
+        saveStorage("packingPool", packingPool);
+
+        // Also update approvedPool to packing stage (for consistency)
         const pool = readStorage(APPROVED_POOL_KEY);
         const idx = pool.findIndex(p => String(p.batchId) === String(item.batchId) && Number(p.pieceNumber) === Number(item.pieceNumber));
-        if (idx === -1) return;
-
-        const entry = pool[idx];
-        const route = entry.route || [];
-        const currentStage = entry.currentStage || {};
-        const curIdx = route.findIndex(r => r.stage === currentStage.stage && r.type === currentStage.type);
-        const nextStage = (curIdx !== -1 && curIdx + 1 < route.length)
-            ? route[curIdx + 1]
-            : { type: "packing", stage: "Packing" };
-
-        pool[idx] = {
-            ...entry,
-            currentStage: nextStage,
-            quantity: qty,
-            stageHistory: [
-                ...(entry.stageHistory || []),
-                { at: new Date().toLocaleString("en-GB"), stage: nextStage.stage, type: nextStage.type, action: "entered", fromQty: qty }
-            ],
-            updatedAt: new Date().toLocaleString("en-GB")
-        };
-        saveStorage(APPROVED_POOL_KEY, pool);
+        if (idx !== -1) {
+            pool[idx] = {
+                ...pool[idx],
+                currentStage: { type: "packing", stage: "Packing" },
+                quantity: qty,
+                stageHistory: [
+                    ...(pool[idx].stageHistory || []),
+                    { at: new Date().toLocaleString("en-GB"), stage: "Packing", type: "packing", action: "entered", fromQty: qty }
+                ],
+                updatedAt: new Date().toLocaleString("en-GB")
+            };
+            saveStorage(APPROVED_POOL_KEY, pool);
+        }
     }
 
     $(document).on("click", ".pass-row-action-btn", function () {
         if ($(this).prop("disabled")) return;
         const id = Number($(this).data("id"));
-        const item = stitchingData.find(d => Number(d.id) === id);
+        const item = ironingData.find(d => Number(d.id) === id);
         if (!item) return;
         if (isFullyPassed(item)) { Swal.fire({ icon: 'info', title: 'Already Passed' }); return; }
 
@@ -847,10 +773,10 @@ $(document).ready(function () {
         if (passableQty <= 0) { Swal.fire({ icon: 'info', title: 'Nothing to Pass' }); return; }
 
         Swal.fire({
-            title: 'Pass to Next Stage?',
+            title: 'Pass to Packing?',
             html: `<div class="text-start">
                     <p><strong>Sub-Batch:</strong> ${escapeHtml(item.subBatch)}</p>
-                    <p><strong>${item.type === "outsource" ? "Firm" : "Worker"}:</strong> ${escapeHtml(item.worker || item.firm)}</p>
+                    <p><strong>Worker:</strong> ${escapeHtml(item.worker)}</p>
                     <p><strong>Completed:</strong> ${progress} pcs</p>
                     <p><strong>Already Passed:</strong> ${passedQty} pcs</p>
                     <hr>
@@ -859,29 +785,28 @@ $(document).ready(function () {
             icon: 'question',
             showCancelButton: true,
             confirmButtonColor: '#198754',
-            confirmButtonText: 'Yes, Pass',
+            confirmButtonText: 'Yes, Pass to Packing',
             cancelButtonText: 'Cancel'
         }).then((r) => {
             if (!r.isConfirmed) return;
-            pushRowToNextStage(item, passableQty);
+            pushRowToPacking(item, passableQty);
             item.passedQty = progress;
-            pushHistory({ stitchId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Passed ${passableQty} pcs to next stage`, by: "Manager" });
+            pushHistory({ ironId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Passed ${passableQty} pcs to Packing`, by: "Manager" });
             saveData();
-            renderInhouseTable();
-            renderOutsourceTable();
-            Swal.fire({ icon: 'success', title: 'Passed', text: `${passableQty} pcs passed.`, timer: 1800, showConfirmButton: false });
+            renderIroningTable();
+            Swal.fire({ icon: 'success', title: 'Passed to Packing', text: `${passableQty} pcs passed.`, timer: 1800, showConfirmButton: false });
         });
     });
 
     /* ================= STOP ROW ================= */
     $(document).on("click", ".stop-row-action-btn", function () {
         const id = Number($(this).data("id"));
-        const item = stitchingData.find(d => Number(d.id) === id);
+        const item = ironingData.find(d => Number(d.id) === id);
         if (!item) return;
 
         Swal.fire({
             title: "Stop this Assignment?",
-            html: `<div class="text-start"><p><strong>Sub-Batch:</strong> ${escapeHtml(item.subBatch)}</p><p><strong>${item.type === "outsource" ? "Firm" : "Worker"}:</strong> ${escapeHtml(item.worker || item.firm)}</p><p class="text-danger mb-0">This assignment will be frozen.</p></div>`,
+            html: `<div class="text-start"><p><strong>Sub-Batch:</strong> ${escapeHtml(item.subBatch)}</p><p><strong>Worker:</strong> ${escapeHtml(item.worker)}</p><p class="text-danger mb-0">This assignment will be frozen.</p></div>`,
             icon: "warning",
             showCancelButton: true,
             confirmButtonText: "Yes, Stop it",
@@ -889,14 +814,13 @@ $(document).ready(function () {
             confirmButtonColor: "#dc3545"
         }).then(r => {
             if (!r.isConfirmed) return;
-            const idx = stitchingData.findIndex(d => Number(d.id) === id);
+            const idx = ironingData.findIndex(d => Number(d.id) === id);
             if (idx === -1) return;
-            stitchingData[idx].stopped = true;
-            stitchingData[idx].stoppedAt = new Date().toLocaleString("en-GB");
-            pushHistory({ stitchId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: "Stopped / Frozen", by: "Manager" });
+            ironingData[idx].stopped = true;
+            ironingData[idx].stoppedAt = new Date().toLocaleString("en-GB");
+            pushHistory({ ironId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: "Stopped / Frozen", by: "Manager" });
             saveData();
-            renderInhouseTable();
-            renderOutsourceTable();
+            renderIroningTable();
             Swal.fire({ icon: "success", title: "Stopped", timer: 1800, showConfirmButton: false });
         });
     });
@@ -904,11 +828,10 @@ $(document).ready(function () {
     /* ================= VIEW ================= */
     $(document).on("click", ".view-row-action-btn", function () {
         const id = Number($(this).data("id"));
-        const item = stitchingData.find(d => Number(d.id) === id);
+        const item = ironingData.find(d => Number(d.id) === id);
         if (!item) return;
 
-        const photo = item.photo || "";
-        const photoSrc = photo ? escapeHtml(photo) : PLACEHOLDER_IMG;
+        const photoSrc = item.photo ? escapeHtml(item.photo) : PLACEHOLDER_IMG;
         const history = getHistoryForAssignment(id);
         const historyHtml = history.length
             ? history.map(h => `<div style="font-size:12px; padding:4px 0; border-bottom:1px dashed #eef1f7;">• <strong>${escapeHtml(h.at)}</strong> — ${escapeHtml(h.action || "")}</div>`).join("")
@@ -916,15 +839,14 @@ $(document).ready(function () {
 
         $("#viewDetailBody").html(`
             <div style="padding:20px;">
-                <h4 style="text-align:center;font-weight:700;color:#161617;">STITCHING DETAILS</h4>
+                <h4 style="text-align:center;font-weight:700;color:#161617;">IRONING DETAILS</h4>
                 <hr>
                 <div style="display:grid;grid-template-columns:1fr 220px;gap:20px;">
                     <div>
                         <table class="table table-bordered mb-3">
                             <tr><th style="width:35%;">Batch ID</th><td>${escapeHtml(item.batchId)}</td></tr>
                             <tr><th>Sub-Batch</th><td>${escapeHtml(item.subBatch)}</td></tr>
-                            <tr><th>Type</th><td>${item.type === "outsource" ? "Outsource" : "In-House"}</td></tr>
-                            <tr><th>${item.type === "outsource" ? "Firm" : "Worker"}</th><td>${escapeHtml(item.worker || item.firm || "-")}</td></tr>
+                            <tr><th>Worker</th><td>${escapeHtml(item.worker || "-")}</td></tr>
                             <tr><th>Brand</th><td>${escapeHtml(item.brand || "-")}</td></tr>
                             <tr><th>Design</th><td>${escapeHtml(item.designNumber || "-")}</td></tr>
                             <tr><th>Color</th><td>${escapeHtml(item.color || "-")}</td></tr>
@@ -948,35 +870,31 @@ $(document).ready(function () {
     });
 
     /* ================= REFRESH ================= */
-    $("#refreshStitchingBtn").click(function () {
+    $("#refreshIroningBtn").click(function () {
         loadData();
         renderAvailableTable();
-        renderInhouseTable();
-        renderOutsourceTable();
+        renderIroningTable();
         Swal.fire({ icon: "success", title: "Refreshed", timer: 1000, showConfirmButton: false });
     });
 
     /* ================= INIT ================= */
     loadData();
     renderAvailableTable();
-    renderInhouseTable();
-    renderOutsourceTable();
+    renderIroningTable();
 
     window.addEventListener("focus", function () {
         loadData();
         renderAvailableTable();
-        renderInhouseTable();
-        renderOutsourceTable();
+        renderIroningTable();
     });
 
     setInterval(function () {
         const prevPool = JSON.stringify(approvedPool);
-        const prevData = JSON.stringify(stitchingData);
+        const prevData = JSON.stringify(ironingData);
         loadData();
-        if (JSON.stringify(approvedPool) !== prevPool || JSON.stringify(stitchingData) !== prevData) {
+        if (JSON.stringify(approvedPool) !== prevPool || JSON.stringify(ironingData) !== prevData) {
             renderAvailableTable();
-            renderInhouseTable();
-            renderOutsourceTable();
+            renderIroningTable();
         }
     }, 2000);
 });

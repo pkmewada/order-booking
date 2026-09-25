@@ -16,7 +16,8 @@ $(document).ready(function () {
         );
 
     const FIXED_FLOW_STAGES = ["Cutting", "Stitching", "Ironing"];
-    const FLOW_STAGE_ORDER = [
+
+    const STAGE_SEQUENCE = [
         "Before Cutting", "Cutting", "After Cutting",
         "Before Stitching", "Stitching", "After Stitching",
         "Before Ironing", "Ironing", "After Ironing"
@@ -34,7 +35,6 @@ $(document).ready(function () {
             .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     }
-
     function readStorage(key) {
         try {
             const value = localStorage.getItem(key);
@@ -43,17 +43,12 @@ $(document).ready(function () {
             return Array.isArray(parsed) ? parsed : [];
         } catch (error) { return []; }
     }
-
     function saveStorage(key, value) {
         try { localStorage.setItem(key, JSON.stringify(value)); return true; }
         catch (error) { return false; }
     }
-
     function normalize(value) { return String(value ?? "").trim().toLowerCase(); }
 
-    /* ======================================================
-       PRIORITY → CSS CLASS  (UNCHANGED)
-       ====================================================== */
     function getPriorityClass(priority) {
         const p = normalize(priority);
         if (p === "high") return "priority-high";
@@ -62,9 +57,6 @@ $(document).ready(function () {
         return "";
     }
 
-    /* ======================================================
-       STATUS BADGE  (UNCHANGED — original badge style)
-       ====================================================== */
     function statusText(status) {
         const map = {
             pending:     { label: "Pending",     cls: "pending" },
@@ -105,16 +97,44 @@ $(document).ready(function () {
     function isBatchStopped(batch) { return !!(batch?.stopped); }
 
     /* ============================================================
+       BUILD PIECE ROUTE
+       ============================================================ */
+    function buildPieceRoute(piece) {
+        const route = [];
+        const worksByStage = {};
+
+        (piece.additionalWorks || []).forEach(w => {
+            const stage = String(w.stage || "").trim();
+            if (!stage) return;
+            if (!worksByStage[stage]) worksByStage[stage] = [];
+            worksByStage[stage].push(w.workType);
+        });
+
+        STAGE_SEQUENCE.forEach(stage => {
+            if (worksByStage[stage] && worksByStage[stage].length) {
+                route.push({
+                    type: "additional_work",
+                    stage: stage,
+                    works: worksByStage[stage]
+                });
+            }
+            if (stage === "Cutting") route.push({ type: "cutting", stage: "Cutting" });
+            if (stage === "Stitching") route.push({ type: "stitching", stage: "Stitching" });
+            if (stage === "Ironing") route.push({ type: "ironing", stage: "Ironing" });
+        });
+
+        return route;
+    }
+
+    /* ============================================================
        MERGED availability
        ============================================================ */
     function buildMergedAvailability(pieceAvailability, batchId, pieceNumber, fullMaterials, extraOverrides) {
         const merged = {};
-
         Object.entries(pieceAvailability || {}).forEach(([k, v]) => {
             if (v === "yes") merged[k] = "yes";
             else if (merged[k] === undefined) merged[k] = v;
         });
-
         const allReqs = readStorage(REQUIREMENT_STORAGE_KEY).filter(r =>
             String(r.batchId) === String(batchId) &&
             Number(r.pieceNumber) === Number(pieceNumber)
@@ -128,16 +148,13 @@ $(document).ready(function () {
                 if (merged[m] === undefined) merged[m] = "no";
             });
         });
-
         Object.entries(extraOverrides || {}).forEach(([k, v]) => {
             if (v === "yes") merged[k] = "yes";
             else if (merged[k] !== "yes") merged[k] = "no";
         });
-
         fullMaterials.forEach(m => {
             if (merged[m] === undefined) merged[m] = "no";
         });
-
         return merged;
     }
 
@@ -156,12 +173,9 @@ $(document).ready(function () {
                 const pieceNumber = getPieceNumber(piece, index);
                 const allMaterials = getPieceMaterials(piece);
                 if (!allMaterials.length) return piece;
-
                 if (piece?.approval?.stopped) return piece;
-
                 const mode = piece.approval?.mode;
                 if (mode !== "confirm" && mode !== "pass") return piece;
-
                 const merged = buildMergedAvailability(
                     piece.approval?.itemAvailability,
                     batch.batchId,
@@ -169,7 +183,6 @@ $(document).ready(function () {
                     allMaterials
                 );
                 const newStatus = deriveStatus(merged, allMaterials);
-
                 return {
                     ...piece,
                     materials: allMaterials,
@@ -187,7 +200,6 @@ $(document).ready(function () {
         saveStorage(APPROVED_BATCH_STORAGE_KEY, batchData);
     }
 
-    /* ================= LOAD ================= */
     function loadData() {
         let approved = readStorage(APPROVED_BATCH_STORAGE_KEY);
         if (approved.length) { batchData = approved; }
@@ -201,10 +213,8 @@ $(document).ready(function () {
     /* ================= TABLE ================= */
     function renderTable() {
         loadData();
-
         const tbody = $("#approvalTableBody");
         tbody.empty();
-
         const statusFilter = normalize($("#approvalStatusFilter").val());
         const searchTerm = normalize($("#approvalSearchInput").val());
 
@@ -217,7 +227,6 @@ $(document).ready(function () {
                     ...((p.additionalWorks || []).map(w => `${w.workType} ${w.stage}`))
                 ].join(" "))
             ].filter(Boolean).join(" ");
-
             if (statusFilter) {
                 if (statusFilter === "stopped") {
                     if (!isBatchStopped(batch)) return false;
@@ -238,10 +247,8 @@ $(document).ready(function () {
             const pieces = Array.isArray(batch.pieces) && batch.pieces.length
                 ? batch.pieces
                 : [{ number: 1, item: batch.piece || "", materials: batch.itemList || [], additionalWorks: [] }];
-
             const photoSrc = batch.photo ? escapeHtml(batch.photo) : PLACEHOLDER_IMG;
             const batchStopped = isBatchStopped(batch);
-
             let pieceTypeHtml = "";
             let statusHtml = "";
 
@@ -249,37 +256,16 @@ $(document).ready(function () {
                 const pieceNumber = getPieceNumber(piece, index);
                 const itemName = getPieceItem(piece);
                 const pieceStatus = getPieceStatus(piece);
-
-                pieceTypeHtml += `
-                    <div class="piece-line">
-                        <span class="piece-num">${escapeHtml(pieceNumber)} Piece</span>
-                        ${itemName ? `<span class="piece-item-text"> (${escapeHtml(itemName)})</span>` : ""}
-                    </div>
-                `;
+                pieceTypeHtml += `<div class="piece-line"><span class="piece-num">${escapeHtml(pieceNumber)} Piece</span>${itemName ? `<span class="piece-item-text"> (${escapeHtml(itemName)})</span>` : ""}</div>`;
                 statusHtml += `<div class="status-line">${statusText(pieceStatus)}</div>`;
             });
 
             const priorityClass = getPriorityClass(batch.priority);
-
-            // Action buttons — ONE ROW: View (black small text) + Stop (red icon only)
-            let actionHtml = `
-                <div class="action-row">
-                    <button type="button" class="btn btn-view-sm open-approval-btn" data-id="${escapeHtml(batch.id)}">
-                        View
-                    </button>
-            `;
+            let actionHtml = `<div class="action-row"><button type="button" class="btn btn-view-sm open-approval-btn" data-id="${escapeHtml(batch.id)}">View</button>`;
             if (batchStopped) {
-                actionHtml += `
-                    <button type="button" class="btn btn-resume-icon resume-batch-btn" data-id="${escapeHtml(batch.id)}" title="Resume">
-                        <i class="bx bx-play"></i>
-                    </button>
-                `;
+                actionHtml += `<button type="button" class="btn btn-resume-icon resume-batch-btn" data-id="${escapeHtml(batch.id)}" title="Resume"><i class="bx bx-play"></i></button>`;
             } else {
-                actionHtml += `
-                    <button type="button" class="btn btn-stop-icon stop-batch-btn" data-id="${escapeHtml(batch.id)}" title="Stop">
-                        <i class="bx bx-stop"></i>
-                    </button>
-                `;
+                actionHtml += `<button type="button" class="btn btn-stop-icon stop-batch-btn" data-id="${escapeHtml(batch.id)}" title="Stop"><i class="bx bx-stop"></i></button>`;
             }
             actionHtml += `</div>`;
 
@@ -292,11 +278,7 @@ $(document).ready(function () {
                     <td><span class="color-text">${escapeHtml(batch.color || "-")}</span></td>
                     <td><div class="piece-cell-lines">${pieceTypeHtml}</div></td>
                     <td>${escapeHtml(batch.quantity || "0")}</td>
-                    <td>
-                        <span class="priority-badge ${priorityClass}">
-                            ${escapeHtml(batch.priority || "-")}
-                        </span>
-                    </td>
+                    <td><span class="priority-badge ${priorityClass}">${escapeHtml(batch.priority || "-")}</span></td>
                     <td><div class="status-cell-lines">${statusHtml}</div></td>
                     <td class="action-cell">${actionHtml}</td>
                 </tr>
@@ -312,11 +294,11 @@ $(document).ready(function () {
     function buildFlowNodes(works) {
         const flowItems = [];
         FIXED_FLOW_STAGES.forEach(function (stageName) {
-            flowItems.push({ type: "fixed", label: stageName, order: FLOW_STAGE_ORDER.indexOf(stageName) });
+            flowItems.push({ type: "fixed", label: stageName, order: STAGE_SEQUENCE.indexOf(stageName) });
         });
         (works || []).forEach(function (work) {
             const stage = work.stage || "";
-            const order = FLOW_STAGE_ORDER.indexOf(stage);
+            const order = STAGE_SEQUENCE.indexOf(stage);
             flowItems.push({ type: "work", label: work.workType || "Work", order: order === -1 ? 99 : order });
         });
         flowItems.sort((a, b) => a.order - b.order);
@@ -336,14 +318,7 @@ $(document).ready(function () {
             const works = getPieceWorks(piece);
             const nodes = buildFlowNodes(works);
 
-            let html = `
-                <div class="mb-3">
-                    <div class="d-flex align-items-center gap-2 mb-2">
-                        <span class="badge bg-primary">Piece ${escapeHtml(pieceNumber)}</span>
-                        ${itemName ? `<span class="fw-semibold">${escapeHtml(itemName)}</span>` : ""}
-                    </div>
-                    <div class="batch-flow-track">
-            `;
+            let html = `<div class="mb-3"><div class="d-flex align-items-center gap-2 mb-2"><span class="badge bg-primary">Piece ${escapeHtml(pieceNumber)}</span>${itemName ? `<span class="fw-semibold">${escapeHtml(itemName)}</span>` : ""}</div><div class="batch-flow-track">`;
             nodes.forEach(function (node, i) {
                 if (i > 0) html += `<span class="batch-flow-connector"></span>`;
                 html += node.type === "fixed"
@@ -359,7 +334,6 @@ $(document).ready(function () {
     function computeAvailability(pieceNumber, materials, piece) {
         const locked = isPieceLocked(piece);
         const stored = piece?.approval?.itemAvailability || {};
-
         const availability = {};
         materials.forEach(mat => {
             if (locked) {
@@ -377,7 +351,6 @@ $(document).ready(function () {
     function renderApprovalPieces(batch) {
         const container = $("#approvalPiecesContainer");
         container.empty();
-
         const pieces = Array.isArray(batch.pieces) && batch.pieces.length
             ? batch.pieces
             : [{ number: 1, item: batch.piece || "", materials: batch.itemList || [], additionalWorks: [] }];
@@ -386,7 +359,6 @@ $(document).ready(function () {
             container.html(`<div class="alert alert-warning">No pieces found for this batch.</div>`);
             return;
         }
-
         const batchStopped = isBatchStopped(batch);
 
         pieces.forEach((piece, index) => {
@@ -407,11 +379,8 @@ $(document).ready(function () {
                     const isChecked = availability[mat] === "yes";
                     const chkId = `chk_${pieceNumber}_${matIndex}`;
                     itemRows += `
-                        <label class="item-list-row ${isChecked ? "checked-row" : ""}"
-                               data-piece="${pieceNumber}" data-item="${escapeHtml(mat)}" for="${chkId}">
-                            <input type="checkbox" class="piece-item-checkbox"
-                                id="${chkId}" data-piece="${pieceNumber}" data-item="${escapeHtml(mat)}"
-                                ${isChecked ? "checked" : ""} ${(locked || stopped) ? "disabled" : ""}>
+                        <label class="item-list-row ${isChecked ? "checked-row" : ""}" data-piece="${pieceNumber}" data-item="${escapeHtml(mat)}" for="${chkId}">
+                            <input type="checkbox" class="piece-item-checkbox" id="${chkId}" data-piece="${pieceNumber}" data-item="${escapeHtml(mat)}" ${isChecked ? "checked" : ""} ${(locked || stopped) ? "disabled" : ""}>
                             <span class="item-name">${escapeHtml(mat)}</span>
                         </label>
                     `;
@@ -440,12 +409,10 @@ $(document).ready(function () {
                         </div>
                         <div class="piece-card-status">${statusText(stopped && !locked ? "stopped" : pieceStatus)}</div>
                     </div>
-
                     <div>
                         <div class="small text-muted mb-1" style="font-size:11px;">Additional Work</div>
                         <div class="work-text">${worksHtml}</div>
                     </div>
-
                     <div>
                         <div class="item-list-top">
                             <span class="item-list-label">Item List</span>
@@ -458,9 +425,7 @@ $(document).ready(function () {
                         </div>
                         <div class="item-list-rows">${itemRows}</div>
                     </div>
-
                     <textarea class="form-control piece-remarks" rows="1" data-piece="${pieceNumber}" placeholder="Remarks..." ${(locked || stopped) ? "readonly" : ""}>${escapeHtml(remarks)}</textarea>
-
                     <div class="piece-card-actions" data-piece="${pieceNumber}"></div>
                 </div>
             `);
@@ -474,89 +439,58 @@ $(document).ready(function () {
     function renderPieceActions(pieceNumber, locked, allYesChecked, stopped) {
         const $actions = $(`.piece-card-actions[data-piece="${pieceNumber}"]`);
         $actions.empty();
-
         if (locked || stopped) {
             if (stopped && !locked) {
                 $actions.html(`<span class="text-muted" style="font-size:10px;"><i class="bx bx-lock-alt me-1"></i>Stopped — no action allowed</span>`);
             }
             return;
         }
-
         if (allYesChecked) {
-            $actions.html(`
-                <button type="button" class="btn btn-success approve-piece-btn" data-piece="${pieceNumber}">
-                    <i class="bx bx-check-circle me-1"></i> Approve
-                </button>
-            `);
+            $actions.html(`<button type="button" class="btn btn-success approve-piece-btn" data-piece="${pieceNumber}"><i class="bx bx-check-circle me-1"></i> Approve</button>`);
         } else {
             $actions.html(`
-                <button type="button" class="btn btn-success approve-piece-btn" data-piece="${pieceNumber}" disabled>
-                    <i class="bx bx-check-circle me-1"></i> Approve
-                </button>
-                <button type="button" class="btn btn-info confirm-piece-btn" data-piece="${pieceNumber}">
-                    <i class="bx bx-time-five me-1"></i> Confirm
-                </button>
-                <button type="button" class="btn btn-warning pass-piece-btn" data-piece="${pieceNumber}">
-                    <i class="bx bx-right-arrow-alt me-1"></i> Pass
-                </button>
+                <button type="button" class="btn btn-success approve-piece-btn" data-piece="${pieceNumber}" disabled><i class="bx bx-check-circle me-1"></i> Approve</button>
+                <button type="button" class="btn btn-info confirm-piece-btn" data-piece="${pieceNumber}"><i class="bx bx-time-five me-1"></i> Confirm</button>
+                <button type="button" class="btn btn-warning pass-piece-btn" data-piece="${pieceNumber}"><i class="bx bx-right-arrow-alt me-1"></i> Pass</button>
             `);
         }
     }
 
-    /* ================= APPROVE ALL STATE ================= */
     function updateApproveAllState() {
         const batch = getCurrentBatch();
         if (!batch) { $("#approveAllBtn").prop("disabled", true); return; }
-
-        if (isBatchStopped(batch)) {
-            $("#approveAllBtn").prop("disabled", true);
-            return;
-        }
-
+        if (isBatchStopped(batch)) { $("#approveAllBtn").prop("disabled", true); return; }
         const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
         let allReady = pieces.length > 0;
-
         pieces.forEach((piece, index) => {
             if (isPieceLocked(piece) || isPieceStopped(piece)) { allReady = false; return; }
             const pieceNumber = getPieceNumber(piece, index);
             const materials = getPieceMaterials(piece);
             if (!materials.length) { allReady = false; return; }
-
             const yesCount = materials.filter(m => {
                 const $row = $(`.item-list-row[data-piece="${pieceNumber}"][data-item="${m}"]`);
                 if ($row.length) return $row.find(".piece-item-checkbox").is(":checked");
                 return false;
             }).length;
-
             if (yesCount !== materials.length) allReady = false;
         });
-
         $("#approveAllBtn").prop("disabled", !allReady);
     }
 
-    /* ================= OPEN MODAL ================= */
     function openApprovalModal(batchId) {
         currentBatchId = batchId;
         loadData();
         const batch = getCurrentBatch();
         if (!batch) return;
-
         const $photo = $("#approvalPhoto");
-        $photo.off("error").on("error", function () {
-            this.onerror = null;
-            this.src = PLACEHOLDER_IMG;
-        });
-
-        $photo.attr("src", batch.photo || PLACEHOLDER_IMG);
-        $photo.css("display", "");
-
+        $photo.off("error").on("error", function () { this.onerror = null; this.src = PLACEHOLDER_IMG; });
+        $photo.attr("src", batch.photo || PLACEHOLDER_IMG).css("display", "");
         $("#approvalBatchId").text(batch.batchId || "-");
         $("#approvalBrand").text(batch.brand || "-");
         $("#approvalDesignNumber").text(batch.designNumber || "-");
         $("#approvalColor").text(batch.color || "-");
         $("#approvalQuantity").text(batch.quantity || "-");
         $("#approvalPriority").text(batch.priority || "-");
-
         renderFlowChart(batch);
         renderApprovalPieces(batch);
         approvalModal.show();
@@ -567,22 +501,14 @@ $(document).ready(function () {
         const $row = $(this).closest(".item-list-row");
         if ($(this).is(":checked")) $row.addClass("checked-row");
         else $row.removeClass("checked-row");
-
         const pieceNumber = $(this).data("piece");
         const $card = $(`.piece-card[data-piece="${pieceNumber}"]`);
         if ($card.hasClass("locked")) return;
-
         const total = $card.find(".piece-item-checkbox").length;
         const checked = $card.find(".piece-item-checkbox:checked").length;
-
-        if (checked === total && total > 0) {
-            $card.find(".all-toggle-radio[value='yes']").prop("checked", true);
-        } else if (checked === 0) {
-            $card.find(".all-toggle-radio[value='no']").prop("checked", true);
-        } else {
-            $card.find(".all-toggle-radio").prop("checked", false);
-        }
-
+        if (checked === total && total > 0) $card.find(".all-toggle-radio[value='yes']").prop("checked", true);
+        else if (checked === 0) $card.find(".all-toggle-radio[value='no']").prop("checked", true);
+        else $card.find(".all-toggle-radio").prop("checked", false);
         const allYesChecked = total > 0 && checked === total;
         renderPieceActions(pieceNumber, false, allYesChecked, false);
         updateApproveAllState();
@@ -592,7 +518,6 @@ $(document).ready(function () {
         const pieceNumber = $(this).data("piece");
         const $card = $(`.piece-card[data-piece="${pieceNumber}"]`);
         if ($card.hasClass("locked")) return;
-
         const val = $(this).val();
         $(`.item-list-row[data-piece="${pieceNumber}"]`).each(function () {
             const $row = $(this);
@@ -600,36 +525,158 @@ $(document).ready(function () {
             if (val === "yes") { $chk.prop("checked", true); $row.addClass("checked-row"); }
             else { $chk.prop("checked", false); $row.removeClass("checked-row"); }
         });
-        const allYesChecked = val === "yes";
-        renderPieceActions(pieceNumber, false, allYesChecked, false);
+        renderPieceActions(pieceNumber, false, val === "yes", false);
         updateApproveAllState();
     });
+
+    /* ================= PUSH TO APPROVED POOL ================= */
+    function pushToApprovedPool(batch, piece, pieceNumber, availableItems, mode, availability, allMaterials) {
+        if (isBatchStopped(batch)) return null;
+
+        const pool = readStorage(APPROVED_POOL_KEY);
+        const materials = allMaterials || getPieceMaterials(piece);
+        const pieceRoute = buildPieceRoute(piece);
+        const firstStage = pieceRoute.length ? pieceRoute[0] : { type: "cutting", stage: "Cutting" };
+
+        const existingIdx = pool.findIndex(p =>
+            String(p.batchId) === String(batch.batchId) &&
+            Number(p.pieceNumber) === Number(pieceNumber)
+        );
+
+        if (existingIdx !== -1) {
+            const prev = pool[existingIdx];
+            const mergedAvailability = { ...(prev.itemAvailability || {}) };
+            Object.entries(availability).forEach(([k, v]) => {
+                if (v === "yes") mergedAvailability[k] = "yes";
+                else if (mergedAvailability[k] !== "yes") mergedAvailability[k] = "no";
+            });
+            const mergedMaterials = [...new Set([...(prev.materials || []), ...materials])];
+            const mergedAvailable = mergedMaterials.filter(m => mergedAvailability[m] === "yes");
+
+            pool[existingIdx] = {
+                ...prev,
+                materials: mergedMaterials,
+                itemAvailability: mergedAvailability,
+                availableItems: mergedAvailable,
+                mode: mode,
+                status: "pending",
+                route: pieceRoute,
+                currentStage: firstStage,
+                stageHistory: [
+                    ...(prev.stageHistory || []),
+                    { at: new Date().toLocaleString("en-GB"), stage: firstStage.stage, type: firstStage.type, action: "entered" }
+                ],
+                updatedAt: new Date().toLocaleString("en-GB")
+            };
+            saveStorage(APPROVED_POOL_KEY, pool);
+            return pool[existingIdx];
+        }
+
+        const nextId = pool.length ? Math.max(...pool.map(p => Number(p.id) || 0)) + 1 : 1;
+
+        const entry = {
+            id: nextId,
+            batchId: batch.batchId,
+            bomId: batch.bomId || "",
+            brand: batch.brand || "",
+            designNumber: batch.designNumber || "",
+            color: batch.color || "",
+            pieceNumber: pieceNumber,
+            pieceItem: getPieceItem(piece),
+            quantity: batch.quantity || 0,
+            priority: batch.priority || "Medium",
+            photo: batch.photo || "",
+            availableItems: [...availableItems],
+            materials: materials,
+            itemAvailability: { ...availability },
+            additionalWorks: getPieceWorks(piece),
+            mode: mode,
+            status: "pending",
+            route: pieceRoute,
+            currentStage: firstStage,
+            stageHistory: [
+                { at: new Date().toLocaleString("en-GB"), stage: firstStage.stage, type: firstStage.type, action: "entered" }
+            ],
+            createdAt: new Date().toLocaleString("en-GB")
+        };
+
+        pool.push(entry);
+        saveStorage(APPROVED_POOL_KEY, pool);
+        return entry;
+    }
+
+    /* ================= CREATE REQUIREMENT ================= */
+    function createRequirement(batch, piece, pieceNumber, missingItems, availability, allMaterials) {
+        if (isBatchStopped(batch)) return null;
+        const requirementData = readStorage(REQUIREMENT_STORAGE_KEY);
+        const materials = allMaterials || getPieceMaterials(piece);
+
+        const existingIdx = requirementData.findIndex(r =>
+            String(r.batchId) === String(batch.batchId) &&
+            Number(r.pieceNumber) === Number(pieceNumber) &&
+            r.status !== "completed"
+        );
+
+        if (existingIdx !== -1) {
+            const existing = requirementData[existingIdx];
+            const mergedMissing = [...new Set([...(existing.missingItems || []), ...missingItems])];
+            requirementData[existingIdx] = {
+                ...existing,
+                missingItems: mergedMissing,
+                itemAvailability: { ...(existing.itemAvailability || {}), ...availability },
+                materials: materials,
+                remarks: piece?.approval?.remarks || existing.remarks,
+                status: "pending",
+                updatedAt: new Date().toLocaleString("en-GB")
+            };
+            saveStorage(REQUIREMENT_STORAGE_KEY, requirementData);
+            return requirementData[existingIdx];
+        }
+
+        const nextId = requirementData.length ? Math.max(...requirementData.map(r => Number(r.id) || 0)) + 1 : 1;
+
+        const requirement = {
+            id: nextId,
+            requirementId: `REQ-${String(nextId).padStart(3, "0")}`,
+            batchId: batch.batchId,
+            bomId: batch.bomId || "",
+            brand: batch.brand || "",
+            designNumber: batch.designNumber || "",
+            color: batch.color || "",
+            pieceNumber: pieceNumber,
+            pieceItem: getPieceItem(piece),
+            quantity: batch.quantity || 0,
+            priority: batch.priority || "Medium",
+            photo: batch.photo || "",
+            materials: materials,
+            additionalWorks: getPieceWorks(piece),
+            missingItems: [...missingItems],
+            itemAvailability: { ...availability },
+            remarks: piece?.approval?.remarks || "",
+            status: "pending",
+            createdAt: new Date().toLocaleString("en-GB")
+        };
+
+        requirementData.push(requirement);
+        saveStorage(REQUIREMENT_STORAGE_KEY, requirementData);
+        return requirement;
+    }
 
     /* ================= PROCESS PIECE ================= */
     function processPiece(pieceNumber, mode) {
         const batch = getCurrentBatch();
         if (!batch) return;
-
         if (isBatchStopped(batch)) {
             showMessage("warning", "This batch is stopped. Resume it first to continue.");
             return;
         }
-
         const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
         const pieceIndex = pieces.findIndex((p, i) => getPieceNumber(p, i) === pieceNumber);
         if (pieceIndex === -1) return;
 
         const piece = pieces[pieceIndex];
-
-        if (isPieceStopped(piece)) {
-            showMessage("warning", "This piece is stopped. It cannot move forward.");
-            return;
-        }
-
-        if (isPieceLocked(piece)) {
-            showMessage("info", "This piece is already locked.");
-            return;
-        }
+        if (isPieceStopped(piece)) { showMessage("warning", "This piece is stopped."); return; }
+        if (isPieceLocked(piece)) { showMessage("info", "This piece is already locked."); return; }
 
         const materials = getPieceMaterials(piece);
         if (!materials.length) { showMessage("warning", "This piece has no item list."); return; }
@@ -639,32 +686,26 @@ $(document).ready(function () {
         const missingItems = materials.filter(m => availability[m] === "no");
         const remarks = $(`.piece-remarks[data-piece="${pieceNumber}"]`).val().trim();
 
-        if (mode === "approve" && missingItems.length) {
-            showMessage("warning", "Approve requires all items present.");
-            return;
-        }
+        if (mode === "approve" && missingItems.length) { showMessage("warning", "Approve requires all items present."); return; }
         if (mode === "confirm") {
             if (!availableItems.length) { showMessage("warning", "At least one item must be present."); return; }
             if (!missingItems.length) { showMessage("info", "All items present — use Approve."); return; }
         }
-        if (mode === "pass" && !availableItems.length) {
-            showMessage("warning", "At least one item must be present to Pass.");
-            return;
-        }
+        if (mode === "pass" && !availableItems.length) { showMessage("warning", "At least one item must be present to Pass."); return; }
 
         let titleText = "", htmlText = "", confirmText = "", confirmColor = "#198754";
 
         if (mode === "approve") {
             titleText = `Approve Piece ${pieceNumber}?`;
-            htmlText = `<div class="text-start"><p><strong>${availableItems.length}</strong></p><p class="text-success">Pass to Cutting (Status: <b>Pass</b>)</p></div>`;
+            htmlText = `<div class="text-start"><p><strong>${availableItems.length} items present</strong></p><p class="text-success">Pass to next stage (Status: <b>Pass</b>)</p></div>`;
             confirmText = "Yes, Approve & Pass";
         } else if (mode === "confirm") {
             titleText = `Confirm Piece ${pieceNumber}?`;
-            htmlText = `<div class="text-start"><p><strong>${availableItems.length} items present</strong></p><p><strong>${missingItems.length} items missing</strong> → Requirement</p><hr><p class="text-muted mb-0">Status <b>Pending</b>. Nothing goes to Cutting.</p></div>`;
+            htmlText = `<div class="text-start"><p><strong>${availableItems.length} items present</strong></p><p><strong>${missingItems.length} items missing</strong> → Requirement</p><hr><p class="text-muted mb-0">Status <b>Pending</b>. Nothing goes forward.</p></div>`;
             confirmText = "Yes, Confirm";
         } else {
             titleText = `Force Pass Piece ${pieceNumber}?`;
-            htmlText = `<div class="text-start"><p><strong>${availableItems.length} items present</strong> → Cutting (In Progress)</p><p><strong>${missingItems.length} items missing</strong> → Requirement</p><hr><p class="mb-1"><strong>Missing:</strong></p><ul>${missingItems.map(m => `<li>${escapeHtml(m)}</li>`).join("") || "<li>None</li>"}</ul></div>`;
+            htmlText = `<div class="text-start"><p><strong>${availableItems.length} items present</strong> → Next stage (In Progress)</p><p><strong>${missingItems.length} items missing</strong> → Requirement</p><hr><p class="mb-1"><strong>Missing:</strong></p><ul>${missingItems.map(m => `<li>${escapeHtml(m)}</li>`).join("") || "<li>None</li>"}</ul></div>`;
             confirmText = "Yes, Pass Anyway";
             confirmColor = "#dc3545";
         }
@@ -727,15 +768,15 @@ $(document).ready(function () {
             renderTable();
 
             if (mode === "confirm") {
-                Swal.fire({ icon: "info", title: "Confirmed — Pending", text: "Requirement created. Nothing passed to Cutting.", timer: 2500, showConfirmButton: false });
+                Swal.fire({ icon: "info", title: "Confirmed — Pending", text: "Requirement created. Nothing passed forward.", timer: 2500, showConfirmButton: false });
             } else if (mode === "pass" && missingItems.length) {
                 Swal.fire({
                     icon: "success", title: "Passed (In Progress)",
-                    html: `<p><strong>${availableItems.length}</strong> items → Cutting Manager</p><p><strong>${missingItems.length}</strong> items → Requirement</p>`,
+                    html: `<p><strong>${availableItems.length}</strong> items → next stage</p><p><strong>${missingItems.length}</strong> items → Requirement</p>`,
                     showCancelButton: true, confirmButtonText: "Open Requirement", cancelButtonText: "Close"
                 }).then(function (r) { if (r.isConfirmed) window.location.href = "requirment.php"; });
             } else {
-                Swal.fire({ icon: "success", title: "Approved & Passed", text: `Piece ${pieceNumber} passed to Cutting Manager.`, timer: 1800, showConfirmButton: false });
+                Swal.fire({ icon: "success", title: "Approved & Passed", text: `Piece ${pieceNumber} passed to next stage.`, timer: 1800, showConfirmButton: false });
             }
         });
     }
@@ -751,11 +792,7 @@ $(document).ready(function () {
     $(document).on("click", "#approveAllBtn", function () {
         const batch = getCurrentBatch();
         if (!batch) return;
-
-        if (isBatchStopped(batch)) {
-            showMessage("warning", "This batch is stopped. Resume it first.");
-            return;
-        }
+        if (isBatchStopped(batch)) { showMessage("warning", "This batch is stopped. Resume it first."); return; }
 
         const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
         const readyPieces = [];
@@ -765,20 +802,16 @@ $(document).ready(function () {
             const pieceNumber = getPieceNumber(piece, index);
             const materials = getPieceMaterials(piece);
             if (!materials.length) return;
-
             const availability = computeAvailability(pieceNumber, materials, piece);
             const allYes = materials.every(m => availability[m] === "yes");
             if (allYes) readyPieces.push({ piece, index, materials, availability });
         });
 
-        if (!readyPieces.length) {
-            showMessage("warning", "No pieces are ready to approve.");
-            return;
-        }
+        if (!readyPieces.length) { showMessage("warning", "No pieces are ready to approve."); return; }
 
         Swal.fire({
             title: "Approve All Ready Pieces?",
-            html: `<div class="text-start"><p><strong>${readyPieces.length}</strong> pieces will be approved and passed to Cutting.</p></div>`,
+            html: `<div class="text-start"><p><strong>${readyPieces.length}</strong> pieces will be approved and passed forward.</p></div>`,
             icon: "question",
             showCancelButton: true,
             confirmButtonText: "Yes, Approve All",
@@ -788,10 +821,7 @@ $(document).ready(function () {
             if (!result.isConfirmed) return;
 
             const freshBatch = getCurrentBatch();
-            if (!freshBatch || isBatchStopped(freshBatch)) {
-                showMessage("warning", "Batch was stopped. Action cancelled.");
-                return;
-            }
+            if (!freshBatch || isBatchStopped(freshBatch)) { showMessage("warning", "Batch was stopped."); return; }
 
             const updatedPieces = [...pieces];
 
@@ -818,7 +848,6 @@ $(document).ready(function () {
             });
 
             updateBatchPieces(batch, updatedPieces);
-
             loadData();
             const freshBatch2 = getCurrentBatch();
             if (freshBatch2) renderApprovalPieces(freshBatch2);
@@ -832,23 +861,11 @@ $(document).ready(function () {
     $(document).on("click", ".stop-batch-btn", function () {
         const batchId = $(this).data("id");
         const batch = batchData.find(b => String(b.id) === String(batchId));
-        if (!batch) {
-            showMessage("danger", "Batch not found.");
-            return;
-        }
+        if (!batch) { showMessage("danger", "Batch not found."); return; }
 
         Swal.fire({
             title: "Stop this Batch?",
-            html: `<div class="text-start">
-                <p><strong>Batch:</strong> ${escapeHtml(batch.batchId || "-")}</p>
-                <p class="text-danger mb-0"><i class="bx bx-block me-1"></i>This batch will be <b>frozen</b>.</p>
-                <ul class="mt-2 mb-0">
-                    <li>It will <b>not</b> move forward.</li>
-                    <li>It will <b>not</b> be deleted.</li>
-                    <li>No more approvals / passes / requirements.</li>
-                    <li>You can <b>Resume</b> it later.</li>
-                </ul>
-            </div>`,
+            html: `<div class="text-start"><p><strong>Batch:</strong> ${escapeHtml(batch.batchId || "-")}</p><p class="text-danger mb-0"><i class="bx bx-block me-1"></i>This batch will be <b>frozen</b>.</p></div>`,
             icon: "warning",
             showCancelButton: true,
             confirmButtonText: "Yes, Stop it",
@@ -856,36 +873,24 @@ $(document).ready(function () {
             confirmButtonColor: "#dc3545"
         }).then(function (result) {
             if (!result.isConfirmed) return;
-
             const idx = batchData.findIndex(b => String(b.id) === String(batchId));
             if (idx === -1) return;
-
-            batchData[idx] = {
-                ...batchData[idx],
-                stopped: true,
-                stoppedAt: new Date().toLocaleString("en-GB")
-            };
-
+            batchData[idx] = { ...batchData[idx], stopped: true, stoppedAt: new Date().toLocaleString("en-GB") };
             saveStorage(APPROVED_BATCH_STORAGE_KEY, batchData);
-
             loadData();
             renderTable();
             if (currentBatchId && String(currentBatchId) === String(batchId)) {
                 const b = getCurrentBatch();
                 if (b) { renderFlowChart(b); renderApprovalPieces(b); }
             }
-
-            Swal.fire({ icon: "success", title: "Batch Stopped", text: "Batch is frozen. No further movement.", timer: 2000, showConfirmButton: false });
+            Swal.fire({ icon: "success", title: "Batch Stopped", timer: 2000, showConfirmButton: false });
         });
     });
 
     $(document).on("click", ".resume-batch-btn", function () {
         const batchId = $(this).data("id");
         const batch = batchData.find(b => String(b.id) === String(batchId));
-        if (!batch) {
-            showMessage("danger", "Batch not found.");
-            return;
-        }
+        if (!batch) { showMessage("danger", "Batch not found."); return; }
 
         Swal.fire({
             title: "Resume this Batch?",
@@ -897,26 +902,21 @@ $(document).ready(function () {
             confirmButtonColor: "#1e88e5"
         }).then(function (result) {
             if (!result.isConfirmed) return;
-
             const idx = batchData.findIndex(b => String(b.id) === String(batchId));
             if (idx === -1) return;
-
             const updated = { ...batchData[idx] };
             delete updated.stopped;
             delete updated.stoppedAt;
             updated.resumedAt = new Date().toLocaleString("en-GB");
             batchData[idx] = updated;
-
             saveStorage(APPROVED_BATCH_STORAGE_KEY, batchData);
-
             loadData();
             renderTable();
             if (currentBatchId && String(currentBatchId) === String(batchId)) {
                 const b = getCurrentBatch();
                 if (b) { renderFlowChart(b); renderApprovalPieces(b); }
             }
-
-            Swal.fire({ icon: "success", title: "Batch Resumed", text: "Batch can move forward again.", timer: 1800, showConfirmButton: false });
+            Swal.fire({ icon: "success", title: "Batch Resumed", timer: 1800, showConfirmButton: false });
         });
     });
 
@@ -930,127 +930,6 @@ $(document).ready(function () {
             updatedAt: new Date().toLocaleString("en-GB")
         };
         saveStorage(APPROVED_BATCH_STORAGE_KEY, batchData);
-    }
-
-    /* ================= PUSH TO APPROVED POOL ================= */
-    function pushToApprovedPool(batch, piece, pieceNumber, availableItems, mode, availability, allMaterials) {
-        if (isBatchStopped(batch)) return null;
-
-        const pool = readStorage(APPROVED_POOL_KEY);
-        const materials = allMaterials || getPieceMaterials(piece);
-
-        const existingIdx = pool.findIndex(p =>
-            String(p.batchId) === String(batch.batchId) &&
-            Number(p.pieceNumber) === Number(pieceNumber)
-        );
-
-        if (existingIdx !== -1) {
-            const prev = pool[existingIdx];
-            const mergedAvailability = { ...(prev.itemAvailability || {}) };
-            Object.entries(availability).forEach(([k, v]) => {
-                if (v === "yes") mergedAvailability[k] = "yes";
-                else if (mergedAvailability[k] !== "yes") mergedAvailability[k] = "no";
-            });
-            const mergedMaterials = [...new Set([...(prev.materials || []), ...materials])];
-            const mergedAvailable = mergedMaterials.filter(m => mergedAvailability[m] === "yes");
-
-            pool[existingIdx] = {
-                ...prev,
-                materials: mergedMaterials,
-                itemAvailability: mergedAvailability,
-                availableItems: mergedAvailable,
-                mode: mode,
-                status: "pending_cutting",
-                updatedAt: new Date().toLocaleString("en-GB")
-            };
-            saveStorage(APPROVED_POOL_KEY, pool);
-            return pool[existingIdx];
-        }
-
-        const nextId = pool.length ? Math.max(...pool.map(p => Number(p.id) || 0)) + 1 : 1;
-
-        const entry = {
-            id: nextId,
-            batchId: batch.batchId,
-            bomId: batch.bomId || "",
-            brand: batch.brand || "",
-            designNumber: batch.designNumber || "",
-            color: batch.color || "",
-            pieceNumber: pieceNumber,
-            pieceItem: getPieceItem(piece),
-            quantity: batch.quantity || 0,
-            priority: batch.priority || "Medium",
-            photo: batch.photo || "",
-            availableItems: [...availableItems],
-            materials: materials,
-            itemAvailability: { ...availability },
-            additionalWorks: getPieceWorks(piece),
-            mode: mode,
-            status: "pending_cutting",
-            createdAt: new Date().toLocaleString("en-GB")
-        };
-
-        pool.push(entry);
-        saveStorage(APPROVED_POOL_KEY, pool);
-        return entry;
-    }
-
-    /* ================= CREATE REQUIREMENT ================= */
-    function createRequirement(batch, piece, pieceNumber, missingItems, availability, allMaterials) {
-        if (isBatchStopped(batch)) return null;
-
-        const requirementData = readStorage(REQUIREMENT_STORAGE_KEY);
-        const materials = allMaterials || getPieceMaterials(piece);
-
-        const existingIdx = requirementData.findIndex(r =>
-            String(r.batchId) === String(batch.batchId) &&
-            Number(r.pieceNumber) === Number(pieceNumber) &&
-            r.status !== "completed"
-        );
-
-        if (existingIdx !== -1) {
-            const existing = requirementData[existingIdx];
-            const mergedMissing = [...new Set([...(existing.missingItems || []), ...missingItems])];
-            requirementData[existingIdx] = {
-                ...existing,
-                missingItems: mergedMissing,
-                itemAvailability: { ...(existing.itemAvailability || {}), ...availability },
-                materials: materials,
-                remarks: piece?.approval?.remarks || existing.remarks,
-                status: "pending",
-                updatedAt: new Date().toLocaleString("en-GB")
-            };
-            saveStorage(REQUIREMENT_STORAGE_KEY, requirementData);
-            return requirementData[existingIdx];
-        }
-
-        const nextId = requirementData.length ? Math.max(...requirementData.map(r => Number(r.id) || 0)) + 1 : 1;
-
-        const requirement = {
-            id: nextId,
-            requirementId: `REQ-${String(nextId).padStart(3, "0")}`,
-            batchId: batch.batchId,
-            bomId: batch.bomId || "",
-            brand: batch.brand || "",
-            designNumber: batch.designNumber || "",
-            color: batch.color || "",
-            pieceNumber: pieceNumber,
-            pieceItem: getPieceItem(piece),
-            quantity: batch.quantity || 0,
-            priority: batch.priority || "Medium",
-            photo: batch.photo || "",
-            materials: materials,
-            additionalWorks: getPieceWorks(piece),
-            missingItems: [...missingItems],
-            itemAvailability: { ...availability },
-            remarks: piece?.approval?.remarks || "",
-            status: "pending",
-            createdAt: new Date().toLocaleString("en-GB")
-        };
-
-        requirementData.push(requirement);
-        saveStorage(REQUIREMENT_STORAGE_KEY, requirementData);
-        return requirement;
     }
 
     $(document).on("click", ".open-approval-btn", function () {

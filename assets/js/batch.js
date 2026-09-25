@@ -56,11 +56,7 @@ $(document).ready(function () {
             return true;
         } catch (error) {
             console.error("Storage save error:", error);
-            Swal.fire(
-                "Storage Error",
-                "Could not save data. The photo may be too large.",
-                "error"
-            );
+            Swal.fire("Storage Error", "Could not save data.", "error");
             return false;
         }
     }
@@ -86,14 +82,7 @@ $(document).ready(function () {
 
     function getPieces(bom) {
         if (!bom) return [];
-
-        const pieces =
-            bom.pieces ||
-            bom.pieceConfigurations ||
-            bom.pieceConfig ||
-            bom.pieceConfiguration ||
-            [];
-
+        const pieces = bom.pieces || bom.pieceConfigurations || bom.pieceConfig || bom.pieceConfiguration || [];
         return Array.isArray(pieces) ? pieces : [];
     }
 
@@ -102,68 +91,27 @@ $(document).ready(function () {
     }
 
     function getPieceItem(piece) {
-        return String(
-            piece?.item ||
-            piece?.selectItem ||
-            piece?.selectedItem ||
-            piece?.product ||
-            ""
-        ).trim();
+        return String(piece?.item || piece?.selectItem || piece?.selectedItem || piece?.product || "").trim();
     }
 
     function getMaterials(piece) {
-        let materials =
-            piece?.materials ||
-            piece?.itemList ||
-            piece?.items ||
-            [];
-
-        if (typeof materials === "string") {
-            materials = materials
-                .split(",")
-                .map(item => item.trim())
-                .filter(Boolean);
-        }
-
+        let materials = piece?.materials || piece?.itemList || piece?.items || [];
+        if (typeof materials === "string") materials = materials.split(",").map(item => item.trim()).filter(Boolean);
         if (!Array.isArray(materials)) return [];
-
-        return [
-            ...new Set(
-                materials
-                    .map(item => {
-                        if (typeof item === "string") return item.trim();
-                        return String(
-                            item?.itemName ||
-                            item?.name ||
-                            item?.materialName ||
-                            item?.label ||
-                            ""
-                        ).trim();
-                    })
-                    .filter(Boolean)
-            )
-        ];
+        return [...new Set(materials.map(item => {
+            if (typeof item === "string") return item.trim();
+            return String(item?.itemName || item?.name || item?.materialName || item?.label || "").trim();
+        }).filter(Boolean))];
     }
 
     function getAdditionalWorks(piece) {
-        let works =
-            piece?.additionalWorks ||
-            piece?.additionalWork ||
-            piece?.additional_work ||
-            piece?.work ||
-            [];
-
+        let works = piece?.additionalWorks || piece?.additionalWork || piece?.additional_work || piece?.work || [];
         if (!Array.isArray(works)) {
-            if (typeof works === "string" && works.trim()) {
-                return [{ workType: works.trim(), stage: "" }];
-            }
+            if (typeof works === "string" && works.trim()) return [{ workType: works.trim(), stage: "" }];
             return [];
         }
-
         return works.map(work => {
-            if (typeof work === "string") {
-                return { workType: work, stage: "" };
-            }
+            if (typeof work === "string") return { workType: work, stage: "" };
             return {
                 workType: String(work?.workType || work?.type || "").trim(),
                 stage: String(work?.stage || "").trim()
@@ -173,34 +121,52 @@ $(document).ready(function () {
 
     function getNextBatchId() {
         if (!batchData.length) return "BATCH-001";
-
         const numbers = batchData.map(batch => {
             const match = String(batch.batchId || "").match(/(\d+)$/);
             return match ? Number(match[1]) : 0;
         });
-
         return `BATCH-${String(Math.max(...numbers, 0) + 1).padStart(3, "0")}`;
     }
 
     function getNextNumericId() {
         if (!batchData.length) return 1;
-        return Math.max(
-            ...batchData.map(batch => Number(batch.id) || 0)
-        ) + 1;
+        return Math.max(...batchData.map(batch => Number(batch.id) || 0)) + 1;
     }
-
-    /* ======================================================
-       PRIORITY → CSS CLASS
-       ====================================================== */
 
     function getPriorityClass(priority) {
         const p = normalize(priority);
-
         if (p === "high") return "priority-high";
         if (p === "medium") return "priority-medium";
         if (p === "low") return "priority-low";
-
         return "";
+    }
+
+    /* ======================================================
+       DESIGN NUMBER UNIQUENESS
+       ====================================================== */
+
+    function isDesignUsedInBatch(designNumber, ignoreBatchId) {
+        const target = normalize(designNumber);
+        if (!target) return false;
+
+        return batchData.some(function (batch) {
+            if (ignoreBatchId && String(batch.id) === String(ignoreBatchId)) {
+                return false;
+            }
+            return normalize(batch.designNumber) === target;
+        });
+    }
+
+    /* ======================================================
+       GET AVAILABLE BOMs (design not used)
+       ====================================================== */
+
+    function getAvailableBoms(ignoreBatchId) {
+        return bomData.filter(function (bom) {
+            const design = getDesignNumber(bom);
+            if (!design) return false;
+            return !isDesignUsedInBatch(design, ignoreBatchId);
+        });
     }
 
     // --------------------------------------------------
@@ -217,17 +183,11 @@ $(document).ready(function () {
     // --------------------------------------------------
 
     function renderFilters() {
-        const brands = [
-            ...new Set(batchData.map(batch => batch.brand).filter(Boolean))
-        ];
-
-        const colors = [
-            ...new Set(batchData.map(batch => batch.color).filter(Boolean))
-        ];
+        const brands = [...new Set(batchData.map(batch => batch.brand).filter(Boolean))];
+        const colors = [...new Set(batchData.map(batch => batch.color).filter(Boolean))];
 
         const brandFilter = $("#brandFilter");
         const colorFilter = $("#colorFilter");
-
         const currentBrand = brandFilter.val();
         const currentColor = colorFilter.val();
 
@@ -235,19 +195,10 @@ $(document).ready(function () {
         colorFilter.find("option:not(:first)").remove();
 
         brands.forEach(brand => {
-            brandFilter.append(`
-                <option value="${escapeHtml(brand)}">
-                    ${escapeHtml(brand)}
-                </option>
-            `);
+            brandFilter.append(`<option value="${escapeHtml(brand)}">${escapeHtml(brand)}</option>`);
         });
-
         colors.forEach(color => {
-            colorFilter.append(`
-                <option value="${escapeHtml(color)}">
-                    ${escapeHtml(color)}
-                </option>
-            `);
+            colorFilter.append(`<option value="${escapeHtml(color)}">${escapeHtml(color)}</option>`);
         });
 
         if (currentBrand) brandFilter.val(currentBrand);
@@ -261,51 +212,50 @@ $(document).ready(function () {
     function buildDesignDropdown(query) {
         const dropdown = $("#designDropdown");
         const q = normalize(query);
+        const editId = $("#editBatchId").val();
 
-        let matches = bomData.filter(bom => getDesignNumber(bom));
+        let matches = getAvailableBoms(editId);
+
+        // If editing, keep the current design visible
+        if (editId) {
+            const currentDesign = normalize($("#designNumber").val());
+            if (currentDesign) {
+                const selfBom = bomData.find(bom => normalize(getDesignNumber(bom)) === currentDesign);
+                if (selfBom && !matches.some(b => String(b.id) === String(selfBom.id))) {
+                    matches.push(selfBom);
+                }
+            }
+        }
 
         if (q) {
             matches = matches.filter(bom => {
                 const design = normalize(getDesignNumber(bom));
                 const brand = normalize(getBrand(bom));
                 const color = normalize(getColor(bom));
-                return design.includes(q) ||
-                    brand.includes(q) ||
-                    color.includes(q);
+                return design.includes(q) || brand.includes(q) || color.includes(q);
             });
         }
 
         if (!matches.length) {
-            dropdown.html(`
-                <div class="design-option text-muted">
-                    No matching design found.
-                </div>
-            `).show();
+            dropdown.html(`<div class="design-option text-muted">No available design found.</div>`).show();
             return;
         }
 
         dropdown.empty();
-
         matches.forEach(bom => {
             const design = getDesignNumber(bom);
             const brand = getBrand(bom);
             const color = getColor(bom);
-
             dropdown.append(`
-                <div class="design-option"
-                    data-design="${escapeHtml(design)}">
+                <div class="design-option" data-design="${escapeHtml(design)}">
                     <div class="fw-semibold">${escapeHtml(design)}</div>
-                    <div class="design-meta">
-                        ${escapeHtml(brand || "-")} • ${escapeHtml(color || "-")}
-                    </div>
+                    <div class="design-meta">${escapeHtml(brand || "-")} • ${escapeHtml(color || "-")}</div>
                 </div>
             `);
         });
-
         dropdown.show();
     }
 
-    // Show dropdown on focus / input
     $("#designNumber").on("focus", function () {
         buildDesignDropdown($(this).val());
     });
@@ -315,19 +265,14 @@ $(document).ready(function () {
         fillDesignData();
     });
 
-    // Select from dropdown
     $(document).on("click", "#designDropdown .design-option", function () {
         const design = $(this).data("design");
-
         if (!design) return;
-
         $("#designNumber").val(design);
         $("#designDropdown").hide();
-
         fillDesignData();
     });
 
-    // Hide dropdown when clicking outside
     $(document).on("click", function (e) {
         if (!$(e.target).closest("#designNumber, #designDropdown").length) {
             $("#designDropdown").hide();
@@ -340,35 +285,22 @@ $(document).ready(function () {
 
     function fillDesignData() {
         const designNumber = normalize($("#designNumber").val());
-
-        selectedBom = bomData.find(bom => {
-            return normalize(getDesignNumber(bom)) === designNumber;
-        });
+        selectedBom = bomData.find(bom => normalize(getDesignNumber(bom)) === designNumber);
 
         if (!selectedBom) {
             $("#brandSelect").val("");
             $("#colorSelect").val("");
-
-            $("#batchPhotoPreview").attr(
-                "src",
-                "assets/images/default.jpg"
-            );
-
+            $("#batchPhotoPreview").attr("src", "assets/images/default.jpg");
             $("#batchPiecesContainer").html("");
             return;
         }
 
         $("#brandSelect").val(getBrand(selectedBom));
         $("#colorSelect").val(getColor(selectedBom));
-
-        $("#batchPhotoPreview").attr(
-            "src",
-            getPhoto(selectedBom)
-        );
+        $("#batchPhotoPreview").attr("src", getPhoto(selectedBom));
 
         const pieces = getPieces(selectedBom);
         let html = "";
-
         pieces.forEach((piece, index) => {
             html += `
                 <div data-piece-index="${index}">
@@ -377,7 +309,6 @@ $(document).ready(function () {
                 </div>
             `;
         });
-
         $("#batchPiecesContainer").html(html);
     }
 
@@ -387,21 +318,13 @@ $(document).ready(function () {
 
     function resetForm() {
         $("#batchForm")[0].reset();
-
         $("#editBatchId").val("");
         $("#batchIdPreview").val(getNextBatchId());
-
-        $("#batchPhotoPreview").attr(
-            "src",
-            "assets/images/default.jpg"
-        );
-
+        $("#batchPhotoPreview").attr("src", "assets/images/default.jpg");
         $("#batchPiecesContainer").html("");
         $("#designDropdown").hide().empty();
-
         $("#batchModalLabel").text("Create Batch");
         $("#batchFormMessage").hide().html("");
-
         selectedBom = null;
     }
 
@@ -427,28 +350,20 @@ $(document).ready(function () {
     });
 
     // --------------------------------------------------
-    // REFRESH BUTTON
+    // REFRESH
     // --------------------------------------------------
 
     $("#refreshBatchBtn").on("click", function () {
         const btn = $(this);
-
         btn.addClass("spinning");
-
         loadData();
-
         $("#brandFilter").val("");
         $("#priorityFilter").val("");
         $("#colorFilter").val("");
         $("#batchSearch").val("");
-
         renderFilters();
         renderTable();
-
-        setTimeout(function () {
-            btn.removeClass("spinning");
-        }, 800);
-
+        setTimeout(function () { btn.removeClass("spinning"); }, 800);
         Swal.fire({
             icon: "success",
             title: "Refreshed",
@@ -468,22 +383,25 @@ $(document).ready(function () {
         const designNumber = $("#designNumber").val().trim();
         const quantity = Number($("#quantityInput").val());
         const priority = $("#prioritySelect").val();
+        const editId = $("#editBatchId").val();
 
         if (!selectedBom) {
+            showFormMessage("warning", "Please select a valid design number from BOM Master.");
+            return;
+        }
+
+        // 🔴 DUPLICATE DESIGN NUMBER CHECK (only for new batch)
+        if (!editId && isDesignUsedInBatch(designNumber)) {
             showFormMessage(
-                "warning",
-                "Please select a valid design number from BOM Master."
+                "danger",
+                `Design Number <b>${escapeHtml(designNumber)}</b> is already used in another batch. Please select a different design number.`
             );
             return;
         }
 
         const pieces = getPieces(selectedBom);
-
         if (!pieces.length) {
-            showFormMessage(
-                "warning",
-                "No pieces found for this BOM design."
-            );
+            showFormMessage("warning", "No pieces found for this BOM design.");
             return;
         }
 
@@ -497,35 +415,21 @@ $(document).ready(function () {
             return;
         }
 
-        const editId = $("#editBatchId").val();
-
         const oldBatch = editId
-            ? batchData.find(batch =>
-                String(batch.id) === String(editId))
+            ? batchData.find(batch => String(batch.id) === String(editId))
             : null;
 
         const batchRecord = {
             id: editId ? Number(editId) : getNextNumericId(),
-
             batchId: oldBatch ? oldBatch.batchId : getNextBatchId(),
-
             bomId: selectedBom.id || selectedBom.bomId || "",
-
             brand: getBrand(selectedBom),
-
             designNumber: designNumber,
-
             color: getColor(selectedBom),
-
             photo: getPhoto(selectedBom),
-
             quantity: quantity,
-
             priority: priority,
-
-            // Preserve existing status on edit
             status: oldBatch ? oldBatch.status : "pending",
-
             pieces: pieces.map((piece, index) => ({
                 number: getPieceNumber(piece, index),
                 item: getPieceItem(piece),
@@ -535,22 +439,16 @@ $(document).ready(function () {
         };
 
         if (editId) {
-            const index = batchData.findIndex(batch =>
-                String(batch.id) === String(editId));
-
+            const index = batchData.findIndex(batch => String(batch.id) === String(editId));
             if (index === -1) return;
-
             batchData[index] = batchRecord;
         } else {
             batchData.push(batchRecord);
         }
 
-        if (!saveStorage(BATCH_STORAGE_KEY, batchData)) {
-            return;
-        }
+        if (!saveStorage(BATCH_STORAGE_KEY, batchData)) return;
 
         batchModal.hide();
-
         renderFilters();
         renderTable();
 
@@ -578,18 +476,12 @@ $(document).ready(function () {
 
         const filteredBatches = batchData.filter(batch => {
             const searchableText = [
-                batch.batchId,
-                batch.brand,
-                batch.designNumber,
-                batch.color,
-                batch.quantity,
-                batch.priority,
+                batch.batchId, batch.brand, batch.designNumber, batch.color,
+                batch.quantity, batch.priority,
                 ...(batch.pieces || []).map(piece => [
                     piece.item,
                     ...(piece.materials || []),
-                    ...(piece.additionalWorks || []).map(
-                        work => `${work.workType} ${work.stage}`
-                    )
+                    ...(piece.additionalWorks || []).map(work => `${work.workType} ${work.stage}`)
                 ].join(" "))
             ].join(" ");
 
@@ -602,103 +494,36 @@ $(document).ready(function () {
         });
 
         if (!filteredBatches.length) {
-            tbody.html(`
-                <tr>
-                    <td colspan="8" class="text-center text-muted py-4">
-                        <i class="bx bx-info-circle me-1"></i>
-                        No batch found.
-                    </td>
-                </tr>
-            `);
+            tbody.html(`<tr><td colspan="8" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No batch found.</td></tr>`);
             return;
         }
 
         filteredBatches.forEach(batch => {
             const photo = batch.photo || "assets/images/default.jpg";
-
             const priorityClass = getPriorityClass(batch.priority);
-
             const isApproved = batch.status === "approved";
 
-            // Pass button only if not approved — right arrow icon
             const passButtonHtml = isApproved
                 ? ""
-                : `
-                    <button
-                        type="button"
-                        class="btn btn-sm btn-success pass-batch-btn"
-                        data-id="${escapeHtml(batch.id)}"
-                        title="Pass">
-                        <i class="bx bx-right-arrow-alt"></i>
-                    </button>
-                `;
+                : `<button type="button" class="btn btn-sm btn-success pass-batch-btn" data-id="${escapeHtml(batch.id)}" title="Pass"><i class="bx bx-right-arrow-alt"></i></button>`;
 
             tbody.append(`
                 <tr>
-
-                    <td>
-                        <strong>${escapeHtml(batch.batchId)}</strong>
-                    </td>
-
-                    <td>
-                        <img
-                            src="${escapeHtml(photo)}"
-                            alt="Photo"
-                            class="batch-table-photo view-photo-btn"
-                            data-photo="${escapeHtml(photo)}"
-                            title="Click to view">
-                    </td>
-
+                    <td><strong>${escapeHtml(batch.batchId)}</strong></td>
+                    <td><img src="${escapeHtml(photo)}" alt="Photo" class="batch-table-photo view-photo-btn" data-photo="${escapeHtml(photo)}" title="Click to view"></td>
                     <td>${escapeHtml(batch.brand || "-")}</td>
-
                     <td>${escapeHtml(batch.designNumber || "-")}</td>
-
-                    <td>
-                        <span class="color-text">
-                            ${escapeHtml(batch.color || "-")}
-                        </span>
-                    </td>
-
+                    <td><span class="color-text">${escapeHtml(batch.color || "-")}</span></td>
                     <td>${escapeHtml(batch.quantity || "0")}</td>
-
-                    <td>
-                        <span class="priority-badge ${priorityClass}">
-                            ${escapeHtml(batch.priority || "-")}
-                        </span>
-                    </td>
-
+                    <td><span class="priority-badge ${priorityClass}">${escapeHtml(batch.priority || "-")}</span></td>
                     <td>
                         <div class="d-flex gap-1 flex-wrap">
-
-                            <button
-                                type="button"
-                                class="btn btn-sm btn-primary view-batch-btn"
-                                data-id="${escapeHtml(batch.id)}"
-                                title="View">
-                                <i class="bx bx-show"></i>
-                            </button>
-
-                            <button
-                                type="button"
-                                class="btn btn-sm btn-primary edit-batch-btn"
-                                data-id="${escapeHtml(batch.id)}"
-                                title="Edit">
-                                <i class="bx bx-edit"></i>
-                            </button>
-
+                            <button type="button" class="btn btn-sm btn-primary view-batch-btn" data-id="${escapeHtml(batch.id)}" title="View"><i class="bx bx-show"></i></button>
+                            <button type="button" class="btn btn-sm btn-primary edit-batch-btn" data-id="${escapeHtml(batch.id)}" title="Edit"><i class="bx bx-edit"></i></button>
                             ${passButtonHtml}
-
-                            <button
-                                type="button"
-                                class="btn btn-sm btn-danger delete-batch-btn"
-                                data-id="${escapeHtml(batch.id)}"
-                                title="Delete">
-                                <i class="bx bx-trash"></i>
-                            </button>
-
+                            <button type="button" class="btn btn-sm btn-danger delete-batch-btn" data-id="${escapeHtml(batch.id)}" title="Delete"><i class="bx bx-trash"></i></button>
                         </div>
                     </td>
-
                 </tr>
             `);
         });
@@ -710,9 +535,7 @@ $(document).ready(function () {
 
     $(document).on("click", ".view-photo-btn", function () {
         const photo = $(this).data("photo");
-
         if (!photo) return;
-
         $("#photoZoomImg").attr("src", photo);
         photoZoomModal.show();
     });
@@ -723,13 +546,10 @@ $(document).ready(function () {
 
     $(document).on("click", ".edit-batch-btn", function () {
         const id = Number($(this).data("id"));
-
         const batch = batchData.find(item => Number(item.id) === id);
-
         if (!batch) return;
 
         $("#batchModalLabel").text("Edit Batch");
-
         $("#editBatchId").val(batch.id);
         $("#batchIdPreview").val(batch.batchId);
         $("#designNumber").val(batch.designNumber);
@@ -737,7 +557,6 @@ $(document).ready(function () {
         $("#prioritySelect").val(batch.priority);
 
         fillDesignData();
-
         batchModal.show();
     });
 
@@ -747,12 +566,9 @@ $(document).ready(function () {
 
     $(document).on("click", ".pass-batch-btn", function () {
         const id = Number($(this).data("id"));
-
         const batch = batchData.find(item => Number(item.id) === id);
-
         if (!batch) return;
 
-        // Prevent double approval
         if (batch.status === "approved") {
             Swal.fire({
                 icon: "info",
@@ -775,29 +591,13 @@ $(document).ready(function () {
         }).then(function (result) {
             if (!result.isConfirmed) return;
 
-            // Mark as approved
             batch.status = "approved";
 
-            // Save to approved batch storage
             let approvedBatches = readStorage(APPROVED_BATCH_STORAGE_KEY);
-
-            // Avoid duplicate entries
-            const alreadyApproved = approvedBatches.some(
-                item => Number(item.id) === id
-            );
-
-            if (!alreadyApproved) {
-                approvedBatches.push({ ...batch });
-            }
-
-            if (!saveStorage(APPROVED_BATCH_STORAGE_KEY, approvedBatches)) {
-                return;
-            }
-
-            // Update main batch storage
-            if (!saveStorage(BATCH_STORAGE_KEY, batchData)) {
-                return;
-            }
+            const alreadyApproved = approvedBatches.some(item => Number(item.id) === id);
+            if (!alreadyApproved) approvedBatches.push({ ...batch });
+            if (!saveStorage(APPROVED_BATCH_STORAGE_KEY, approvedBatches)) return;
+            if (!saveStorage(BATCH_STORAGE_KEY, batchData)) return;
 
             renderTable();
 
@@ -817,14 +617,12 @@ $(document).ready(function () {
 
     $(document).on("click", ".delete-batch-btn", function () {
         const id = Number($(this).data("id"));
-
         const batch = batchData.find(item => Number(item.id) === id);
-
         if (!batch) return;
 
         Swal.fire({
             title: "Delete Batch?",
-            text: `${batch.batchId} will be deleted.`,
+            text: `${batch.batchId} will be deleted. Design number will become available again.`,
             icon: "warning",
             showCancelButton: true,
             confirmButtonText: "Yes, Delete",
@@ -833,12 +631,8 @@ $(document).ready(function () {
         }).then(function (result) {
             if (!result.isConfirmed) return;
 
-            batchData = batchData.filter(item =>
-                Number(item.id) !== id);
-
-            if (!saveStorage(BATCH_STORAGE_KEY, batchData)) {
-                return;
-            }
+            batchData = batchData.filter(item => Number(item.id) !== id);
+            if (!saveStorage(BATCH_STORAGE_KEY, batchData)) return;
 
             renderFilters();
             renderTable();
@@ -846,7 +640,7 @@ $(document).ready(function () {
             Swal.fire({
                 icon: "success",
                 title: "Deleted",
-                text: "Batch deleted successfully.",
+                text: "Batch deleted. Design number is now available again.",
                 timer: 1500,
                 showConfirmButton: false
             });
@@ -859,9 +653,7 @@ $(document).ready(function () {
 
     $(document).on("click", ".view-batch-btn", function () {
         const id = Number($(this).data("id"));
-
         const batch = batchData.find(item => Number(item.id) === id);
-
         if (!batch) return;
 
         $("#viewBatchId").text(batch.batchId || "-");
@@ -878,11 +670,7 @@ $(document).ready(function () {
     // FILTERS
     // --------------------------------------------------
 
-    $("#brandFilter, #priorityFilter, #colorFilter").on(
-        "change",
-        renderTable
-    );
-
+    $("#brandFilter, #priorityFilter, #colorFilter").on("change", renderTable);
     $("#batchSearch").on("keyup", renderTable);
 
     $("#batchModal").on("hidden.bs.modal", function () {
@@ -896,5 +684,4 @@ $(document).ready(function () {
     loadData();
     renderFilters();
     renderTable();
-
 });

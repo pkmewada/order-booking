@@ -44,19 +44,14 @@ $(document).ready(function () {
     }
 
     /* ============================================================
-     * CORE: Build merged availability from all sources
-     * Rule: "yes" is STICKY (never overwritten by "no")
+     * MERGED availability — "yes" is sticky
      * ============================================================ */
     function buildMergedAvailability(pieceAvailability, batchId, pieceNumber, fullMaterials, extraOverrides) {
         const merged = {};
-
-        // From piece's current stored availability
         Object.entries(pieceAvailability || {}).forEach(([k, v]) => {
             if (v === "yes") merged[k] = "yes";
             else if (merged[k] === undefined) merged[k] = v;
         });
-
-        // From ALL requirements (past + present)
         const allReqs = readStorage(REQUIREMENT_STORAGE_KEY).filter(r =>
             String(r.batchId) === String(batchId) &&
             Number(r.pieceNumber) === Number(pieceNumber)
@@ -66,19 +61,17 @@ $(document).ready(function () {
                 if (v === "yes") merged[k] = "yes";
                 else if (v === "no" && merged[k] !== "yes") merged[k] = "no";
             });
+            (r.missingItems || []).forEach(m => {
+                if (merged[m] === undefined) merged[m] = "no";
+            });
         });
-
-        // Overrides
         Object.entries(extraOverrides || {}).forEach(([k, v]) => {
             if (v === "yes") merged[k] = "yes";
             else if (merged[k] !== "yes") merged[k] = "no";
         });
-
-        // Fill missing with "no"
         fullMaterials.forEach(m => {
             if (merged[m] === undefined) merged[m] = "no";
         });
-
         return merged;
     }
 
@@ -98,13 +91,8 @@ $(document).ready(function () {
         return full;
     }
 
-    /**
-     * Apply merged availability to the piece in both storages.
-     * Recompute status: all yes → pass; some yes → in_progress; none → pending.
-     */
     function applyMergedToPiece(batchId, pieceNumber, mergedAvailability, fullMaterials) {
         const yesCount = fullMaterials.filter(m => mergedAvailability[m] === "yes").length;
-
         let newStatus;
         if (fullMaterials.length > 0 && yesCount === fullMaterials.length) newStatus = "pass";
         else if (yesCount > 0) newStatus = "in_progress";
@@ -114,19 +102,15 @@ $(document).ready(function () {
             const batchData = readStorage(key);
             const bIdx = batchData.findIndex(b => String(b.batchId) === String(batchId));
             if (bIdx === -1) return;
-
             const batch = batchData[bIdx];
             const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
             const pieceIdx = pieces.findIndex(p => Number(p.number) === Number(pieceNumber));
             if (pieceIdx === -1) return;
-
             const piece = pieces[pieceIdx];
             const approval = piece.approval || {};
-
             const finalMaterials = fullMaterials.length
                 ? fullMaterials
                 : (Array.isArray(piece.materials) && piece.materials.length ? piece.materials : []);
-
             pieces[pieceIdx] = {
                 ...piece,
                 materials: finalMaterials,
@@ -139,7 +123,6 @@ $(document).ready(function () {
                     syncedAt: new Date().toLocaleString("en-GB")
                 }
             };
-
             batchData[bIdx] = { ...batch, pieces };
             saveStorage(key, batchData);
         });
@@ -147,16 +130,14 @@ $(document).ready(function () {
 
     function syncRequirementTickToBatch(req, item, checked) {
         const fullMaterials = getPieceFullMaterials(req.batchId, req.pieceNumber, req.materials);
-
         const merged = buildMergedAvailability(
-            null, // Don't pass piece availability directly — buildMerged reads from storage if needed
+            null,
             req.batchId,
             req.pieceNumber,
             fullMaterials,
             { [item]: checked ? "yes" : "no" }
         );
 
-        // Also merge from piece's own stored availability
         const approvedBatchData = readStorage(APPROVED_BATCH_STORAGE_KEY);
         const bIdx = approvedBatchData.findIndex(b => String(b.batchId) === String(req.batchId));
         if (bIdx !== -1) {
@@ -171,19 +152,15 @@ $(document).ready(function () {
                 });
             }
         }
-
-        // Ensure full materials all have a value
         fullMaterials.forEach(m => {
             if (merged[m] === undefined) merged[m] = "no";
         });
-
         applyMergedToPiece(req.batchId, req.pieceNumber, merged, fullMaterials);
     }
 
     function renderRequirements() {
         const container = $("#requirementCardsContainer");
         container.empty();
-
         const activeReqs = requirements.filter(r => r.status !== "completed");
 
         if (!activeReqs.length) {
@@ -232,7 +209,6 @@ $(document).ready(function () {
                 <div class="col-xl-6 col-lg-6 col-md-12 mb-3">
                     <div class="card custom-card h-100 requirement-card" data-req-id="${req.id}">
                         <div class="card-body">
-
                             <div class="d-flex gap-3 mb-3">
                                 ${photoHtml}
                                 <div class="flex-grow-1">
@@ -248,7 +224,6 @@ $(document).ready(function () {
                                     </div>
                                 </div>
                             </div>
-
                             <div class="mb-2">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <span class="fw-semibold small">Missing Items (${missingItems.length})</span>
@@ -258,13 +233,11 @@ $(document).ready(function () {
                                     ${itemsHtml || '<div class="text-muted small p-2">No items</div>'}
                                 </div>
                             </div>
-
                             <div class="d-flex gap-2 mt-3">
                                 <button class="btn btn-success btn-sm flex-fill req-merge-pass-btn" data-req-id="${req.id}" disabled>
-                                    <i class="bx bx-check-circle me-1"></i> Pass to Cutting
+                                    <i class="bx bx-check-circle me-1"></i> Pass to Next Stage
                                 </button>
                             </div>
-
                         </div>
                     </div>
                 </div>
@@ -277,22 +250,18 @@ $(document).ready(function () {
     function checkMergeButton(reqId) {
         const req = requirements.find(r => Number(r.id) === Number(reqId));
         if (!req) return;
-
         const missing = Array.isArray(req.missingItems) ? req.missingItems : [];
         const availability = req.itemAvailability || {};
-
         const receivedCount = missing.filter(item => availability[item] === "yes").length;
         const atLeastOne = receivedCount > 0;
-
         const $btn = $(`.req-merge-pass-btn[data-req-id="${reqId}"]`);
         $btn.prop("disabled", !atLeastOne);
-
         if (receivedCount === missing.length && missing.length > 0) {
-            $btn.html('<i class="bx bx-check-circle me-1"></i> Pass to Cutting (All Received)');
+            $btn.html('<i class="bx bx-check-circle me-1"></i> Pass to Next Stage (All Received)');
         } else if (atLeastOne) {
             $btn.html('<i class="bx bx-right-arrow-alt me-1"></i> Pass Received & Keep Remaining');
         } else {
-            $btn.html('<i class="bx bx-check-circle me-1"></i> Pass to Cutting');
+            $btn.html('<i class="bx bx-check-circle me-1"></i> Pass to Next Stage');
         }
     }
 
@@ -310,32 +279,21 @@ $(document).ready(function () {
 
         const missing = Array.isArray(req.missingItems) ? req.missingItems : [];
         const receivedCount = missing.filter(m => req.itemAvailability[m] === "yes").length;
-
-        if (receivedCount === missing.length && missing.length > 0) {
-            req.status = "pending";
-        } else if (receivedCount > 0) {
-            req.status = "partial";
-        } else {
-            req.status = "pending";
-        }
+        if (receivedCount === missing.length && missing.length > 0) req.status = "pending";
+        else if (receivedCount > 0) req.status = "partial";
+        else req.status = "pending";
 
         saveStorage(REQUIREMENT_STORAGE_KEY, requirements);
-
-        // Sync to piece
         syncRequirementTickToBatch(req, item, checked);
 
         const $row = $(this).closest(".req-item-row");
         $row.toggleClass("received", checked);
         $row.find(".req-missing-badge, .req-received-badge").remove();
-        if (checked) {
-            $row.append('<span class="req-received-badge ms-auto">Received</span>');
-        } else {
-            $row.append('<span class="req-missing-badge ms-auto">Missing</span>');
-        }
+        if (checked) $row.append('<span class="req-received-badge ms-auto">Received</span>');
+        else $row.append('<span class="req-missing-badge ms-auto">Missing</span>');
 
         const $card = $(`.requirement-card[data-req-id="${reqId}"]`);
         $card.find(".badge").replaceWith(getStatusBadge(req.status));
-
         checkMergeButton(reqId);
     });
 
@@ -352,7 +310,6 @@ $(document).ready(function () {
         const req = requirements[reqIndex];
         const missing = Array.isArray(req.missingItems) ? req.missingItems : [];
         const availability = req.itemAvailability || {};
-
         const receivedItems = missing.filter(i => availability[i] === "yes");
         const remainingItems = missing.filter(i => availability[i] !== "yes");
         const isPartial = remainingItems.length > 0;
@@ -364,7 +321,7 @@ $(document).ready(function () {
                 <p><strong>Batch:</strong> ${escapeHtml(req.batchId)}</p>
                 <p><strong>Piece:</strong> ${escapeHtml(req.pieceNumber)} (${escapeHtml(req.pieceItem)})</p>
                 <hr>
-                <p class="text-success"><strong>${receivedItems.length} items received</strong> → Pass to Cutting</p>
+                <p class="text-success"><strong>${receivedItems.length} items received</strong> → Pass to next stage</p>
         `;
         if (isPartial) {
             htmlText += `<p class="text-warning"><strong>${remainingItems.length} items still missing</strong> → Stay in Requirement</p>`;
@@ -384,15 +341,12 @@ $(document).ready(function () {
         }).then(function (result) {
             if (!result.isConfirmed) return;
 
-            /* ---- STEP 1: Full material list ---- */
             const trueFullMaterials = getPieceFullMaterials(req.batchId, req.pieceNumber, req.materials);
 
-            /* ---- STEP 2: Build merged availability with overrides ---- */
             const overrides = {};
             receivedItems.forEach(m => { overrides[m] = "yes"; });
             remainingItems.forEach(m => { overrides[m] = "no"; });
 
-            // Read piece's current availability
             const approvedBatchData = readStorage(APPROVED_BATCH_STORAGE_KEY);
             const bIdx = approvedBatchData.findIndex(b => String(b.batchId) === String(req.batchId));
             let pieceAvailability = {};
@@ -413,12 +367,50 @@ $(document).ready(function () {
 
             const availableItems = trueFullMaterials.filter(m => finalAvailability[m] === "yes");
 
-            /* ---- STEP 3: Push to Cutting pool ---- */
+            /* ---- Push to Approved Pool with route --- */
             const pool = readStorage(APPROVED_POOL_KEY);
             const existingIdx = pool.findIndex(p =>
                 String(p.batchId) === String(req.batchId) &&
                 Number(p.pieceNumber) === Number(req.pieceNumber)
             );
+
+            // 🆕 Build route from BOM (piece.additionalWorks + fixed stages)
+            function buildPieceRoute(piece) {
+                const STAGE_SEQUENCE = [
+                    "Before Cutting", "Cutting", "After Cutting",
+                    "Before Stitching", "Stitching", "After Stitching",
+                    "Before Ironing", "Ironing", "After Ironing"
+                ];
+                const route = [];
+                const worksByStage = {};
+                (piece.additionalWorks || []).forEach(w => {
+                    const stage = String(w.stage || "").trim();
+                    if (!stage) return;
+                    if (!worksByStage[stage]) worksByStage[stage] = [];
+                    worksByStage[stage].push(w.workType);
+                });
+                STAGE_SEQUENCE.forEach(stage => {
+                    if (worksByStage[stage] && worksByStage[stage].length) {
+                        route.push({ type: "additional_work", stage, works: worksByStage[stage] });
+                    }
+                    if (stage === "Cutting") route.push({ type: "cutting", stage: "Cutting" });
+                    if (stage === "Stitching") route.push({ type: "stitching", stage: "Stitching" });
+                    if (stage === "Ironing") route.push({ type: "ironing", stage: "Ironing" });
+                });
+                return route;
+            }
+
+            // Get the piece object (from approved batch data) to build route
+            let pieceObject = { additionalWorks: [] };
+            if (bIdx !== -1) {
+                const batch = approvedBatchData[bIdx];
+                const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
+                const pieceIdx = pieces.findIndex(p => Number(p.number) === Number(req.pieceNumber));
+                if (pieceIdx !== -1) pieceObject = pieces[pieceIdx];
+            }
+
+            const pieceRoute = buildPieceRoute(pieceObject);
+            const firstStage = pieceRoute.length ? pieceRoute[0] : { type: "cutting", stage: "Cutting" };
 
             if (existingIdx !== -1) {
                 const prev = pool[existingIdx];
@@ -436,7 +428,13 @@ $(document).ready(function () {
                     itemAvailability: mergedAvail,
                     availableItems: mergedAvailable,
                     mode: "pass",
-                    status: "pending_cutting",
+                    status: "pending",
+                    route: pieceRoute,
+                    currentStage: firstStage,
+                    stageHistory: [
+                        ...(prev.stageHistory || []),
+                        { at: new Date().toLocaleString("en-GB"), stage: firstStage.stage, type: firstStage.type, action: "re-entered from requirement" }
+                    ],
                     updatedAt: new Date().toLocaleString("en-GB")
                 };
             } else {
@@ -459,15 +457,19 @@ $(document).ready(function () {
                     additionalWorks: req.additionalWorks || [],
                     fromRequirement: req.requirementId,
                     mode: "pass",
-                    status: "pending_cutting",
+                    status: "pending",
+                    route: pieceRoute,
+                    currentStage: firstStage,
+                    stageHistory: [
+                        { at: new Date().toLocaleString("en-GB"), stage: firstStage.stage, type: firstStage.type, action: "entered from requirement" }
+                    ],
                     createdAt: new Date().toLocaleString("en-GB")
                 });
             }
             saveStorage(APPROVED_POOL_KEY, pool);
 
-            /* ---- STEP 4: Update requirement ---- */
+            /* ---- Update requirement ---- */
             if (isPartial) {
-                // Keep partial requirement active with remaining items
                 requirements[reqIndex] = {
                     ...req,
                     missingItems: remainingItems,
@@ -479,11 +481,8 @@ $(document).ready(function () {
                     updatedAt: new Date().toLocaleString("en-GB")
                 };
             } else {
-                // CRITICAL: DO NOT DELETE - keep in storage so its history
-                // is available for future merges. Just mark completed.
                 requirements[reqIndex] = {
                     ...req,
-                    // Keep the ORIGINAL missingItems list so merge logic can use it
                     missingItems: [...missing],
                     itemAvailability: { ...finalAvailability },
                     status: "completed",
@@ -492,21 +491,18 @@ $(document).ready(function () {
             }
             saveStorage(REQUIREMENT_STORAGE_KEY, requirements);
 
-            /* ---- STEP 5: Apply merged state to piece ---- */
             applyMergedToPiece(req.batchId, req.pieceNumber, finalAvailability, trueFullMaterials);
-
             renderRequirements();
 
             Swal.fire({
                 icon: "success",
                 title: isPartial ? "Partial Passed" : "Passed",
                 html: isPartial
-                    ? `<p><strong>${receivedItems.length}</strong> items passed to Cutting.</p><p><strong>${remainingItems.length}</strong> items still in Requirement.</p>`
-                    : `<p>All items received and passed to <strong>Cutting Manager</strong>.</p>`,
-                showCancelButton: true,
-                confirmButtonText: "Open Cutting Manager",
-                cancelButtonText: "Close"
-            }).then(function (r) { if (r.isConfirmed) window.location.href = "cutting-manager"; });
+                    ? `<p><strong>${receivedItems.length}</strong> items passed to next stage.</p><p><strong>${remainingItems.length}</strong> items still in Requirement.</p>`
+                    : `<p>All items received and passed to <strong>next stage</strong>.</p>`,
+                timer: 2200,
+                showConfirmButton: false
+            });
         });
     }
 
