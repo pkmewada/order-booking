@@ -2,11 +2,12 @@ $(document).ready(function () {
     "use strict";
 
     const APPROVED_POOL_KEY = "approvedPool";
-    const WORK_STORAGE_KEY = "stitchingData";
-    const WORK_NEXT_ID_KEY = "stitchingData_nextId";
-    const WORK_HISTORY_KEY = "stitchingData_history";
+    const WORK_STORAGE_KEY = "addWork_hand_work";
+    const WORK_NEXT_ID_KEY = "addWork_hand_work_nextId";
+    const WORK_HISTORY_KEY = "addWork_hand_work_history";
 
-    const WORK_TYPE = "Stitching";
+    const WORK_TYPE = "Hand Work";
+    const SUB_BATCH_SUFFIX = "H";
 
     const ROWS_PER_PAGE = 10;
 
@@ -25,19 +26,13 @@ $(document).ready(function () {
         "Zafar Iqbal", "Rashid Mahmood"
     ];
 
-    const FIRMS = [
-        "Ahmad Tailors", "Bilal Garments", "Danish Fabrics", "Faisal Stitching", "Usman Enterprises",
-        "Ali Industries", "Imran Textiles", "Saeed Garments", "Zafar Fabrics", "Rashid Tailors"
-    ];
-
     let pool = [];
     let workData = [];
     let nextId = 1;
     let currentEditingId = null;
 
     let availablePage = 1;
-    let inhousePage = 1;
-    let outsourcePage = 1;
+    let assignedPage = 1;
 
     let bulkSelectedBatchIds = new Set();
 
@@ -58,7 +53,10 @@ $(document).ready(function () {
 
     function loadData() {
         pool = readStorage(APPROVED_POOL_KEY).filter(p =>
-            p.currentStage && p.currentStage.type === "stitching"
+            p.currentStage &&
+            p.currentStage.type === "additional_work" &&
+            Array.isArray(p.currentStage.works) &&
+            p.currentStage.works.map(normalize).includes(normalize(WORK_TYPE))
         );
         workData = readStorage(WORK_STORAGE_KEY);
         nextId = Number(localStorage.getItem(WORK_NEXT_ID_KEY)) || 1;
@@ -75,20 +73,19 @@ $(document).ready(function () {
     }
     function getHistoryFor(id) {
         return readStorage(WORK_HISTORY_KEY)
-            .filter(h => Number(h.stitchId) === Number(id))
+            .filter(h => Number(h.workId) === Number(id))
             .sort((a, b) => String(a.at).localeCompare(String(b.at)));
     }
 
     function sanitizePieceName(name) {
         return String(name || "").trim().replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "Piece";
     }
-    function peekSubBatchId(batchId, pieceName, splitIndex, type) {
+    function peekSubBatchId(batchId, pieceName, splitIndex) {
         let formatted = String(batchId || "");
         if (!formatted.includes("BATCH-")) formatted = `BATCH-${String(batchId).padStart(3, "0")}`;
         const safePiece = sanitizePieceName(pieceName);
         const num = Number(splitIndex || 0) + 1;
-        const sfx = type === "outsource" ? "OS" : "IH";
-        return `${formatted}-${safePiece}-${sfx}${num}`;
+        return `${formatted}-${safePiece}-${SUB_BATCH_SUFFIX}${num}`;
     }
 
     function formatDate(ds) {
@@ -108,7 +105,7 @@ $(document).ready(function () {
         return "delivery-ontrack";
     }
     function defaultDate() {
-        const d = new Date(); d.setDate(d.getDate() + 14);
+        const d = new Date(); d.setDate(d.getDate() + 10);
         return d.toISOString().split("T")[0];
     }
     function splitQuantity(total, count) {
@@ -254,23 +251,23 @@ $(document).ready(function () {
     }
 
     /* ============================================================
-       COMMON TABLE RENDER (In-House / Outsource)
+       TABLE 2 — ASSIGNED
        ============================================================ */
-    function renderTypeTable(tbodySel, type, page, setPage, pagerSel, workerLabel) {
-        const tbody = $(tbodySel);
+    function renderAssignedTable() {
+        const tbody = $("#assignedList");
         tbody.empty();
-        const visible = workData.filter(w => w.type === type && !isFullyPassed(w));
+        const visible = workData.filter(w => !isFullyPassed(w));
 
         if (!visible.length) {
-            tbody.html(`<tr><td colspan="14" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No ${type} assignments yet.</td></tr>`);
-            $(pagerSel).empty();
+            tbody.html(`<tr><td colspan="14" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No ${escapeHtml(WORK_TYPE)} assignments yet.</td></tr>`);
+            $("#assignedPagination").empty();
             return;
         }
 
         const totalItems = visible.length;
         const totalPages = Math.max(1, Math.ceil(totalItems / ROWS_PER_PAGE));
-        if (page > totalPages) page = totalPages;
-        const startIdx = (page - 1) * ROWS_PER_PAGE;
+        if (assignedPage > totalPages) assignedPage = totalPages;
+        const startIdx = (assignedPage - 1) * ROWS_PER_PAGE;
         const pageItems = visible.slice(startIdx, startIdx + ROWS_PER_PAGE);
 
         let serial = startIdx;
@@ -309,8 +306,6 @@ $(document).ready(function () {
                 const isStopped = !!item.stopped;
                 const canPass = !isStopped && progress > passed;
 
-                const nameVal = type === "inhouse" ? (item.worker || "-") : (item.firm || "-");
-
                 tbody.append(`
                     <tr>
                         <td>${isFirst ? serial : ""}</td>
@@ -318,7 +313,7 @@ $(document).ready(function () {
                         <td><span class="fw-semibold text-primary">${escapeHtml(item.subBatch || "-")}</span></td>
                         <td>${escapeHtml(item.brand || "-")}</td>
                         <td>${escapeHtml(item.pieceType || "-")}</td>
-                        <td>${escapeHtml(nameVal)}</td>
+                        <td>${escapeHtml(item.worker || "-")}</td>
                         <td><span class="qty-pair"><span class="qty-total">${qty}</span><span class="qty-sep">/</span><span class="qty-assigned ${progress === 0 ? "zero" : ""}">${progress}</span></span></td>
                         <td><div class="d-flex align-items-center gap-2"><span>${progress}</span><div class="progress-bar-container"><div class="progress-bar-fill" style="width:${pct}%;"></div></div></div></td>
                         <td>${damageHtml}</td>
@@ -339,15 +334,8 @@ $(document).ready(function () {
             });
         });
 
-        buildPager($(pagerSel), page, totalPages, totalItems, ROWS_PER_PAGE,
-            p => { setPage(p); if (type === "inhouse") renderInhouseTable(); else renderOutsourceTable(); }, "assignments");
-    }
-
-    function renderInhouseTable() {
-        renderTypeTable("#inhouseList", "inhouse", inhousePage, p => inhousePage = p, "#inhousePagination", "Worker");
-    }
-    function renderOutsourceTable() {
-        renderTypeTable("#outsourceList", "outsource", outsourcePage, p => outsourcePage = p, "#outsourcePagination", "Firm");
+        buildPager($("#assignedPagination"), assignedPage, totalPages, totalItems, ROWS_PER_PAGE,
+            p => { assignedPage = p; renderAssignedTable(); }, "assignments");
     }
 
     /* ============================================================
@@ -370,7 +358,6 @@ $(document).ready(function () {
         const assigned = getPoolAssigned(poolItem);
 
         const workerOpts = WORKERS.map(w => `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`).join("");
-        const firmOpts = FIRMS.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join("");
 
         container.append(`
             <div class="alert alert-primary mb-3">
@@ -404,14 +391,7 @@ $(document).ready(function () {
                 <div class="table-responsive">
                     <table class="table table-bordered table-sm mb-0">
                         <thead>
-                            <tr>
-                                <th>Sub-Batch</th>
-                                <th>Type</th>
-                                <th>Worker / Firm</th>
-                                <th>Quantity</th>
-                                <th>Priority</th>
-                                <th>Delivery Date</th>
-                            </tr>
+                            <tr><th>Sub-Batch</th><th>Worker</th><th>Quantity</th><th>Priority</th><th>Delivery Date</th></tr>
                         </thead>
                         <tbody id="assignTableBody"></tbody>
                     </table>
@@ -422,25 +402,11 @@ $(document).ready(function () {
             const defDate = defaultDate();
 
             for (let i = 0; i < count; i++) {
-                const subBatchIH = peekSubBatchId(poolItem.batchId, poolItem.pieceItem, i, "inhouse");
-                const subBatchOS = peekSubBatchId(poolItem.batchId, poolItem.pieceItem, i, "outsource");
+                const subBatch = peekSubBatchId(poolItem.batchId, poolItem.pieceItem, i);
                 tbody.append(`
                     <tr class="assignment-row">
-                        <td>
-                            <span class="sub-batch-label fw-semibold text-primary sub-batch-display">${escapeHtml(subBatchIH)}</span>
-                            <input type="hidden" class="sub-batch-input-ih" value="${escapeHtml(subBatchIH)}">
-                            <input type="hidden" class="sub-batch-input-os" value="${escapeHtml(subBatchOS)}">
-                        </td>
-                        <td>
-                            <select class="form-select form-select-sm type-select">
-                                <option value="inhouse" selected>In-House</option>
-                                <option value="outsource">Outsource</option>
-                            </select>
-                        </td>
-                        <td>
-                            <select class="form-select form-select-sm worker-select"><option value="">Select Worker</option>${workerOpts}</select>
-                            <select class="form-select form-select-sm firm-select" style="display:none;"><option value="">Select Firm</option>${firmOpts}</select>
-                        </td>
+                        <td><span class="sub-batch-label fw-semibold text-primary">${escapeHtml(subBatch)}</span><input type="hidden" class="sub-batch-input" value="${escapeHtml(subBatch)}"></td>
+                        <td><select class="form-select form-select-sm worker-select"><option value="">Select Worker</option>${workerOpts}</select></td>
                         <td><input type="number" class="form-control form-control-sm quantity-input" value="${autoQtys[i]}" min="1" max="${remaining}"></td>
                         <td>
                             <select class="form-select form-select-sm priority-select">
@@ -453,14 +419,6 @@ $(document).ready(function () {
                     </tr>
                 `);
             }
-
-            tbody.find(".type-select").on("change", function () {
-                const $row = $(this).closest("tr");
-                const isOutsource = $(this).val() === "outsource";
-                $row.find(".firm-select").toggle(isOutsource);
-                $row.find(".worker-select").toggle(!isOutsource);
-                $row.find(".sub-batch-display").text(isOutsource ? $row.find(".sub-batch-input-os").val() : $row.find(".sub-batch-input-ih").val());
-            });
         }
 
         renderRows(1);
@@ -496,17 +454,13 @@ $(document).ready(function () {
         const rows = [];
         let valid = true;
         $(".assignment-row").each(function () {
-            const type = $(this).find(".type-select").val();
-            const subBatch = type === "outsource" ? $(this).find(".sub-batch-input-os").val() : $(this).find(".sub-batch-input-ih").val();
-            const worker = type === "inhouse" ? $(this).find(".worker-select").val() : "";
-            const firm = type === "outsource" ? $(this).find(".firm-select").val() : "";
+            const subBatch = $(this).find(".sub-batch-input").val();
+            const worker = $(this).find(".worker-select").val();
             const quantity = parseInt($(this).find(".quantity-input").val()) || 0;
             const priority = $(this).find(".priority-select").val();
             const deliveryDate = $(this).find(".delivery-date-input").val();
-            if (type === "inhouse" && !worker) { valid = false; return false; }
-            if (type === "outsource" && !firm) { valid = false; return false; }
-            if (quantity < 1 || !deliveryDate) { valid = false; return false; }
-            rows.push({ type, subBatch, worker, firm, quantity, priority, deliveryDate });
+            if (!worker || quantity < 1 || !deliveryDate) { valid = false; return false; }
+            rows.push({ subBatch, worker, quantity, priority, deliveryDate });
         });
 
         if (!valid || !rows.length) { Swal.fire({ icon: "warning", title: "Incomplete" }); return; }
@@ -520,7 +474,6 @@ $(document).ready(function () {
             workData.push({
                 id: newId,
                 poolId: poolItem.id,
-                type: row.type,
                 batchId: poolItem.batchId,
                 brand: poolItem.brand,
                 designNumber: poolItem.designNumber,
@@ -529,7 +482,6 @@ $(document).ready(function () {
                 pieceNumber: poolItem.pieceNumber,
                 subBatch: row.subBatch,
                 worker: row.worker,
-                firm: row.firm,
                 quantity: row.quantity,
                 priority: row.priority,
                 deliveryDate: row.deliveryDate,
@@ -539,14 +491,13 @@ $(document).ready(function () {
                 photo: poolItem.photo || "",
                 workType: WORK_TYPE
             });
-            pushHistory({ stitchId: newId, batchId: poolItem.batchId, subBatch: row.subBatch, action: `Assigned ${row.quantity} pcs to ${row.worker || row.firm} (${row.type})`, by: "Manager" });
+            pushHistory({ workId: newId, batchId: poolItem.batchId, subBatch: row.subBatch, action: `Assigned ${row.quantity} pcs to ${row.worker}`, by: "Manager" });
             addedNew++;
         });
 
         saveData();
         renderAvailableTable();
-        renderInhouseTable();
-        renderOutsourceTable();
+        renderAssignedTable();
         $("#assignModal").modal("hide");
         Swal.fire({ icon: "success", title: "Assigned", text: `${addedNew} assignments created.`, timer: 1800, showConfirmButton: false });
     });
@@ -616,17 +567,11 @@ $(document).ready(function () {
 
             let rowsHtml = "";
             batch.items.forEach(item => {
-                const subBatchIH = peekSubBatchId(item.batchId, item.pieceItem, 0, "inhouse");
-                const subBatchOS = peekSubBatchId(item.batchId, item.pieceItem, 0, "outsource");
+                const subBatch = peekSubBatchId(item.batchId, item.pieceItem, 0);
                 const workerOpts = WORKERS.map(w => `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`).join("");
-                const firmOpts = FIRMS.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join("");
                 rowsHtml += `
                     <tr class="bulk-assignment-row" data-pool-id="${item.id}" data-batch-id="${escapeHtml(item.batchId)}">
-                        <td>
-                            <span class="fw-semibold text-primary bulk-sub-batch" style="font-size:11px;">${escapeHtml(subBatchIH)}</span>
-                            <input type="hidden" class="bulk-sub-ih" value="${escapeHtml(subBatchIH)}">
-                            <input type="hidden" class="bulk-sub-os" value="${escapeHtml(subBatchOS)}">
-                        </td>
+                        <td><span class="fw-semibold text-primary" style="font-size:11px;">${escapeHtml(subBatch)}</span></td>
                         <td>
                             <div style="font-size:11px;">
                                 <div class="fw-semibold">Piece ${item.pieceNumber}</div>
@@ -634,14 +579,10 @@ $(document).ready(function () {
                             </div>
                         </td>
                         <td>
-                            <select class="form-select form-select-sm bulk-type-select">
-                                <option value="inhouse">In-House</option>
-                                <option value="outsource">Outsource</option>
+                            <select class="form-select form-select-sm bulk-worker-select">
+                                <option value="">Worker</option>
+                                ${workerOpts}
                             </select>
-                        </td>
-                        <td>
-                            <select class="form-select form-select-sm bulk-worker-select"><option value="">Worker</option>${workerOpts}</select>
-                            <select class="form-select form-select-sm bulk-firm-select mt-1" style="display:none;"><option value="">Firm</option>${firmOpts}</select>
                         </td>
                         <td><input type="number" class="form-control form-control-sm bulk-qty-input" value="${item.quantity || 0}" min="1" style="width:80px;"></td>
                         <td>
@@ -672,21 +613,13 @@ $(document).ready(function () {
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered mb-0" style="font-size:12px;">
                             <thead style="background:#f8f9fa;">
-                                <tr><th>Sub-Batch</th><th>Piece</th><th>Type</th><th>Worker / Firm</th><th>Qty</th><th>Priority</th><th>Delivery</th></tr>
+                                <tr><th>Sub-Batch</th><th>Piece</th><th>Worker</th><th>Qty</th><th>Priority</th><th>Delivery</th></tr>
                             </thead>
                             <tbody>${rowsHtml}</tbody>
                         </table>
                     </div>
                 </div>
             `);
-        });
-
-        container.find(".bulk-type-select").off("change").on("change", function () {
-            const $row = $(this).closest("tr");
-            const isOutsource = $(this).val() === "outsource";
-            $row.find(".bulk-firm-select").toggle(isOutsource);
-            $row.find(".bulk-worker-select").toggle(!isOutsource);
-            $row.find(".bulk-sub-batch").text(isOutsource ? $row.find(".bulk-sub-os").val() : $row.find(".bulk-sub-ih").val());
         });
     }
 
@@ -752,17 +685,12 @@ $(document).ready(function () {
 
         $(".bulk-assignment-row").each(function () {
             const poolId = Number($(this).data("pool-id"));
-            const type = $(this).find(".bulk-type-select").val();
-            const subBatch = type === "outsource" ? $(this).find(".bulk-sub-os").val() : $(this).find(".bulk-sub-ih").val();
-            const worker = type === "inhouse" ? $(this).find(".bulk-worker-select").val() : "";
-            const firm = type === "outsource" ? $(this).find(".bulk-firm-select").val() : "";
+            const worker = $(this).find(".bulk-worker-select").val();
             const qty = parseInt($(this).find(".bulk-qty-input").val()) || 0;
             const priority = $(this).find(".bulk-priority-select").val();
             const date = $(this).find(".bulk-date-input").val();
-            if (type === "inhouse" && !worker) { valid = false; return; }
-            if (type === "outsource" && !firm) { valid = false; return; }
-            if (qty < 1 || !date) { valid = false; return; }
-            assignments.push({ poolId, type, subBatch, worker, firm, qty, priority, date });
+            if (!worker || qty < 1 || !date) { valid = false; return; }
+            assignments.push({ poolId, worker, qty, priority, date });
         });
 
         if (!valid || !assignments.length) { Swal.fire({ icon: "warning", title: "Incomplete form" }); return; }
@@ -771,20 +699,19 @@ $(document).ready(function () {
         assignments.forEach(a => {
             const poolItem = pool.find(p => Number(p.id) === a.poolId);
             if (!poolItem) return;
+            const subBatch = peekSubBatchId(poolItem.batchId, poolItem.pieceItem, 0);
             const newId = nextId++;
             workData.push({
                 id: newId,
                 poolId: poolItem.id,
-                type: a.type,
                 batchId: poolItem.batchId,
                 brand: poolItem.brand,
                 designNumber: poolItem.designNumber,
                 color: poolItem.color,
                 pieceType: `Piece ${poolItem.pieceNumber} (${poolItem.pieceItem})`,
                 pieceNumber: poolItem.pieceNumber,
-                subBatch: a.subBatch,
+                subBatch: subBatch,
                 worker: a.worker,
-                firm: a.firm,
                 quantity: a.qty,
                 priority: a.priority,
                 deliveryDate: a.date,
@@ -794,14 +721,13 @@ $(document).ready(function () {
                 photo: poolItem.photo || "",
                 workType: WORK_TYPE
             });
-            pushHistory({ stitchId: newId, batchId: poolItem.batchId, subBatch: a.subBatch, action: `Bulk assigned ${a.qty} pcs to ${a.worker || a.firm} (${a.type})`, by: "Manager" });
+            pushHistory({ workId: newId, batchId: poolItem.batchId, subBatch: subBatch, action: `Bulk assigned ${a.qty} pcs to ${a.worker}`, by: "Manager" });
             addedCount++;
         });
 
         saveData();
         renderAvailableTable();
-        renderInhouseTable();
-        renderOutsourceTable();
+        renderAssignedTable();
         $("#bulkAssignModal").modal("hide");
         Swal.fire({ icon: "success", title: "Assigned", text: `${addedCount} assignments created.`, timer: 1800, showConfirmButton: false });
     });
@@ -830,7 +756,7 @@ $(document).ready(function () {
 
         currentEditingId = id;
         $("#progressSubBatch").val(item.subBatch);
-        $("#progressWorker").val(item.worker || item.firm || "-");
+        $("#progressWorker").val(item.worker);
         $("#progressTypeSelect").val("completed");
         $("#progressQty").val(0);
         refreshProgressNumbers(item);
@@ -866,10 +792,10 @@ $(document).ready(function () {
 
         if (type === "completed") {
             item.progress = existingProgress + addQty;
-            pushHistory({ stitchId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Progress +${addQty} (total ${item.progress})`, by: "Manager" });
+            pushHistory({ workId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Progress +${addQty} (total ${item.progress})`, by: "Manager" });
         } else {
             item.damage = existingDamage + addQty;
-            pushHistory({ stitchId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Damage +${addQty} (total ${item.damage})`, by: "Manager" });
+            pushHistory({ workId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Damage +${addQty} (total ${item.damage})`, by: "Manager" });
         }
 
         const finalEff = Math.max(0, item.quantity - (item.damage || 0));
@@ -880,18 +806,16 @@ $(document).ready(function () {
             const autoPassQty = finalProgress - finalPassed;
             pushToNextStage(item, autoPassQty);
             item.passedQty = finalProgress;
-            pushHistory({ stitchId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Auto-passed ${autoPassQty} pcs`, by: "System" });
+            pushHistory({ workId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Auto-passed ${autoPassQty} pcs`, by: "System" });
             saveData();
-            renderInhouseTable();
-            renderOutsourceTable();
+            renderAssignedTable();
             $("#progressModal").modal("hide");
             Swal.fire({ icon: "success", title: "Auto-Passed", text: `${finalProgress} pcs completed & auto-passed.`, timer: 2200, showConfirmButton: false });
             return;
         }
 
         saveData();
-        renderInhouseTable();
-        renderOutsourceTable();
+        renderAssignedTable();
         $("#progressModal").modal("hide");
         Swal.fire({ icon: "success", title: "Updated", timer: 1200, showConfirmButton: false });
     });
@@ -939,7 +863,7 @@ $(document).ready(function () {
             title: "Pass to Next Stage?",
             html: `<div class="text-start">
                     <p><strong>Sub-Batch:</strong> ${escapeHtml(item.subBatch)}</p>
-                    <p><strong>${item.type === "outsource" ? "Firm" : "Worker"}:</strong> ${escapeHtml(item.worker || item.firm || "-")}</p>
+                    <p><strong>Worker:</strong> ${escapeHtml(item.worker)}</p>
                     <p><strong>Completed:</strong> ${progress}</p>
                     <p><strong>Already Passed:</strong> ${passed}</p>
                     <hr>
@@ -954,10 +878,9 @@ $(document).ready(function () {
             if (!r.isConfirmed) return;
             pushToNextStage(item, passable);
             item.passedQty = progress;
-            pushHistory({ stitchId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Passed ${passable} pcs`, by: "Manager" });
+            pushHistory({ workId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Passed ${passable} pcs`, by: "Manager" });
             saveData();
-            renderInhouseTable();
-            renderOutsourceTable();
+            renderAssignedTable();
             Swal.fire({ icon: "success", title: "Passed", timer: 1800, showConfirmButton: false });
         });
     });
@@ -971,7 +894,7 @@ $(document).ready(function () {
         if (!item) return;
         Swal.fire({
             title: "Stop this Assignment?",
-            html: `<div class="text-start"><p><strong>Sub-Batch:</strong> ${escapeHtml(item.subBatch)}</p><p><strong>${item.type === "outsource" ? "Firm" : "Worker"}:</strong> ${escapeHtml(item.worker || item.firm || "-")}</p><p class="text-danger mb-0">Frozen.</p></div>`,
+            html: `<div class="text-start"><p><strong>Sub-Batch:</strong> ${escapeHtml(item.subBatch)}</p><p><strong>Worker:</strong> ${escapeHtml(item.worker)}</p><p class="text-danger mb-0">Frozen.</p></div>`,
             icon: "warning",
             showCancelButton: true,
             confirmButtonText: "Yes, Stop",
@@ -981,10 +904,9 @@ $(document).ready(function () {
             if (!r.isConfirmed) return;
             item.stopped = true;
             item.stoppedAt = new Date().toLocaleString("en-GB");
-            pushHistory({ stitchId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: "Stopped", by: "Manager" });
+            pushHistory({ workId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: "Stopped", by: "Manager" });
             saveData();
-            renderInhouseTable();
-            renderOutsourceTable();
+            renderAssignedTable();
             Swal.fire({ icon: "success", title: "Stopped", timer: 1500, showConfirmButton: false });
         });
     });
@@ -1000,8 +922,6 @@ $(document).ready(function () {
         const historyHtml = history.length
             ? history.map(h => `<div style="font-size:11px;padding:4px 0;border-bottom:1px dashed #eef1f7;">• <strong>${escapeHtml(h.at)}</strong> — ${escapeHtml(h.action || "")}</div>`).join("")
             : `<div class="text-muted small">No history yet.</div>`;
-        const nameLabel = item.type === "outsource" ? "Firm Name" : "Worker Name";
-        const nameVal = item.type === "outsource" ? item.firm : item.worker;
 
         return `
             <div class="detail-print-wrap">
@@ -1013,7 +933,7 @@ $(document).ready(function () {
                 <div class="detail-split-layout">
                     <div>
                         <div class="detail-highlight-grid">
-                            <div class="detail-highlight-item"><span class="lbl">${escapeHtml(nameLabel)}</span><span class="val">${escapeHtml(nameVal || "-")}</span></div>
+                            <div class="detail-highlight-item"><span class="lbl">Worker Name</span><span class="val">${escapeHtml(item.worker || "-")}</span></div>
                             <div class="detail-highlight-item"><span class="lbl">Design Number</span><span class="val">${escapeHtml(item.designNumber || "-")}</span></div>
                             <div class="detail-highlight-item"><span class="lbl">Brand</span><span class="val">${escapeHtml(item.brand || "-")}</span></div>
                             <div class="detail-highlight-item"><span class="lbl">Total Quantity</span><span class="val">${item.quantity || 0}</span></div>
@@ -1021,12 +941,12 @@ $(document).ready(function () {
                         <div class="detail-info-grid">
                             <div class="detail-info-cell"><span class="lbl">Batch ID</span><span class="val">${escapeHtml(item.batchId || "-")}</span></div>
                             <div class="detail-info-cell"><span class="lbl">Sub-Batch</span><span class="val">${escapeHtml(item.subBatch || "-")}</span></div>
-                            <div class="detail-info-cell"><span class="lbl">Type</span><span class="val">${item.type === "outsource" ? "Outsource" : "In-House"}</span></div>
                             <div class="detail-info-cell"><span class="lbl">Color</span><span class="val">${escapeHtml(item.color || "-")}</span></div>
                             <div class="detail-info-cell"><span class="lbl">Piece Type</span><span class="val">${escapeHtml(item.pieceType || "-")}</span></div>
                             <div class="detail-info-cell"><span class="lbl">Priority</span><span class="val">${escapeHtml(item.priority || "-")}</span></div>
                             <div class="detail-info-cell"><span class="lbl">Delivery Date</span><span class="val">${escapeHtml(formatDate(item.deliveryDate))}</span></div>
                             <div class="detail-info-cell"><span class="lbl">Progress</span><span class="val">${item.progress || 0}</span></div>
+                            <div class="detail-info-cell"><span class="lbl">Damage</span><span class="val">${item.damage || 0}</span></div>
                             <div class="detail-info-cell"><span class="lbl">Passed</span><span class="val">${item.passedQty || 0}</span></div>
                         </div>
                         <h6 style="color:#161617;font-weight:700;margin-top:16px;">History</h6>
@@ -1080,8 +1000,6 @@ $(document).ready(function () {
                 const isFirst = idx === 0;
                 const pc = getPriorityClass(item.priority);
                 const deliveryCls = getDeliveryClass(item.deliveryDate);
-                const typeLabel = item.type === "outsource" ? "Outsource" : "In-House";
-                const nameVal = item.type === "outsource" ? (item.firm || "-") : (item.worker || "-");
                 tableRows += `
                     <tr>
                         <td>${isFirst ? serial : ""}</td>
@@ -1089,8 +1007,7 @@ $(document).ready(function () {
                         <td><span class="fw-semibold text-primary">${escapeHtml(item.subBatch || "-")}</span></td>
                         <td>${escapeHtml(item.brand || "-")}</td>
                         <td>${escapeHtml(item.pieceType || "-")}</td>
-                        <td><span class="badge bg-info">${typeLabel}</span></td>
-                        <td>${escapeHtml(nameVal)}</td>
+                        <td>${escapeHtml(item.worker || "-")}</td>
                         <td>${item.quantity}</td>
                         <td>${item.progress || 0}</td>
                         <td>${item.damage || 0}</td>
@@ -1113,9 +1030,9 @@ $(document).ready(function () {
                     <thead>
                         <tr>
                             <th>#</th><th>Batch ID</th><th>Sub-Batch</th><th>Brand</th>
-                            <th>Piece</th><th>Type</th><th>Worker / Firm</th><th>Qty</th>
-                            <th>Progress</th><th>Damage</th><th>Remaining</th><th>Priority</th>
-                            <th>Delivery</th><th>Status</th><th>Action</th>
+                            <th>Piece</th><th>Worker</th><th>Qty</th><th>Progress</th>
+                            <th>Damage</th><th>Remaining</th><th>Priority</th><th>Delivery</th>
+                            <th>Status</th><th>Action</th>
                         </tr>
                     </thead>
                     <tbody>${tableRows}</tbody>
@@ -1142,11 +1059,10 @@ $(document).ready(function () {
     /* ============================================================
        REFRESH
        ============================================================ */
-    $("#refreshStitchingBtn").on("click", function () {
+    $("#refreshHandworkBtn").on("click", function () {
         loadData();
         renderAvailableTable();
-        renderInhouseTable();
-        renderOutsourceTable();
+        renderAssignedTable();
         Swal.fire({ icon: "success", title: "Refreshed", timer: 1000, showConfirmButton: false });
     });
 
@@ -1155,14 +1071,12 @@ $(document).ready(function () {
        ============================================================ */
     loadData();
     renderAvailableTable();
-    renderInhouseTable();
-    renderOutsourceTable();
+    renderAssignedTable();
 
     window.addEventListener("focus", function () {
         loadData();
         renderAvailableTable();
-        renderInhouseTable();
-        renderOutsourceTable();
+        renderAssignedTable();
     });
 
     setInterval(function () {
@@ -1171,8 +1085,7 @@ $(document).ready(function () {
         loadData();
         if (JSON.stringify(pool) !== prevPool || JSON.stringify(workData) !== prevData) {
             renderAvailableTable();
-            renderInhouseTable();
-            renderOutsourceTable();
+            renderAssignedTable();
         }
     }, 2000);
 });

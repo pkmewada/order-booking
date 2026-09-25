@@ -1,8 +1,14 @@
 <?php require_once __DIR__ . '/includes/header.php'; ?>
 
 <style>
-    #refreshBtn { background-color: #161617 !important; border-color: #161617 !important; color: #fff !important; }
-    #refreshBtn:hover { background-color: #2b2b2d !important; border-color: #2b2b2d !important; }
+    #refreshScreenBtn { background-color: #161617 !important; border-color: #161617 !important; color: #fff !important; }
+    #refreshScreenBtn:hover { background-color: #2b2b2d !important; border-color: #2b2b2d !important; }
+
+    #listAllBtn, #bulkAssignBtn {
+        background-color: #161617 !important; border-color: #161617 !important;
+        color: #fff !important;
+    }
+    #listAllBtn:hover, #bulkAssignBtn:hover { background-color: #2b2b2d !important; border-color: #2b2b2d !important; }
 
     #availableList td, #availableList th,
     #assignedList td, #assignedList th { vertical-align: middle !important; }
@@ -64,6 +70,43 @@
     .qty-pair .qty-assigned.zero { color: #9ca3af; font-weight: 500; }
 
     .piece-num { font-weight: 700; color: #161617; }
+    .piece-line { font-size: 13px; color: #18243d; line-height: 1.8; white-space: nowrap; }
+
+    /* Detail modal */
+    .detail-print-wrap { background: #fff; padding: 10px 0; }
+    .detail-header-line { text-align: center; margin-bottom: 4px; }
+    .detail-header-line h4 { margin: 0; font-weight: 700; color: #161617; letter-spacing: 1px; font-size: 22px; }
+    .detail-header-line small { display: block; color: #9ca3af; font-size: 11px; margin-top: 4px; }
+    .detail-divider { border-top: 1px solid #e2e7f1; margin: 14px 0 18px; }
+    .detail-split-layout { display: grid; grid-template-columns: 1fr 240px; gap: 24px; align-items: start; margin-bottom: 20px; }
+    .detail-highlight-grid { display: grid; grid-template-columns: 1fr; gap: 8px; margin-bottom: 14px; }
+    .detail-highlight-item { padding: 8px 14px; background: #f8f9fa; border-left: 3px solid #161617; border-radius: 4px; }
+    .detail-highlight-item .lbl { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 2px; display: block; }
+    .detail-highlight-item .val { font-size: 14px; color: #161617; font-weight: 700; word-break: break-word; line-height: 1.3; }
+    .detail-info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border: 1px solid #e2e7f1; border-radius: 6px; overflow: hidden; background: #fff; }
+    .detail-info-cell { padding: 8px 12px; border-right: 1px solid #e2e7f1; border-bottom: 1px solid #e2e7f1; background: #fff; }
+    .detail-info-cell:nth-child(3n) { border-right: none; }
+    .detail-info-cell .lbl { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; margin-bottom: 2px; display: block; }
+    .detail-info-cell .val { font-size: 12px; color: #18243d; font-weight: 600; word-break: break-word; line-height: 1.3; }
+    .detail-photo-box { width: 100%; height: 360px; aspect-ratio: 3 / 4; border: 1px solid #dfe5f1; border-radius: 8px; background: #f8f9fa; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .detail-photo-box img { width: 100%; height: 100%; object-fit: cover; }
+    .detail-signature { margin-top: 30px; text-align: right; padding-top: 10px; }
+    .detail-signature .sig-line { display: inline-block; border-top: 1px solid #161617; padding-top: 6px; min-width: 220px; text-align: center; font-size: 12px; color: #161617; font-weight: 600; letter-spacing: 0.5px; }
+
+    /* Multi-select */
+    .multi-select-wrap { position: relative; }
+    .multi-select-box { min-height: 38px; padding: 5px 10px; border: 1px solid #dfe5f1; border-radius: 8px; background: #fff; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; cursor: pointer; }
+    .multi-select-box:hover { border-color: #c9d2e3; }
+    .multi-select-box .placeholder { color: #9aa6c2; font-size: 13px; }
+    .multi-select-chip { display: inline-flex; align-items: center; gap: 4px; background: #eef2ff; color: #3730a3; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+    .multi-select-chip .chip-x { cursor: pointer; font-weight: 700; margin-left: 2px; opacity: .6; }
+    .multi-select-chip .chip-x:hover { opacity: 1; }
+    .multi-select-dropdown { position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; max-height: 300px; overflow-y: auto; background: #fff; border: 1px solid #dfe5f1; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 1000; display: none; }
+    .multi-select-dropdown.open { display: block; }
+    .multi-select-option { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #f1f3f9; }
+    .multi-select-option:hover { background: #f4f5f9; }
+    .multi-select-option.selected { background: #f0f7ff; }
+    .multi-select-option input { width: 16px; height: 16px; margin: 0; accent-color: #161617; }
 </style>
 
 <div class="main-content app-content">
@@ -79,9 +122,17 @@
                     </ol>
                 </nav>
             </div>
-            <button type="button" class="btn btn-primary" id="refreshBtn">
-                <i class="bx bx-refresh me-1"></i>
-            </button>
+            <div class="d-flex gap-2">
+                <button class="btn" id="listAllBtn">
+                    <i class="bx bx-list-ul align-middle me-1"></i> List
+                </button>
+                <button class="btn" id="bulkAssignBtn">
+                    <i class="bx bx-layer-plus align-middle me-1"></i> Bulk Assign Screen Print
+                </button>
+                <button class="btn" id="refreshScreenBtn">
+                    <i class="bx bx-refresh align-middle"></i>
+                </button>
+            </div>
         </div>
 
         <div class="row">
@@ -98,17 +149,8 @@
                             <table class="table table-bordered text-nowrap w-100">
                                 <thead>
                                     <tr>
-                                        <th>Batch ID</th>
-                                        <th>Photo</th>
-                                        <th>Brand</th>
-                                        <th>Design</th>
-                                        <th>Color</th>
-                                        <th>Piece</th>
-                                        <th>Item</th>
-                                        <th>Quantity</th>
-                                        <th>Priority</th>
-                                        <th>Status</th>
-                                        <th>Action</th>
+                                        <th>Batch ID</th><th>Photo</th><th>Brand</th><th>Design</th><th>Color</th>
+                                        <th>Piece</th><th>Item</th><th>Quantity</th><th>Priority</th><th>Status</th><th>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody id="availableList"></tbody>
@@ -134,20 +176,9 @@
                             <table class="table table-bordered text-nowrap w-100">
                                 <thead>
                                     <tr>
-                                        <th>#</th>
-                                        <th>Batch ID</th>
-                                        <th>Sub-Batch</th>
-                                        <th>Brand</th>
-                                        <th>Piece Type</th>
-                                        <th>Worker</th>
-                                        <th>Quantity</th>
-                                        <th>Progress</th>
-                                        <th>Damage</th>
-                                        <th>Remaining</th>
-                                        <th>Priority</th>
-                                        <th>Delivery Date</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
+                                        <th>#</th><th>Batch ID</th><th>Sub-Batch</th><th>Brand</th><th>Piece Type</th><th>Worker</th>
+                                        <th>Quantity</th><th>Progress</th><th>Damage</th><th>Remaining</th>
+                                        <th>Priority</th><th>Delivery Date</th><th>Status</th><th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="assignedList"></tbody>
@@ -158,10 +189,10 @@
                 </div>
             </div>
         </div>
-
     </div>
 </div>
 
+<!-- ASSIGN MODAL -->
 <div class="modal fade" id="assignModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content">
@@ -190,6 +221,38 @@
     </div>
 </div>
 
+<!-- BULK ASSIGN MODAL -->
+<div class="modal fade" id="bulkAssignModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bx bx-layer-plus me-1"></i> Bulk Assign Screen Print</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div style="background:#fff; border-bottom:1px solid #e2e7f1; padding:8px 0; margin-bottom:10px;">
+                    <label class="fw-semibold me-2">Select Batches:</label>
+                    <div class="multi-select-wrap d-inline-block" style="min-width:400px;">
+                        <div class="multi-select-box" id="multiSelectBox">
+                            <span class="placeholder" id="multiSelectPlaceholder">Click to choose batches...</span>
+                        </div>
+                        <div class="multi-select-dropdown" id="multiSelectDropdown"></div>
+                    </div>
+                    <span class="ms-3 badge bg-primary" id="selectedCountBadge">0 batch(es) selected</span>
+                </div>
+                <div id="bulkItemsContainer"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveBulkAssignBtn">
+                    <i class="bx bx-save"></i> Assign Selected
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- UPDATE PROGRESS MODAL -->
 <div class="modal fade" id="progressModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -231,14 +294,46 @@
     </div>
 </div>
 
+<!-- VIEW DETAIL MODAL -->
+<div class="modal fade" id="viewDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Assignment Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="viewDetailBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-dark" id="printDetailBtn">
+                    <i class="bx bx-printer me-1"></i> Print / Download
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- LIST ALL MODAL -->
+<div class="modal fade" id="listAllModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:99vw; width:99vw;">
+        <div class="modal-content" style="height:96vh;">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bx bx-list-ul me-1"></i> All Passed Screen Print Assignments</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="listAllBody" style="overflow-y:auto;"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-dark" id="printListAllBtn">
+                    <i class="bx bx-printer me-1"></i> Print / Download
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
-<script src="assets/js/additional-work-template.js"></script>
-<script>
-    window.ADDITIONAL_WORK_CONFIG = {
-        workType: "Screen Print",
-        storageKey: "addWork_screen_print"
-    };
-</script>
+<script src="assets/js/screen-print.js"></script>
 </body>
 </html>
