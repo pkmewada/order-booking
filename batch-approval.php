@@ -55,7 +55,7 @@
     .piece-card .piece-card-title { font-weight: 600; font-size: 14px; color: #18243d; }
     .piece-card .piece-card-item { font-size: 12px; color: #6b7280; margin-top: 2px; }
 
-    /* ---------- Status badges (updated) ---------- */
+    /* ---------- Status badges (UNCHANGED — original style) ---------- */
     .status-badge {
         display: inline-block;
         padding: 4px 10px;
@@ -68,6 +68,7 @@
     .status-badge.pending    { background: #fdd835; color: #161617 !important; }
     .status-badge.in_progress { background: #1e88e5; }
     .status-badge.pass       { background: #198754; }
+    .status-badge.stopped    { background: #0a0a0a; color: #fff !important; }
 
     .work-text { font-size: 12px; color: #333; line-height: 1.5; }
     .work-text .work-empty { color: #9ca3af; font-size: 11px; }
@@ -127,24 +128,14 @@
     .status-line:first-child { padding-top: 0; }
     .status-line:last-child { padding-bottom: 0; border-bottom: none; }
 
-    /* ---------- Color badge (11px, own colour) ---------- */
-    .color-badge {
-        display: inline-block;
-        padding: 4px 10px;
-        border-radius: 6px;
-        color: #fff !important;
-        font-size: 11px;
+    /* ---------- Color TEXT (plain, no badge — only colour column changed) ---------- */
+    .color-text {
+        font-size: 13px;
         font-weight: 600;
-        letter-spacing: 0.3px;
-        border: 1px solid rgba(0, 0, 0, 0.08);
-    }
-    .color-badge[style*="#fdd835"],
-    .color-badge[style*="#ffffff"] {
-        color: #161617 !important;
-        border: 1px solid #cfd6e4;
+        color: #18243d;
     }
 
-    /* ---------- Priority badge (same as batch.php) ---------- */
+    /* ---------- Priority badge (UNCHANGED — same as batch.php) ---------- */
     .priority-badge {
         display: inline-block;
         padding: 4px 10px;
@@ -157,6 +148,59 @@
     .priority-badge.priority-high   { background: #dc3545; }
     .priority-badge.priority-medium { background: #1e88e5; }
     .priority-badge.priority-low    { background: #fdd835; color: #161617 !important; }
+
+    /* ---------- Action cell: one row, small ---------- */
+    .action-cell { white-space: nowrap; }
+    .action-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .btn-view-sm {
+        background: #161617 !important;
+        border: 1px solid #161617 !important;
+        color: #fff !important;
+        font-size: 11px !important;
+        font-weight: 600;
+        padding: 3px 12px !important;
+        line-height: 1.5 !important;
+        border-radius: 6px !important;
+    }
+    .btn-view-sm:hover { background: #2b2b2b !important; border-color: #2b2b2b !important; color: #fff !important; }
+
+    .btn-stop-icon {
+        background: #dc3545 !important;
+        border: 1px solid #dc3545 !important;
+        color: #fff !important;
+        font-size: 14px !important;
+        width: 28px;
+        height: 28px;
+        padding: 0 !important;
+        line-height: 26px !important;
+        border-radius: 6px !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .btn-stop-icon:hover { background: #b02a37 !important; border-color: #b02a37 !important; color: #fff !important; }
+
+    .btn-resume-icon {
+        background: #1e88e5 !important;
+        border: 1px solid #1e88e5 !important;
+        color: #fff !important;
+        font-size: 14px !important;
+        width: 28px;
+        height: 28px;
+        padding: 0 !important;
+        line-height: 26px !important;
+        border-radius: 6px !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .btn-resume-icon:hover { background: #1565c0 !important; border-color: #1565c0 !important; color: #fff !important; }
+
+    tr.frozen-row { background: #f8f9fa !important; opacity: 0.9; }
 </style>
 
 <div class="main-content app-content">
@@ -188,6 +232,7 @@
                             <option value="pending">Pending</option>
                             <option value="in_progress">In Progress</option>
                             <option value="pass">Pass</option>
+                            <option value="stopped">Stopped</option>
                         </select>
                     </div>
                     <div class="col-md-4 ms-auto">

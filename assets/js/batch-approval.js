@@ -52,26 +52,7 @@ $(document).ready(function () {
     function normalize(value) { return String(value ?? "").trim().toLowerCase(); }
 
     /* ======================================================
-       COLOR → HEX MAP  (same as BOM Master / Batch)
-       ====================================================== */
-    function getColorHex(colorName) {
-        const map = {
-            "Red":     "#e53935",
-            "Blue":    "#1e88e5",
-            "Green":   "#43a047",
-            "Yellow":  "#fdd835",
-            "Black":   "#161617",
-            "White":   "#ffffff",
-            "Orange":  "#fb8c00",
-            "Purple":  "#8e24aa",
-            "Pink":    "#ec407a",
-            "Brown":   "#6d4c41"
-        };
-        return map[colorName] || "#161617";
-    }
-
-    /* ======================================================
-       PRIORITY → CSS CLASS  (same as batch.php)
+       PRIORITY → CSS CLASS  (UNCHANGED)
        ====================================================== */
     function getPriorityClass(priority) {
         const p = normalize(priority);
@@ -82,13 +63,14 @@ $(document).ready(function () {
     }
 
     /* ======================================================
-       STATUS BADGE (updated)
+       STATUS BADGE  (UNCHANGED — original badge style)
        ====================================================== */
     function statusText(status) {
         const map = {
             pending:     { label: "Pending",     cls: "pending" },
             in_progress: { label: "In Progress", cls: "in_progress" },
-            pass:        { label: "Pass",        cls: "pass" }
+            pass:        { label: "Pass",        cls: "pass" },
+            stopped:     { label: "Stopped",     cls: "stopped" }
         };
         const s = map[status] || map.pending;
         return `<span class="status-badge ${s.cls}">${s.label}</span>`;
@@ -119,14 +101,12 @@ $(document).ready(function () {
 
     function getPieceStatus(piece) { return piece?.approval?.status || "pending"; }
     function isPieceLocked(piece) { return !!(piece?.approval?.locked); }
+    function isPieceStopped(piece) { return !!(piece?.approval?.stopped); }
+    function isBatchStopped(batch) { return !!(batch?.stopped); }
 
     /* ============================================================
-     * CRITICAL: Build the MERGED availability for a piece from:
-     *   1) piece.approval.itemAvailability (current stored state)
-     *   2) ALL requirements (completed AND active) for this piece
-     *   3) extra overrides
-     * Rule: "yes" is STICKY — NEVER overwritten by "no"
-     * ============================================================ */
+       MERGED availability
+       ============================================================ */
     function buildMergedAvailability(pieceAvailability, batchId, pieceNumber, fullMaterials, extraOverrides) {
         const merged = {};
 
@@ -176,6 +156,8 @@ $(document).ready(function () {
                 const pieceNumber = getPieceNumber(piece, index);
                 const allMaterials = getPieceMaterials(piece);
                 if (!allMaterials.length) return piece;
+
+                if (piece?.approval?.stopped) return piece;
 
                 const mode = piece.approval?.mode;
                 if (mode !== "confirm" && mode !== "pass") return piece;
@@ -237,8 +219,12 @@ $(document).ready(function () {
             ].filter(Boolean).join(" ");
 
             if (statusFilter) {
-                const anyMatch = pieces.some(p => normalize(getPieceStatus(p)) === statusFilter);
-                if (!anyMatch) return false;
+                if (statusFilter === "stopped") {
+                    if (!isBatchStopped(batch)) return false;
+                } else {
+                    const anyMatch = pieces.some(p => normalize(getPieceStatus(p)) === statusFilter);
+                    if (!anyMatch) return false;
+                }
             }
             return (!searchTerm || normalize(searchable).includes(searchTerm));
         });
@@ -254,6 +240,7 @@ $(document).ready(function () {
                 : [{ number: 1, item: batch.piece || "", materials: batch.itemList || [], additionalWorks: [] }];
 
             const photoSrc = batch.photo ? escapeHtml(batch.photo) : PLACEHOLDER_IMG;
+            const batchStopped = isBatchStopped(batch);
 
             let pieceTypeHtml = "";
             let statusHtml = "";
@@ -272,20 +259,37 @@ $(document).ready(function () {
                 statusHtml += `<div class="status-line">${statusText(pieceStatus)}</div>`;
             });
 
-            const colorHex = getColorHex(batch.color);
             const priorityClass = getPriorityClass(batch.priority);
 
+            // Action buttons — ONE ROW: View (black small text) + Stop (red icon only)
+            let actionHtml = `
+                <div class="action-row">
+                    <button type="button" class="btn btn-view-sm open-approval-btn" data-id="${escapeHtml(batch.id)}">
+                        View
+                    </button>
+            `;
+            if (batchStopped) {
+                actionHtml += `
+                    <button type="button" class="btn btn-resume-icon resume-batch-btn" data-id="${escapeHtml(batch.id)}" title="Resume">
+                        <i class="bx bx-play"></i>
+                    </button>
+                `;
+            } else {
+                actionHtml += `
+                    <button type="button" class="btn btn-stop-icon stop-batch-btn" data-id="${escapeHtml(batch.id)}" title="Stop">
+                        <i class="bx bx-stop"></i>
+                    </button>
+                `;
+            }
+            actionHtml += `</div>`;
+
             tbody.append(`
-                <tr>
+                <tr class="${batchStopped ? 'frozen-row' : ''}">
                     <td><strong>${escapeHtml(batch.batchId || "-")}</strong></td>
                     <td><img src="${photoSrc}" alt="Batch" style="width:55px;height:55px;object-fit:cover;border-radius:6px;" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}';"></td>
                     <td>${escapeHtml(batch.brand || "-")}</td>
                     <td>${escapeHtml(batch.designNumber || "-")}</td>
-                    <td>
-                        <span class="color-badge" style="background:${colorHex};">
-                            ${escapeHtml(batch.color || "-")}
-                        </span>
-                    </td>
+                    <td><span class="color-text">${escapeHtml(batch.color || "-")}</span></td>
                     <td><div class="piece-cell-lines">${pieceTypeHtml}</div></td>
                     <td>${escapeHtml(batch.quantity || "0")}</td>
                     <td>
@@ -294,11 +298,7 @@ $(document).ready(function () {
                         </span>
                     </td>
                     <td><div class="status-cell-lines">${statusHtml}</div></td>
-                    <td>
-                        <button type="button" class="btn btn-sm btn-primary open-approval-btn" data-id="${escapeHtml(batch.id)}">
-                            <i class="bx bx-show me-1"></i> View
-                        </button>
-                    </td>
+                    <td class="action-cell">${actionHtml}</td>
                 </tr>
             `);
         });
@@ -387,6 +387,8 @@ $(document).ready(function () {
             return;
         }
 
+        const batchStopped = isBatchStopped(batch);
+
         pieces.forEach((piece, index) => {
             const pieceNumber = getPieceNumber(piece, index);
             const itemName = getPieceItem(piece);
@@ -397,6 +399,7 @@ $(document).ready(function () {
             const pieceStatus = approval.status || "pending";
             const remarks = approval.remarks || "";
             const locked = isPieceLocked(piece);
+            const stopped = isPieceStopped(piece) || batchStopped;
 
             let itemRows = "";
             if (materials.length) {
@@ -408,7 +411,7 @@ $(document).ready(function () {
                                data-piece="${pieceNumber}" data-item="${escapeHtml(mat)}" for="${chkId}">
                             <input type="checkbox" class="piece-item-checkbox"
                                 id="${chkId}" data-piece="${pieceNumber}" data-item="${escapeHtml(mat)}"
-                                ${isChecked ? "checked" : ""} ${locked ? "disabled" : ""}>
+                                ${isChecked ? "checked" : ""} ${(locked || stopped) ? "disabled" : ""}>
                             <span class="item-name">${escapeHtml(mat)}</span>
                         </label>
                     `;
@@ -429,13 +432,13 @@ $(document).ready(function () {
             const toggleName = `toggle_${pieceNumber}`;
 
             container.append(`
-                <div class="piece-card ${locked ? 'locked' : ''}" data-piece="${pieceNumber}">
+                <div class="piece-card ${locked || stopped ? 'locked' : ''}" data-piece="${pieceNumber}">
                     <div class="piece-card-header">
                         <div>
                             <div class="piece-card-title">Piece ${escapeHtml(pieceNumber)}</div>
                             ${itemName ? `<div class="piece-card-item">${escapeHtml(itemName)}</div>` : ""}
                         </div>
-                        <div class="piece-card-status">${statusText(pieceStatus)}</div>
+                        <div class="piece-card-status">${statusText(stopped && !locked ? "stopped" : pieceStatus)}</div>
                     </div>
 
                     <div>
@@ -446,7 +449,7 @@ $(document).ready(function () {
                     <div>
                         <div class="item-list-top">
                             <span class="item-list-label">Item List</span>
-                            <div class="all-toggle" ${(locked || allYesChecked) ? 'style="display:none;"' : ""}>
+                            <div class="all-toggle" ${(locked || stopped || allYesChecked) ? 'style="display:none;"' : ""}>
                                 <input type="radio" name="${toggleName}" id="allYes_${pieceNumber}" class="all-toggle-radio" value="yes" data-piece="${pieceNumber}" ${allYesChecked ? "checked" : ""}>
                                 <label for="allYes_${pieceNumber}" class="all-yes-label">All Yes</label>
                                 <input type="radio" name="${toggleName}" id="allNo_${pieceNumber}" class="all-toggle-radio" value="no" data-piece="${pieceNumber}" ${allNoChecked ? "checked" : ""}>
@@ -456,23 +459,28 @@ $(document).ready(function () {
                         <div class="item-list-rows">${itemRows}</div>
                     </div>
 
-                    <textarea class="form-control piece-remarks" rows="1" data-piece="${pieceNumber}" placeholder="Remarks..." ${locked ? "readonly" : ""}>${escapeHtml(remarks)}</textarea>
+                    <textarea class="form-control piece-remarks" rows="1" data-piece="${pieceNumber}" placeholder="Remarks..." ${(locked || stopped) ? "readonly" : ""}>${escapeHtml(remarks)}</textarea>
 
                     <div class="piece-card-actions" data-piece="${pieceNumber}"></div>
                 </div>
             `);
 
-            renderPieceActions(pieceNumber, locked, allYesChecked);
+            renderPieceActions(pieceNumber, locked, allYesChecked, stopped);
         });
 
         updateApproveAllState();
     }
 
-    function renderPieceActions(pieceNumber, locked, allYesChecked) {
+    function renderPieceActions(pieceNumber, locked, allYesChecked, stopped) {
         const $actions = $(`.piece-card-actions[data-piece="${pieceNumber}"]`);
         $actions.empty();
 
-        if (locked) return;
+        if (locked || stopped) {
+            if (stopped && !locked) {
+                $actions.html(`<span class="text-muted" style="font-size:10px;"><i class="bx bx-lock-alt me-1"></i>Stopped — no action allowed</span>`);
+            }
+            return;
+        }
 
         if (allYesChecked) {
             $actions.html(`
@@ -500,11 +508,16 @@ $(document).ready(function () {
         const batch = getCurrentBatch();
         if (!batch) { $("#approveAllBtn").prop("disabled", true); return; }
 
+        if (isBatchStopped(batch)) {
+            $("#approveAllBtn").prop("disabled", true);
+            return;
+        }
+
         const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
         let allReady = pieces.length > 0;
 
         pieces.forEach((piece, index) => {
-            if (isPieceLocked(piece)) { allReady = false; return; }
+            if (isPieceLocked(piece) || isPieceStopped(piece)) { allReady = false; return; }
             const pieceNumber = getPieceNumber(piece, index);
             const materials = getPieceMaterials(piece);
             if (!materials.length) { allReady = false; return; }
@@ -571,7 +584,7 @@ $(document).ready(function () {
         }
 
         const allYesChecked = total > 0 && checked === total;
-        renderPieceActions(pieceNumber, false, allYesChecked);
+        renderPieceActions(pieceNumber, false, allYesChecked, false);
         updateApproveAllState();
     });
 
@@ -588,7 +601,7 @@ $(document).ready(function () {
             else { $chk.prop("checked", false); $row.removeClass("checked-row"); }
         });
         const allYesChecked = val === "yes";
-        renderPieceActions(pieceNumber, false, allYesChecked);
+        renderPieceActions(pieceNumber, false, allYesChecked, false);
         updateApproveAllState();
     });
 
@@ -597,11 +610,21 @@ $(document).ready(function () {
         const batch = getCurrentBatch();
         if (!batch) return;
 
+        if (isBatchStopped(batch)) {
+            showMessage("warning", "This batch is stopped. Resume it first to continue.");
+            return;
+        }
+
         const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
         const pieceIndex = pieces.findIndex((p, i) => getPieceNumber(p, i) === pieceNumber);
         if (pieceIndex === -1) return;
 
         const piece = pieces[pieceIndex];
+
+        if (isPieceStopped(piece)) {
+            showMessage("warning", "This piece is stopped. It cannot move forward.");
+            return;
+        }
 
         if (isPieceLocked(piece)) {
             showMessage("info", "This piece is already locked.");
@@ -633,7 +656,7 @@ $(document).ready(function () {
 
         if (mode === "approve") {
             titleText = `Approve Piece ${pieceNumber}?`;
-            htmlText = `<div class="text-start"><p><strong>All ${availableItems.length} items present ✅</strong></p><p class="text-success">Pass to Cutting (Status: <b>Pass</b>)</p></div>`;
+            htmlText = `<div class="text-start"><p><strong>${availableItems.length}</strong></p><p class="text-success">Pass to Cutting (Status: <b>Pass</b>)</p></div>`;
             confirmText = "Yes, Approve & Pass";
         } else if (mode === "confirm") {
             titleText = `Confirm Piece ${pieceNumber}?`;
@@ -652,6 +675,17 @@ $(document).ready(function () {
             confirmButtonColor: confirmColor
         }).then(function (result) {
             if (!result.isConfirmed) return;
+
+            const freshBatch = getCurrentBatch();
+            if (!freshBatch || isBatchStopped(freshBatch)) {
+                showMessage("warning", "Batch was stopped. Action cancelled.");
+                return;
+            }
+            const freshPiece = (freshBatch.pieces || []).find((p, i) => getPieceNumber(p, i) === pieceNumber);
+            if (freshPiece && isPieceStopped(freshPiece)) {
+                showMessage("warning", "Piece was stopped. Action cancelled.");
+                return;
+            }
 
             let newStatus;
             if (mode === "approve") newStatus = "pass";
@@ -688,8 +722,8 @@ $(document).ready(function () {
             }
 
             loadData();
-            const freshBatch = getCurrentBatch();
-            if (freshBatch) renderApprovalPieces(freshBatch);
+            const freshBatch2 = getCurrentBatch();
+            if (freshBatch2) renderApprovalPieces(freshBatch2);
             renderTable();
 
             if (mode === "confirm") {
@@ -718,11 +752,16 @@ $(document).ready(function () {
         const batch = getCurrentBatch();
         if (!batch) return;
 
+        if (isBatchStopped(batch)) {
+            showMessage("warning", "This batch is stopped. Resume it first.");
+            return;
+        }
+
         const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
         const readyPieces = [];
 
         pieces.forEach((piece, index) => {
-            if (isPieceLocked(piece)) return;
+            if (isPieceLocked(piece) || isPieceStopped(piece)) return;
             const pieceNumber = getPieceNumber(piece, index);
             const materials = getPieceMaterials(piece);
             if (!materials.length) return;
@@ -747,6 +786,12 @@ $(document).ready(function () {
             confirmButtonColor: "#198754"
         }).then(function (result) {
             if (!result.isConfirmed) return;
+
+            const freshBatch = getCurrentBatch();
+            if (!freshBatch || isBatchStopped(freshBatch)) {
+                showMessage("warning", "Batch was stopped. Action cancelled.");
+                return;
+            }
 
             const updatedPieces = [...pieces];
 
@@ -775,11 +820,103 @@ $(document).ready(function () {
             updateBatchPieces(batch, updatedPieces);
 
             loadData();
-            const freshBatch = getCurrentBatch();
-            if (freshBatch) renderApprovalPieces(freshBatch);
+            const freshBatch2 = getCurrentBatch();
+            if (freshBatch2) renderApprovalPieces(freshBatch2);
             renderTable();
 
             Swal.fire({ icon: "success", title: "Approved", text: `${readyPieces.length} pieces approved & passed.`, timer: 2000, showConfirmButton: false });
+        });
+    });
+
+    /* ================= STOP / RESUME BATCH ================= */
+    $(document).on("click", ".stop-batch-btn", function () {
+        const batchId = $(this).data("id");
+        const batch = batchData.find(b => String(b.id) === String(batchId));
+        if (!batch) {
+            showMessage("danger", "Batch not found.");
+            return;
+        }
+
+        Swal.fire({
+            title: "Stop this Batch?",
+            html: `<div class="text-start">
+                <p><strong>Batch:</strong> ${escapeHtml(batch.batchId || "-")}</p>
+                <p class="text-danger mb-0"><i class="bx bx-block me-1"></i>This batch will be <b>frozen</b>.</p>
+                <ul class="mt-2 mb-0">
+                    <li>It will <b>not</b> move forward.</li>
+                    <li>It will <b>not</b> be deleted.</li>
+                    <li>No more approvals / passes / requirements.</li>
+                    <li>You can <b>Resume</b> it later.</li>
+                </ul>
+            </div>`,
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Yes, Stop it",
+            cancelButtonText: "Cancel",
+            confirmButtonColor: "#dc3545"
+        }).then(function (result) {
+            if (!result.isConfirmed) return;
+
+            const idx = batchData.findIndex(b => String(b.id) === String(batchId));
+            if (idx === -1) return;
+
+            batchData[idx] = {
+                ...batchData[idx],
+                stopped: true,
+                stoppedAt: new Date().toLocaleString("en-GB")
+            };
+
+            saveStorage(APPROVED_BATCH_STORAGE_KEY, batchData);
+
+            loadData();
+            renderTable();
+            if (currentBatchId && String(currentBatchId) === String(batchId)) {
+                const b = getCurrentBatch();
+                if (b) { renderFlowChart(b); renderApprovalPieces(b); }
+            }
+
+            Swal.fire({ icon: "success", title: "Batch Stopped", text: "Batch is frozen. No further movement.", timer: 2000, showConfirmButton: false });
+        });
+    });
+
+    $(document).on("click", ".resume-batch-btn", function () {
+        const batchId = $(this).data("id");
+        const batch = batchData.find(b => String(b.id) === String(batchId));
+        if (!batch) {
+            showMessage("danger", "Batch not found.");
+            return;
+        }
+
+        Swal.fire({
+            title: "Resume this Batch?",
+            text: "The batch will be unfrozen and can move forward again.",
+            icon: "question",
+            showCancelButton: true,
+            confirmButtonText: "Yes, Resume",
+            cancelButtonText: "Cancel",
+            confirmButtonColor: "#1e88e5"
+        }).then(function (result) {
+            if (!result.isConfirmed) return;
+
+            const idx = batchData.findIndex(b => String(b.id) === String(batchId));
+            if (idx === -1) return;
+
+            const updated = { ...batchData[idx] };
+            delete updated.stopped;
+            delete updated.stoppedAt;
+            updated.resumedAt = new Date().toLocaleString("en-GB");
+            batchData[idx] = updated;
+
+            saveStorage(APPROVED_BATCH_STORAGE_KEY, batchData);
+
+            loadData();
+            renderTable();
+            if (currentBatchId && String(currentBatchId) === String(batchId)) {
+                const b = getCurrentBatch();
+                if (b) { renderFlowChart(b); renderApprovalPieces(b); }
+            }
+
+            Swal.fire({ icon: "success", title: "Batch Resumed", text: "Batch can move forward again.", timer: 1800, showConfirmButton: false });
         });
     });
 
@@ -797,6 +934,8 @@ $(document).ready(function () {
 
     /* ================= PUSH TO APPROVED POOL ================= */
     function pushToApprovedPool(batch, piece, pieceNumber, availableItems, mode, availability, allMaterials) {
+        if (isBatchStopped(batch)) return null;
+
         const pool = readStorage(APPROVED_POOL_KEY);
         const materials = allMaterials || getPieceMaterials(piece);
 
@@ -858,6 +997,8 @@ $(document).ready(function () {
 
     /* ================= CREATE REQUIREMENT ================= */
     function createRequirement(batch, piece, pieceNumber, missingItems, availability, allMaterials) {
+        if (isBatchStopped(batch)) return null;
+
         const requirementData = readStorage(REQUIREMENT_STORAGE_KEY);
         const materials = allMaterials || getPieceMaterials(piece);
 

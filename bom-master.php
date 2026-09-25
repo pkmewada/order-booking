@@ -374,25 +374,12 @@ include __DIR__ . "/includes/header.php";
         }
     }
 
-    /* Color badge — own colour per row */
-    .color-badge {
-        display: inline-block;
-        padding: 5px 12px;
-        border-radius: 6px;
-        color: #fff !important;
-        font-size: 12px;
+    /* Color — plain bold text */
+    .color-text {
+        font-size: 14px;
         font-weight: 600;
-        letter-spacing: 0.3px;
-        border: 1px solid rgba(0, 0, 0, 0.08);
+        color: #18243d;
     }
-
-    /* Yellow & White need dark text */
-    .color-badge[style*="#fdd835"],
-    .color-badge[style*="#ffffff"] {
-        color: #161617 !important;
-        border: 1px solid #cfd6e4;
-    }
-
     /* Piece — simple bold */
     .piece-bold {
         font-weight: 600;

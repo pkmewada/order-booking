@@ -128,7 +128,7 @@ $(document).ready(function () {
             console.error("BOM save error:", error);
 
             alertMsg(
-                "BOM save nahi ho paya. Photo size chhota karke try karein.",
+                "LocalStorage Full Image.",
                 "error"
             );
 
@@ -1241,13 +1241,8 @@ $(document).ready(function () {
 
                 <td>${escapeHtml(bom.designNumber)}</td>
 
-                <td>
-                    <span
-                        class="badge color-badge"
-                        style="background:${getColorHex(bom.color)};"
-                    >
-                        ${escapeHtml(bom.color)}
-                    </span>
+                                <td>
+                    <span class="color-text">${escapeHtml(bom.color)}</span>
                 </td>
 
                 <td>${photoHtml}</td>
@@ -1298,28 +1293,6 @@ $(document).ready(function () {
         });
 
         updateBrandFilter();
-    }
-
-    /* ======================================================
-       COLOR → HEX MAP
-       ====================================================== */
-
-    function getColorHex(colorName) {
-
-        const map = {
-            "Red": "#e53935",
-            "Blue": "#1e88e5",
-            "Green": "#43a047",
-            "Yellow": "#fdd835",
-            "Black": "#161617",
-            "White": "#ffffff",
-            "Orange": "#fb8c00",
-            "Purple": "#8e24aa",
-            "Pink": "#ec407a",
-            "Brown": "#6d4c41"
-        };
-
-        return map[colorName] || "#161617";
     }
 
     /* ======================================================

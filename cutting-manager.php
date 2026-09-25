@@ -15,6 +15,13 @@
     }
     #bulkAssignBtn:hover { background-color: #2b2b2d !important; border-color: #2b2b2d !important; }
 
+    #listAllBtn {
+        background-color: #161617 !important;
+        border-color: #161617 !important;
+        color: #fff !important;
+    }
+    #listAllBtn:hover { background-color: #2b2b2d !important; border-color: #2b2b2d !important; }
+
     #approvedItemsList td, #approvedItemsList th { vertical-align: middle !important; }
     #approvedItemsList .piece-line {
         font-size: 13px; color: #18243d; line-height: 1.8; white-space: nowrap;
@@ -72,24 +79,12 @@
     }
     #rowsContainer .table td { padding: 6px 8px; vertical-align: middle; }
 
-    /* ---------- Color badge ---------- */
-    .color-badge {
-        display: inline-block;
-        padding: 4px 10px;
-        border-radius: 6px;
-        color: #fff !important;
-        font-size: 11px;
+    .color-text {
+        font-size: 13px;
         font-weight: 600;
-        letter-spacing: 0.3px;
-        border: 1px solid rgba(0, 0, 0, 0.08);
-    }
-    .color-badge[style*="#fdd835"],
-    .color-badge[style*="#ffffff"] {
-        color: #161617 !important;
-        border: 1px solid #cfd6e4;
+        color: #18243d;
     }
 
-    /* ---------- Priority badge ---------- */
     .priority-badge {
         display: inline-block;
         padding: 4px 10px;
@@ -103,7 +98,6 @@
     .priority-badge.priority-medium { background: #1e88e5; }
     .priority-badge.priority-low    { background: #fdd835; color: #161617 !important; }
 
-    /* ---------- Status badge ---------- */
     .status-badge {
         display: inline-block;
         padding: 4px 10px;
@@ -116,6 +110,9 @@
     .status-badge.pending     { background: #fdd835; color: #161617 !important; }
     .status-badge.in_progress { background: #1e88e5; }
     .status-badge.passed      { background: #198754; }
+    .status-badge.stopped     { background: #dc3545; color: #fff !important; }
+    .status-badge.not_assigned   { background: #dc3545; color: #fff !important; }
+    .status-badge.assign_progress { background: #198754; color: #fff !important; }
 
     .pass-row-btn {
         background-color: #198754 !important;
@@ -127,6 +124,50 @@
         border-color: #157347 !important;
     }
     .pass-row-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .stop-row-btn {
+        background-color: #dc3545 !important;
+        border-color: #dc3545 !important;
+        color: #fff !important;
+    }
+    .stop-row-btn:hover:not(:disabled) {
+        background-color: #b02a37 !important;
+        border-color: #b02a37 !important;
+    }
+    .stop-row-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .view-row-btn {
+        background-color: #161617 !important;
+        border-color: #161617 !important;
+        color: #fff !important;
+    }
+    .view-row-btn:hover {
+        background-color: #2b2b2d !important;
+        border-color: #2b2b2d !important;
+    }
+
+    .resume-row-btn {
+        background-color: #1e88e5 !important;
+        border-color: #1e88e5 !important;
+        color: #fff !important;
+    }
+    .resume-row-btn:hover {
+        background-color: #1565c0 !important;
+        border-color: #1565c0 !important;
+    }
+
+    .list-row-btn {
+        background-color: #161617 !important;
+        border-color: #161617 !important;
+        color: #fff !important;
+        font-size: 11px !important;
+        padding: 3px 10px !important;
+    }
+    .list-row-btn:hover {
+        background-color: #2b2b2d !important;
+        border-color: #2b2b2d !important;
+        color: #fff !important;
+    }
 
     .qty-pair {
         font-size: 13px; font-weight: 600; color: #18243d;
@@ -175,7 +216,6 @@
     .bulk-qty-pill.remaining { background: #fef3c7; color: #92400e; }
     .bulk-qty-pill.helper { background: #f1f5f9; color: #475569; font-weight: 500; }
 
-    /* ---------- Split table ---------- */
     .split-row-table {
         width: 100%;
         font-size: 12px;
@@ -201,7 +241,6 @@
         max-width: 100%;
     }
 
-    /* Colgroup widths */
     .split-row-table col.col-sub { width: 13%; }
     .split-row-table col.col-piece { width: 11%; }
     .split-row-table col.col-worker { width: 24%; }
@@ -221,7 +260,6 @@
         background: #f8f9fa;
     }
 
-    /* Copy button cell — align top */
     .split-row-table td.copy-col-cell {
         width: 5%;
         text-align: center;
@@ -239,7 +277,6 @@
         padding-top: 2px;
     }
 
-    /* Copy button — compact 30x26 */
     .copy-row-side-btn {
         background-color: #198754 !important;
         border: 1px solid #198754 !important;
@@ -326,6 +363,210 @@
         padding: 3px 8px !important;
     }
     .bulk-global-split { font-size: 12px !important; }
+
+    /* ---------- View Detail Modal ---------- */
+    #viewDetailModal .modal-dialog { max-width: 900px; }
+    #viewDetailModal .modal-body { padding: 24px 28px; }
+    .detail-print-wrap { background: #fff; }
+
+    .detail-header-line { text-align: center; margin-bottom: 4px; }
+    .detail-header-line h4 {
+        margin: 0;
+        font-weight: 700;
+        color: #161617;
+        letter-spacing: 1px;
+        font-size: 22px;
+    }
+    .detail-header-line small {
+        display: block;
+        color: #9ca3af;
+        font-size: 11px;
+        margin-top: 4px;
+    }
+    .detail-divider {
+        border-top: 1px solid #e2e7f1;
+        margin: 14px 0 18px;
+    }
+
+    .detail-split-layout {
+        display: grid;
+        grid-template-columns: 1fr 240px;
+        gap: 24px;
+        align-items: start;
+        margin-bottom: 20px;
+    }
+
+    .detail-highlight-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+        margin-bottom: 14px;
+    }
+    .detail-highlight-item {
+        padding: 8px 14px;
+        background: #f8f9fa;
+        border-left: 3px solid #161617;
+        border-radius: 4px;
+    }
+    .detail-highlight-item .lbl {
+        font-size: 10px;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 700;
+        margin-bottom: 2px;
+        display: block;
+    }
+    .detail-highlight-item .val {
+        font-size: 14px;
+        color: #161617;
+        font-weight: 700;
+        word-break: break-word;
+        line-height: 1.3;
+    }
+
+    .detail-info-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0;
+        border: 1px solid #e2e7f1;
+        border-radius: 6px;
+        overflow: hidden;
+        background: #fff;
+    }
+    .detail-info-cell {
+        padding: 8px 12px;
+        border-right: 1px solid #e2e7f1;
+        border-bottom: 1px solid #e2e7f1;
+        background: #fff;
+    }
+    .detail-info-cell:nth-child(3n) { border-right: none; }
+    .detail-info-cell:nth-child(n+4) { border-bottom: none; }
+    .detail-info-cell .lbl {
+        font-size: 10px;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        font-weight: 700;
+        margin-bottom: 2px;
+        display: block;
+    }
+    .detail-info-cell .val {
+        font-size: 12px;
+        color: #18243d;
+        font-weight: 600;
+        word-break: break-word;
+        line-height: 1.3;
+    }
+
+    .detail-photo-box {
+        width: 100%;
+        height: 360px;
+        aspect-ratio: 3 / 4;
+        border: 1px solid #dfe5f1;
+        border-radius: 8px;
+        background: #f8f9fa;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+    .detail-photo-box img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .detail-signature {
+        margin-top: 40px;
+        text-align: right;
+        padding-top: 10px;
+    }
+    .detail-signature .sig-line {
+        display: inline-block;
+        border-top: 1px solid #161617;
+        padding-top: 6px;
+        min-width: 220px;
+        text-align: center;
+        font-size: 12px;
+        color: #161617;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+    /* List modal */
+    #listDetailModal .modal-dialog { max-width: 1200px; }
+    #listDetailModal .modal-body { padding: 20px; }
+
+    /* ---------- LIST ALL MODAL — FULL WIDTH ---------- */
+    #listAllModal .modal-dialog {
+        max-width: 99vw;
+        width: 99vw;
+        margin: 0.5rem auto;
+    }
+    #listAllModal .modal-content {
+        height: 96vh;
+    }
+    #listAllModal .modal-body {
+        padding: 20px;
+        max-height: calc(96vh - 130px);
+        overflow-y: auto;
+    }
+
+    /* ✅ View button 70% width in List table */
+    #listAllBody .batch-history-btn {
+        width: 70% !important;
+        display: inline-flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+    }
+
+    /* Nested History modal */
+    #batchHistoryModal .modal-dialog { max-width: 1000px; }
+    #batchHistoryModal .modal-body { padding: 20px; }
+
+    .list-detail-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .list-detail-table th, .list-detail-table td {
+        border: 1px solid #e2e7f1;
+        padding: 8px 10px;
+        vertical-align: middle;
+    }
+    .list-detail-table th {
+        background: #f8f9fa;
+        font-weight: 600;
+        color: #18243d;
+        text-align: left;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+    .list-detail-table td { color: #333; }
+    .list-detail-table tr:nth-child(even) td { background: #fafbfd; }
+
+    .history-block {
+        background: #fafbfd;
+        border-left: 3px solid #1e88e5;
+        padding: 8px 12px;
+        font-size: 11px;
+        color: #4b5563;
+        margin-top: 4px;
+        border-radius: 3px;
+    }
+    .history-block strong { color: #161617; }
+
+    @media print {
+        body * { visibility: hidden; }
+        #viewDetailModal, #viewDetailModal *,
+        #listDetailModal, #listDetailModal *,
+        #listAllModal, #listAllModal *,
+        #batchHistoryModal, #batchHistoryModal * { visibility: visible; }
+        #viewDetailModal, #listDetailModal, #listAllModal, #batchHistoryModal {
+            position: absolute; left: 0; top: 0; width: 100%;
+        }
+        .modal-footer, .btn-close { display: none !important; }
+        .modal-dialog { max-width: 100% !important; margin: 0 !important; }
+        .modal-content { box-shadow: none !important; border: none !important; }
+    }
 </style>
 
 <div class="main-content app-content">
@@ -342,6 +583,9 @@
                 </nav>
             </div>
             <div class="d-flex gap-2">
+                <button class="btn" id="listAllBtn">
+                    <i class="bx bx-list-ul align-middle me-1"></i> List
+                </button>
                 <button class="btn" id="bulkAssignBtn">
                     <i class="bx bx-layer-plus align-middle me-1"></i> Bulk Assign Cutting Master
                 </button>
@@ -544,6 +788,90 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" id="updateProgressBtn">
                     <i class="bx bx-save"></i> Update
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- VIEW DETAIL MODAL -->
+<div class="modal fade" id="viewDetailModal" tabindex="-1" aria-labelledby="viewDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewDetailModalLabel">
+                    <i class="bx bx-detail me-1"></i> Assignment Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="viewDetailBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-dark" id="printDetailBtn">
+                    <i class="bx bx-printer me-1"></i> Print / Download
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- LIST DETAIL MODAL (per-batch from Bulk card) -->
+<div class="modal fade" id="listDetailModal" tabindex="-1" aria-labelledby="listDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="listDetailModalLabel">
+                    <i class="bx bx-list-ul me-1"></i> Batch Assignment List
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="listDetailBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-dark" id="printListDetailBtn">
+                    <i class="bx bx-printer me-1"></i> Print / Download
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ✅ LIST ALL MODAL (Top-level List button) — FULL WIDTH -->
+<div class="modal fade" id="listAllModal" tabindex="-1" aria-labelledby="listAllModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="listAllModalLabel">
+                    <i class="bx bx-list-ul me-1"></i> All Passed Cutting Assignments
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="listAllBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-dark" id="printListAllBtn">
+                    <i class="bx bx-printer me-1"></i> Print / Download
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ✅ NESTED BATCH HISTORY MODAL (opens on top of List) -->
+<div class="modal fade" id="batchHistoryModal" tabindex="-1" aria-labelledby="batchHistoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:1000px;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="batchHistoryModalLabel">
+                    <i class="bx bx-history me-1"></i> Batch History
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="batchHistoryBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-dark" id="printBatchHistoryBtn">
+                    <i class="bx bx-printer me-1"></i> Print / Download
                 </button>
             </div>
         </div>

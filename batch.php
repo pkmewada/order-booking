@@ -207,22 +207,11 @@
         opacity: 1;
     }
 
-    /* ---------- Color badge (same as BOM Master) ---------- */
-    .color-badge {
-        display: inline-block;
-        padding: 5px 12px;
-        border-radius: 6px;
-        color: #fff !important;
-        font-size: 11px;
+    /* ---------- Color TEXT (plain, no badge) ---------- */
+    .color-text {
+        font-size: 13px;
         font-weight: 600;
-        letter-spacing: 0.3px;
-        border: 1px solid rgba(0, 0, 0, 0.08);
-    }
-
-    .color-badge[style*="#fdd835"],
-    .color-badge[style*="#ffffff"] {
-        color: #161617 !important;
-        border: 1px solid #cfd6e4;
+        color: #18243d;
     }
 
     /* ---------- Priority badge ---------- */
@@ -268,7 +257,6 @@
 
             <div class="d-flex gap-2">
                 
-
                 <button type="button" class="btn btn-primary" id="createBatchBtn">
                     <i class="bx bx-plus me-1"></i>
                     Create Batch

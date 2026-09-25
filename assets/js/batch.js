@@ -190,28 +190,6 @@ $(document).ready(function () {
     }
 
     /* ======================================================
-       COLOR → HEX MAP  (same as BOM Master)
-       ====================================================== */
-
-    function getColorHex(colorName) {
-
-        const map = {
-            "Red":     "#e53935",
-            "Blue":    "#1e88e5",
-            "Green":   "#43a047",
-            "Yellow":  "#fdd835",
-            "Black":   "#161617",
-            "White":   "#ffffff",
-            "Orange":  "#fb8c00",
-            "Purple":  "#8e24aa",
-            "Pink":    "#ec407a",
-            "Brown":   "#6d4c41"
-        };
-
-        return map[colorName] || "#161617";
-    }
-
-    /* ======================================================
        PRIORITY → CSS CLASS
        ====================================================== */
 
@@ -638,13 +616,11 @@ $(document).ready(function () {
         filteredBatches.forEach(batch => {
             const photo = batch.photo || "assets/images/default.jpg";
 
-            const colorHex = getColorHex(batch.color);
-
             const priorityClass = getPriorityClass(batch.priority);
 
             const isApproved = batch.status === "approved";
 
-            // Pass button only if not approved
+            // Pass button only if not approved — right arrow icon
             const passButtonHtml = isApproved
                 ? ""
                 : `
@@ -653,7 +629,7 @@ $(document).ready(function () {
                         class="btn btn-sm btn-success pass-batch-btn"
                         data-id="${escapeHtml(batch.id)}"
                         title="Pass">
-                        <i class="bx bx-check"></i>
+                        <i class="bx bx-right-arrow-alt"></i>
                     </button>
                 `;
 
@@ -678,10 +654,7 @@ $(document).ready(function () {
                     <td>${escapeHtml(batch.designNumber || "-")}</td>
 
                     <td>
-                        <span
-                            class="color-badge"
-                            style="background:${colorHex};"
-                        >
+                        <span class="color-text">
                             ${escapeHtml(batch.color || "-")}
                         </span>
                     </td>
