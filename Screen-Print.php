@@ -34,8 +34,8 @@
     .pagination-wrap .pager .page-btn:disabled { opacity: .5; cursor: not-allowed; }
 
     .assignment-row td { vertical-align: middle; padding: 6px 8px; }
-    #assignRowsContainer .table th { background: #f8f9fa; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 10px; border-bottom: 2px solid #dee2e6; }
-    #assignRowsContainer .table td { padding: 6px 8px; vertical-align: middle; }
+    #assignRowsContainer .table th, #bulkRowsContainer .table th { background: #f8f9fa; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 10px; border-bottom: 2px solid #dee2e6; }
+    #assignRowsContainer .table td, #bulkRowsContainer .table td { padding: 6px 8px; vertical-align: middle; }
 
     .color-text { font-size: 13px; font-weight: 600; color: #18243d; }
 
@@ -107,6 +107,56 @@
     .multi-select-option:hover { background: #f4f5f9; }
     .multi-select-option.selected { background: #f0f7ff; }
     .multi-select-option input { width: 16px; height: 16px; margin: 0; accent-color: #161617; }
+
+    /* Split table */
+    .split-row-table { width: 100%; font-size: 12px; margin-bottom: 0; table-layout: fixed; border-collapse: collapse; }
+    .split-row-table th { background: #f8f9fa; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; padding: 8px 8px; border-bottom: 1px solid #e9edf5; color: #4b5563; vertical-align: middle; }
+    .split-row-table td { padding: 6px 8px; vertical-align: middle; border-bottom: 1px solid #f1f3f9; overflow: hidden; }
+    .split-row-table tr:last-child td { border-bottom: none; }
+    .split-row-table input, .split-row-table select { font-size: 12px; padding: 4px 8px; height: auto; max-width: 100%; }
+    .split-row-table col.col-sub { width: 13%; }
+    .split-row-table col.col-piece { width: 11%; }
+    .split-row-table col.col-worker { width: 24%; }
+    .split-row-table col.col-qty { width: 10%; }
+    .split-row-table col.col-priority { width: 13%; }
+    .split-row-table col.col-date { width: 24%; }
+    .split-row-table col.col-copy { width: 5%; }
+    .split-row-table th.copy-header-cell { text-align: center; padding: 8px 4px; font-size: 10px; color: #4b5563; text-transform: uppercase; letter-spacing: 0.3px; vertical-align: middle; background: #f8f9fa; }
+    .split-row-table td.copy-col-cell { width: 5%; text-align: center; vertical-align: top; padding: 6px 4px; background: #fff; border-left: 1px solid #f1f3f9; }
+    .copy-body-inner { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px; padding-top: 2px; }
+    .copy-row-side-btn { background-color: #198754 !important; border: 1px solid #198754 !important; color: #fff !important; font-size: 11px !important; padding: 0 !important; font-weight: 700; border-radius: 5px; white-space: nowrap; line-height: 1; box-shadow: 0 1px 3px rgba(25,135,84,0.25); transition: background-color .12s ease; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 26px; }
+    .copy-row-side-btn i { font-size: 14px; }
+    .copy-row-side-btn:disabled { background-color: #f3f4f6 !important; border-color: #e5e7eb !important; color: #9ca3af !important; cursor: not-allowed; box-shadow: none; }
+    .copy-row-side-btn:not(:disabled):hover { background-color: #157347 !important; border-color: #157347 !important; }
+
+    .bulk-item-card { border: 1px solid #e2e7f1; border-radius: 10px; background: #fff; padding: 10px; margin-bottom: 12px; }
+    .bulk-item-header { display: flex; align-items: center; gap: 10px; border-bottom: 1px dashed #eef1f7; padding-bottom: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    .bulk-item-title { font-weight: 600; font-size: 13px; color: #18243d; }
+    .bulk-item-sub { font-size: 11px; color: #6b7280; margin-top: 2px; }
+    .bulk-qty-summary { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+    .bulk-qty-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; }
+    .bulk-qty-pill.total { background: #eef2ff; color: #3730a3; }
+    .bulk-qty-pill.assigned { background: #d1fae5; color: #065f46; }
+    .bulk-qty-pill.remaining { background: #fef3c7; color: #92400e; }
+
+    .bulk-toolbar { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom: 1px solid #e2e7f1; padding: 8px 0; margin-bottom: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .bulk-toolbar label { font-size: 12px; }
+
+    .bulk-apply-split-btn { font-size: 11px !important; padding: 3px 8px !important; }
+    .bulk-global-split { font-size: 12px !important; }
+
+    /* Progress modal history */
+    .progress-history-wrap { margin-top: 14px; border: 1px solid #e2e7f1; border-radius: 8px; overflow: hidden; background: #fafbfd; }
+    .progress-history-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f1f3f9; border-bottom: 1px solid #e2e7f1; font-size: 12px; font-weight: 700; color: #18243d; text-transform: uppercase; letter-spacing: 0.4px; }
+    .progress-history-head i { font-size: 15px; color: #161617; }
+    .progress-history-body { max-height: 200px; overflow-y: auto; padding: 6px 4px; }
+    .progress-history-row { display: grid; grid-template-columns: 140px 1fr 90px; gap: 8px; align-items: center; padding: 6px 12px; font-size: 12px; border-bottom: 1px dashed #eef1f7; }
+    .progress-history-row:last-child { border-bottom: none; }
+    .progress-history-row .h-at { color: #6b7280; font-weight: 500; white-space: nowrap; }
+    .progress-history-row .h-action { color: #18243d; font-weight: 600; }
+    .progress-history-row .h-by { color: #9ca3af; font-size: 11px; text-align: right; white-space: nowrap; }
+    .progress-history-empty { padding: 14px; text-align: center; color: #9aa6c2; font-size: 12px; font-style: italic; }
+    .quantity-input.manually-edited { background: #fffbeb !important; border-color: #fcd34d !important; font-weight: 700; color: #92400e; }
 </style>
 
 <div class="main-content app-content">
@@ -221,31 +271,31 @@
     </div>
 </div>
 
-<!-- BULK ASSIGN MODAL -->
+<!-- BULK ASSIGN MODAL — FULL WIDTH -->
 <div class="modal fade" id="bulkAssignModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:100%; width:100%; height:100%; margin:0;">
+        <div class="modal-content" style="height:100vh; border-radius:0; border:none;">
+            <div class="modal-header py-2">
                 <h5 class="modal-title"><i class="bx bx-layer-plus me-1"></i> Bulk Assign Screen Print</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-                <div style="background:#fff; border-bottom:1px solid #e2e7f1; padding:8px 0; margin-bottom:10px;">
-                    <label class="fw-semibold me-2">Select Batches:</label>
-                    <div class="multi-select-wrap d-inline-block" style="min-width:400px;">
+            <div class="modal-body" style="overflow-y:auto; padding:12px 20px;">
+                <div class="bulk-toolbar">
+                    <label class="mb-0 fw-semibold">Select Batches:</label>
+                    <div class="multi-select-wrap" style="flex:1 1 420px; max-width:640px;">
                         <div class="multi-select-box" id="multiSelectBox">
                             <span class="placeholder" id="multiSelectPlaceholder">Click to choose batches...</span>
                         </div>
                         <div class="multi-select-dropdown" id="multiSelectDropdown"></div>
                     </div>
-                    <span class="ms-3 badge bg-primary" id="selectedCountBadge">0 batch(es) selected</span>
+                    <span class="ms-auto badge bg-primary" id="selectedCountBadge">0 batch(es) selected</span>
                 </div>
                 <div id="bulkItemsContainer"></div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="saveBulkAssignBtn">
-                    <i class="bx bx-save"></i> Assign Selected
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="saveBulkAssignBtn">
+                    <i class="bx bx-save me-1"></i> Assign Selected
                 </button>
             </div>
         </div>
@@ -275,6 +325,7 @@
                             <option value="completed" selected>Completed (+)</option>
                             <option value="damage">Damage (+)</option>
                         </select>
+                        <small class="text-muted">Damage moves to Repair &amp; reduces total</small>
                     </div>
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Add Quantity (+)</label>
@@ -282,7 +333,15 @@
                         <small class="text-muted">Max addable: <span id="progressMax">0</span></small>
                     </div>
                 </div>
-                <div class="alert alert-info mb-0" id="progressLivePreview" style="font-size:13px;"></div>
+                <div class="alert alert-info mb-3" id="progressLivePreview" style="font-size:13px;"></div>
+
+                <div class="progress-history-wrap">
+                    <div class="progress-history-head">
+                        <i class="bx bx-history"></i>
+                        Previous Assignment / Progress History
+                    </div>
+                    <div class="progress-history-body" id="progressHistoryList"></div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -325,6 +384,25 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 <button type="button" class="btn btn-dark" id="printListAllBtn">
+                    <i class="bx bx-printer me-1"></i> Print / Download
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- NESTED BATCH HISTORY MODAL -->
+<div class="modal fade" id="batchHistoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:1000px;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bx bx-history me-1"></i> Batch History</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="batchHistoryBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-dark" id="printBatchHistoryBtn">
                     <i class="bx bx-printer me-1"></i> Print / Download
                 </button>
             </div>

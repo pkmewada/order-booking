@@ -81,24 +81,6 @@ $(document).ready(function () {
         }
     }
 
-    function confirmBox(message) {
-        if (hasSwal()) {
-            return Swal.fire({
-                icon: "warning",
-                text: message,
-                showCancelButton: true,
-                confirmButtonText: "Yes",
-                cancelButtonText: "Cancel",
-                confirmButtonColor: "#161617",
-                cancelButtonColor: "#6c757d"
-            }).then(function (result) {
-                return !!result.isConfirmed;
-            });
-        }
-
-        return Promise.resolve(confirm(message));
-    }
-
     /* ======================================================
        LOCAL STORAGE
        ====================================================== */
@@ -109,7 +91,16 @@ $(document).ready(function () {
                 localStorage.getItem(STORAGE_KEY)
             );
 
-            return Array.isArray(data) ? data : [];
+            if (!Array.isArray(data)) return [];
+
+            // Normalize: ensure every record has a status (default active)
+            return data.map(function (item) {
+                if (!item.status) {
+                    item.status = "active";
+                }
+                return item;
+            });
+
         } catch (error) {
             console.error("BOM load error:", error);
             return [];
@@ -203,6 +194,48 @@ $(document).ready(function () {
 
         return html;
     }
+
+    /* ======================================================
+       PHOTO LIGHTBOX
+       ====================================================== */
+
+    function openLightbox(src) {
+        if (!src) return;
+
+        $("#lightboxImg").attr("src", src);
+        $("#photoLightbox").addClass("show").attr("aria-hidden", "false");
+    }
+
+    function closeLightbox() {
+        $("#photoLightbox").removeClass("show").attr("aria-hidden", "true");
+        $("#lightboxImg").attr("src", "");
+    }
+
+    // Click on any thumbnail image → open lightbox
+    $(document).on("click", ".bom-photo-thumb", function () {
+        const src = $(this).data("src") || $(this).attr("src");
+        openLightbox(src);
+    });
+
+    // Close via button
+    $(document).on("click", "#lightboxClose", function (e) {
+        e.stopPropagation();
+        closeLightbox();
+    });
+
+    // Close via backdrop click
+    $(document).on("click", "#photoLightbox", function (e) {
+        if (e.target === this) {
+            closeLightbox();
+        }
+    });
+
+    // Close via ESC
+    $(document).on("keydown", function (e) {
+        if (e.key === "Escape") {
+            closeLightbox();
+        }
+    });
 
     /* ======================================================
        DUPLICATE DESIGN NUMBER CHECK
@@ -651,6 +684,9 @@ $(document).ready(function () {
             <img
                 src="${escapeHtml(photo)}"
                 alt="BOM Photo"
+                class="bom-photo-thumb"
+                data-src="${escapeHtml(photo)}"
+                title="Click to view large"
                 style="
                     width:120px;
                     height:120px;
@@ -779,6 +815,8 @@ $(document).ready(function () {
         $("#brandFilter").val("");
 
         $("#pieceFilter").val("");
+
+        $("#statusFilter").val("");
 
         $("#searchInput").val("");
 
@@ -965,6 +1003,9 @@ $(document).ready(function () {
 
                 ...bomDetails,
 
+                // Newly created BOM is Active by default
+                status: "active",
+
                 createdAt: getToday(),
 
                 updatedAt: getToday()
@@ -1016,6 +1057,15 @@ $(document).ready(function () {
             );
 
             if (!bom) return;
+
+            // Safety: inactive records cannot be edited
+            if ((bom.status || "active") === "inactive") {
+                alertMsg(
+                    "Inactive BOM cannot be edited. Please activate it first.",
+                    "warning"
+                );
+                return;
+            }
 
             $("#editId").val(bom.id);
 
@@ -1069,19 +1119,18 @@ $(document).ready(function () {
         const photoHtml = bom.photo
 
             ? `
-                <img
-                    src="${escapeHtml(bom.photo)}"
-                    alt="BOM Photo"
-                    style="
-                        width:160px;
-                        height:160px;
-                        object-fit:cover;
-                        border-radius:8px;
-                    "
-                >
+                <div class="view-photo-wrap">
+                    <img
+                        src="${escapeHtml(bom.photo)}"
+                        alt="BOM Photo"
+                        class="bom-photo-thumb"
+                        data-src="${escapeHtml(bom.photo)}"
+                        title="Click to view large"
+                    >
+                </div>
             `
 
-            : `<span class="text-muted">No Photo</span>`;
+            : `<div class="text-center text-muted">No Photo</div>`;
 
         const rows = (bom.pieces || []).map(piece => {
 
@@ -1116,6 +1165,10 @@ $(document).ready(function () {
             `;
         }).join("");
 
+        const statusBadge = (bom.status === "inactive")
+            ? `<span class="badge bg-secondary">Inactive</span>`
+            : `<span class="badge bg-success">Active</span>`;
+
         $("#viewBomBody").html(`
 
             <div class="row g-4 mb-4">
@@ -1148,6 +1201,11 @@ $(document).ready(function () {
                         <tr>
                             <th>Piece</th>
                             <td>${bom.pieceCount} Pic</td>
+                        </tr>
+
+                        <tr>
+                            <th>Status</th>
+                            <td>${statusBadge}</td>
                         </tr>
 
                         <tr>
@@ -1199,54 +1257,73 @@ $(document).ready(function () {
                 Number(item.id) === id
             );
 
-            if (bom) {
-                renderViewBom(bom);
+            if (!bom) return;
+
+            // Safety: inactive records cannot be viewed
+            if ((bom.status || "active") === "inactive") {
+                alertMsg(
+                    "Inactive BOM cannot be viewed. Please activate it first.",
+                    "warning"
+                );
+                return;
             }
+
+            renderViewBom(bom);
         }
     );
 
     /* ======================================================
-       DELETE BOM
+       ACTIVE / INACTIVE TOGGLE (inside Action column)
        ====================================================== */
 
     $(document).on(
-        "click",
-        ".delete-bom-btn",
+        "change",
+        ".bom-status-switch",
         function () {
 
-            const id = Number(
-                $(this).data("id")
-            );
+            const checkbox = $(this);
 
-            const bom = bomData.find(item =>
+            const id = Number(checkbox.data("id"));
+
+            const index = bomData.findIndex(item =>
                 Number(item.id) === id
             );
 
-            if (!bom) return;
+            if (index === -1) return;
 
-            confirmBox(
-                `Delete ${bom.bomId}?`
-            ).then(function (confirmed) {
+            const newStatus = checkbox.is(":checked")
+                ? "active"
+                : "inactive";
 
-                if (!confirmed) return;
+            const oldStatus = bomData[index].status || "active";
 
-                const oldData = [...bomData];
+            if (oldStatus === newStatus) return;
 
-                bomData = bomData.filter(item =>
-                    Number(item.id) !== id
+            bomData[index].status = newStatus;
+
+            bomData[index].updatedAt = getToday();
+
+            if (!saveData()) {
+
+                // Revert on failure
+                bomData[index].status = oldStatus;
+
+                checkbox.prop(
+                    "checked",
+                    oldStatus === "active"
                 );
 
-                if (!saveData()) {
+                return;
+            }
 
-                    bomData = oldData;
+            renderTable();
 
-                    return;
-                }
+            const bomId = bomData[index].bomId || "BOM";
 
-                renderTable();
-
-                alertMsg("BOM deleted successfully.", "success");
-            });
+            alertMsg(
+                `${bomId} marked as ${newStatus === "active" ? "Active" : "Inactive"}.`,
+                "success"
+            );
         }
     );
 
@@ -1264,6 +1341,8 @@ $(document).ready(function () {
 
         const pieceFilter = $("#pieceFilter").val();
 
+        const statusFilter = $("#statusFilter").val();
+
         const search = $("#searchInput")
             .val()
             .toLowerCase()
@@ -1279,6 +1358,10 @@ $(document).ready(function () {
                 !pieceFilter ||
                 Number(bom.pieceCount) === Number(pieceFilter);
 
+            const statusMatch =
+                !statusFilter ||
+                (bom.status || "active") === statusFilter;
+
             const searchable = [
                 bom.bomId,
                 bom.brand,
@@ -1289,6 +1372,7 @@ $(document).ready(function () {
 
             return brandMatch &&
                 pieceMatch &&
+                statusMatch &&
                 (!search || searchable.includes(search));
         });
 
@@ -1312,12 +1396,17 @@ $(document).ready(function () {
 
         filtered.forEach(bom => {
 
+            const isActive = (bom.status || "active") === "active";
+
             const photoHtml = bom.photo
 
                 ? `
                 <img
                     src="${escapeHtml(bom.photo)}"
                     alt="BOM Photo"
+                    class="bom-photo-thumb"
+                    data-src="${escapeHtml(bom.photo)}"
+                    title="Click to view large"
                     style="
                         width:60px;
                         height:60px;
@@ -1331,13 +1420,13 @@ $(document).ready(function () {
 
             tbody.append(`
 
-            <tr>
+            <tr class="${isActive ? "" : "inactive-row"}">
 
                 <td>${escapeHtml(bom.brand)}</td>
 
                 <td>${escapeHtml(bom.designNumber)}</td>
 
-                                <td>
+                <td>
                     <span class="color-text">${escapeHtml(bom.color)}</span>
                 </td>
 
@@ -1351,13 +1440,14 @@ $(document).ready(function () {
 
                 <td>
 
-                    <div class="d-flex gap-1">
+                    <div class="action-cell">
 
                         <button
                             type="button"
                             class="btn btn-sm btn-info view-bom-btn"
                             data-id="${bom.id}"
-                            title="View"
+                            title="${isActive ? "View" : "Activate to view"}"
+                            ${isActive ? "" : "disabled"}
                         >
                             <i class="bx bx-show"></i>
                         </button>
@@ -1366,19 +1456,28 @@ $(document).ready(function () {
                             type="button"
                             class="btn btn-sm btn-primary edit-bom-btn"
                             data-id="${bom.id}"
-                            title="Edit"
+                            title="${isActive ? "Edit" : "Activate to edit"}"
+                            ${isActive ? "" : "disabled"}
                         >
                             <i class="bx bx-edit"></i>
                         </button>
 
-                        <button
-                            type="button"
-                            class="btn btn-sm btn-danger delete-bom-btn"
-                            data-id="${bom.id}"
-                            title="Delete"
-                        >
-                            <i class="bx bx-trash"></i>
-                        </button>
+                        <div class="form-check form-switch status-toggle">
+                            <input
+                                class="form-check-input bom-status-switch"
+                                type="checkbox"
+                                role="switch"
+                                data-id="${bom.id}"
+                                id="statusSwitch-${bom.id}"
+                                ${isActive ? "checked" : ""}
+                            >
+                            <label
+                                class="status-label ${isActive ? "active" : "inactive"}"
+                                for="statusSwitch-${bom.id}"
+                            >
+                                ${isActive ? "Active" : "Inactive"}
+                            </label>
+                        </div>
 
                     </div>
 
@@ -1429,7 +1528,7 @@ $(document).ready(function () {
        FILTER EVENTS
        ====================================================== */
 
-    $("#brandFilter, #pieceFilter").on(
+    $("#brandFilter, #pieceFilter, #statusFilter").on(
         "change",
         renderTable
     );

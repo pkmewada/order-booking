@@ -380,11 +380,170 @@ include __DIR__ . "/includes/header.php";
         font-weight: 600;
         color: #18243d;
     }
+
     /* Piece — simple bold */
     .piece-bold {
         font-weight: 600;
         color: #161617;
         font-size: 14px;
+    }
+
+    /* ======================================================
+       PHOTO LIGHTBOX
+       ====================================================== */
+
+    .bom-photo-thumb {
+        cursor: zoom-in;
+        transition: transform .18s ease, box-shadow .18s ease;
+    }
+
+    .bom-photo-thumb:hover {
+        transform: scale(1.04);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+    }
+
+    #photoLightbox {
+        position: fixed;
+        inset: 0;
+        z-index: 3000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, .78);
+        backdrop-filter: blur(3px);
+        padding: 30px;
+    }
+
+    #photoLightbox.show {
+        display: flex;
+    }
+
+    #photoLightbox .lightbox-img {
+        max-width: 92vw;
+        max-height: 92vh;
+        border-radius: 10px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+        background: #fff;
+        object-fit: contain;
+    }
+
+    #photoLightbox .lightbox-close {
+        position: absolute;
+        top: 18px;
+        right: 22px;
+        width: 44px;
+        height: 44px;
+        border: none;
+        border-radius: 50%;
+        background: #fff;
+        color: #161617;
+        font-size: 22px;
+        line-height: 1;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: .2s ease;
+    }
+
+    #photoLightbox .lightbox-close:hover {
+        background: #e9e9ec;
+        transform: rotate(90deg);
+    }
+
+    /* ======================================================
+       STATUS TOGGLE (inside Action column)
+       ====================================================== */
+
+    .action-cell {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: nowrap;
+    }
+
+    .action-cell .btn {
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 7px;
+    }
+
+    .action-cell .btn:disabled,
+    .action-cell .btn.disabled-look {
+        opacity: .35;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+
+    .status-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        user-select: none;
+        margin-left: 4px;
+    }
+
+    .status-toggle .status-label {
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+        min-width: 48px;
+    }
+
+    .status-toggle .status-label.active {
+        color: #16a34a;
+    }
+
+    .status-toggle .status-label.inactive {
+        color: #9ca3af;
+    }
+
+    .form-switch .form-check-input.bom-status-switch {
+        width: 2.6em;
+        height: 1.4em;
+        cursor: pointer;
+        margin: 0;
+        background-color: #cbd2dc;
+        border-color: #cbd2dc;
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e");
+    }
+
+    .form-switch .form-check-input.bom-status-switch:checked {
+        background-color: #16a34a;
+        border-color: #16a34a;
+    }
+
+    .form-switch .form-check-input.bom-status-switch:focus {
+        box-shadow: 0 0 0 0.2rem rgba(22, 163, 74, 0.18);
+        border-color: #16a34a;
+    }
+
+    .inactive-row {
+        opacity: .7;
+    }
+
+    /* ======================================================
+       VIEW MODAL PHOTO (fixed height, auto width)
+       ====================================================== */
+
+    #viewBomBody .view-photo-wrap {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+    }
+
+    #viewBomBody .view-photo-wrap img {
+        height: 220px;
+        width: auto;
+        max-width: 100%;
+        object-fit: contain;
+        border-radius: 8px;
+        border: 1px solid #e9edf5;
+        background: #fff;
     }
 </style>
 
@@ -452,7 +611,16 @@ include __DIR__ . "/includes/header.php";
                         </select>
                     </div>
 
-                    <div class="col-md-4 ms-auto">
+                    <div class="col-md-3">
+                        <label class="form-label">Status</label>
+                        <select id="statusFilter" class="form-select">
+                            <option value="">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-3 ms-auto">
                         <label class="form-label">Search</label>
 
                         <div class="input-group">
@@ -471,7 +639,7 @@ include __DIR__ . "/includes/header.php";
                 </div>
 
                 <div class="table-responsive">
-                    <table class="table table-bordered align-middle w-100">
+                    <table class="table table-bordered align-middle w-90">
                         <thead>
                             <tr>
                                 <th>Brand</th>
@@ -769,6 +937,15 @@ include __DIR__ . "/includes/header.php";
 
     </div>
 
+</div>
+
+<!-- PHOTO LIGHTBOX -->
+
+<div id="photoLightbox" aria-hidden="true">
+    <button type="button" class="lightbox-close" id="lightboxClose" aria-label="Close">
+        <i class="bx bx-x"></i>
+    </button>
+    <img src="" alt="BOM Photo Large" class="lightbox-img" id="lightboxImg">
 </div>
 
 <?php include __DIR__ . "/includes/footer.php"; ?>

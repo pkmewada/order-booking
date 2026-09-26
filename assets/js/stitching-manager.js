@@ -7,6 +7,8 @@ $(document).ready(function () {
     const WORK_HISTORY_KEY = "stitchingData_history";
 
     const WORK_TYPE = "Stitching";
+    const SUB_BATCH_SUFFIX_IH = "C";   // In-house
+    const SUB_BATCH_SUFFIX_OS = "OS";  // Outsource
 
     const ROWS_PER_PAGE = 10;
 
@@ -40,6 +42,7 @@ $(document).ready(function () {
     let outsourcePage = 1;
 
     let bulkSelectedBatchIds = new Set();
+    let bulkPieceSplits = {};
 
     /* ================= HELPERS ================= */
     function escapeHtml(v) {
@@ -73,10 +76,18 @@ $(document).ready(function () {
         h.push({ id: Date.now() + Math.floor(Math.random() * 1000), at: new Date().toLocaleString("en-GB"), ...entry });
         saveStorage(WORK_HISTORY_KEY, h);
     }
+
+    function parseHistoryTime(str) {
+        const m = String(str).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2}):(\d{2})/);
+        if (!m) return 0;
+        const [, d, mo, y, h, mi, se] = m;
+        return new Date(`${y}-${mo.padStart(2,"0")}-${d.padStart(2,"0")}T${h.padStart(2,"0")}:${mi}:${se}`).getTime();
+    }
+
     function getHistoryFor(id) {
         return readStorage(WORK_HISTORY_KEY)
             .filter(h => Number(h.stitchId) === Number(id))
-            .sort((a, b) => String(a.at).localeCompare(String(b.at)));
+            .sort((a, b) => parseHistoryTime(a.at) - parseHistoryTime(b.at));
     }
 
     function sanitizePieceName(name) {
@@ -87,7 +98,7 @@ $(document).ready(function () {
         if (!formatted.includes("BATCH-")) formatted = `BATCH-${String(batchId).padStart(3, "0")}`;
         const safePiece = sanitizePieceName(pieceName);
         const num = Number(splitIndex || 0) + 1;
-        const sfx = type === "outsource" ? "OS" : "IH";
+        const sfx = type === "outsource" ? SUB_BATCH_SUFFIX_OS : SUB_BATCH_SUFFIX_IH;
         return `${formatted}-${safePiece}-${sfx}${num}`;
     }
 
@@ -175,6 +186,63 @@ $(document).ready(function () {
             .reduce((s, d) => s + (Number(d.quantity) || 0), 0);
     }
     function getPoolRemaining(p) { return Math.max(0, getPoolTotal(p) - getPoolAssigned(p)); }
+    function getBusyWorkersExcluding(poolId, type) {
+        const busy = new Set();
+        workData.forEach(row => {
+            if (Number(row.poolId) !== Number(poolId) && row.type === type && !isFullyPassed(row) && !row.stopped) {
+                const name = type === "outsource" ? row.firm : row.worker;
+                if (name) busy.add(name);
+            }
+        });
+        return busy;
+    }
+    function getWorkersInPool(poolId, type) {
+        const workers = new Set();
+        workData.forEach(row => {
+            if (Number(row.poolId) === Number(poolId) && row.type === type) {
+                const name = type === "outsource" ? row.firm : row.worker;
+                if (name) workers.add(name);
+            }
+        });
+        return workers;
+    }
+
+    /* ============================================================
+       MANUAL SPLIT — auto-distribute remaining qty
+       ============================================================ */
+    function redistributeQuantities($tbody, totalRemaining, changedRowIdx, rowSelector) {
+        const $rows = $tbody.find(rowSelector);
+        if (!$rows.length) return;
+
+        const rowCount = $rows.length;
+        if (rowCount === 1) {
+            $rows.eq(0).find(".quantity-input").val(totalRemaining);
+            return;
+        }
+
+        const manualVal = parseInt($rows.eq(changedRowIdx).find(".quantity-input").val()) || 0;
+        const remainingForOthers = Math.max(0, totalRemaining - manualVal);
+        const otherRowsCount = rowCount - 1;
+
+        if (otherRowsCount === 1) {
+            $rows.each(function (i) {
+                if (i === changedRowIdx) return;
+                $(this).find(".quantity-input").val(remainingForOthers);
+            });
+            return;
+        }
+
+        const base = Math.floor(remainingForOthers / otherRowsCount);
+        const rem = remainingForOthers - (base * otherRowsCount);
+
+        let otherIdx = 0;
+        $rows.each(function (i) {
+            if (i === changedRowIdx) return;
+            const extra = (otherIdx >= (otherRowsCount - rem)) ? 1 : 0;
+            $(this).find(".quantity-input").val(base + extra);
+            otherIdx++;
+        });
+    }
 
     /* ============================================================
        TABLE 1 — AVAILABLE
@@ -256,7 +324,7 @@ $(document).ready(function () {
     /* ============================================================
        COMMON TABLE RENDER (In-House / Outsource)
        ============================================================ */
-    function renderTypeTable(tbodySel, type, page, setPage, pagerSel, workerLabel) {
+    function renderTypeTable(tbodySel, type, page, setPage, pagerSel) {
         const tbody = $(tbodySel);
         tbody.empty();
         const visible = workData.filter(w => w.type === type && !isFullyPassed(w));
@@ -344,10 +412,10 @@ $(document).ready(function () {
     }
 
     function renderInhouseTable() {
-        renderTypeTable("#inhouseList", "inhouse", inhousePage, p => inhousePage = p, "#inhousePagination", "Worker");
+        renderTypeTable("#inhouseList", "inhouse", inhousePage, p => inhousePage = p, "#inhousePagination");
     }
     function renderOutsourceTable() {
-        renderTypeTable("#outsourceList", "outsource", outsourcePage, p => outsourcePage = p, "#outsourcePagination", "Firm");
+        renderTypeTable("#outsourceList", "outsource", outsourcePage, p => outsourcePage = p, "#outsourcePagination");
     }
 
     /* ============================================================
@@ -363,14 +431,48 @@ $(document).ready(function () {
         });
     }
 
+    function buildWorkerOpts(poolId) {
+        const inhouseWorkers = getWorkersInPool(poolId, "inhouse");
+        const busyInhouseWorkers = getBusyWorkersExcluding(poolId, "inhouse");
+
+        let opts = "";
+        WORKERS.forEach(w => {
+            if (inhouseWorkers.has(w)) opts += `<option value="${escapeHtml(w)}" data-in-pool="1">${escapeHtml(w)} (continuing)</option>`;
+        });
+        WORKERS.forEach(w => {
+            if (!inhouseWorkers.has(w) && !busyInhouseWorkers.has(w)) opts += `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`;
+        });
+        WORKERS.forEach(w => {
+            if (!inhouseWorkers.has(w) && busyInhouseWorkers.has(w)) opts += `<option value="${escapeHtml(w)}" disabled>${escapeHtml(w)} (busy elsewhere)</option>`;
+        });
+        return opts;
+    }
+
+    function buildFirmOpts(poolId) {
+        const outFirms = getWorkersInPool(poolId, "outsource");
+        const busyOutFirms = getBusyWorkersExcluding(poolId, "outsource");
+
+        let opts = "";
+        FIRMS.forEach(f => {
+            if (outFirms.has(f)) opts += `<option value="${escapeHtml(f)}" data-in-pool="1">${escapeHtml(f)} (continuing)</option>`;
+        });
+        FIRMS.forEach(f => {
+            if (!outFirms.has(f) && !busyOutFirms.has(f)) opts += `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`;
+        });
+        FIRMS.forEach(f => {
+            if (!outFirms.has(f) && busyOutFirms.has(f)) opts += `<option value="${escapeHtml(f)}" disabled>${escapeHtml(f)} (busy elsewhere)</option>`;
+        });
+        return opts;
+    }
+
     function generateAssignRows(poolItem, remaining) {
         const container = $("#assignRowsContainer");
         container.empty();
         const total = getPoolTotal(poolItem);
         const assigned = getPoolAssigned(poolItem);
 
-        const workerOpts = WORKERS.map(w => `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`).join("");
-        const firmOpts = FIRMS.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join("");
+        const workerOpts = buildWorkerOpts(poolItem.id);
+        const firmOpts = buildFirmOpts(poolItem.id);
 
         container.append(`
             <div class="alert alert-primary mb-3">
@@ -425,7 +527,7 @@ $(document).ready(function () {
                 const subBatchIH = peekSubBatchId(poolItem.batchId, poolItem.pieceItem, i, "inhouse");
                 const subBatchOS = peekSubBatchId(poolItem.batchId, poolItem.pieceItem, i, "outsource");
                 tbody.append(`
-                    <tr class="assignment-row">
+                    <tr class="assignment-row" data-row-index="${i}">
                         <td>
                             <span class="sub-batch-label fw-semibold text-primary sub-batch-display">${escapeHtml(subBatchIH)}</span>
                             <input type="hidden" class="sub-batch-input-ih" value="${escapeHtml(subBatchIH)}">
@@ -441,7 +543,7 @@ $(document).ready(function () {
                             <select class="form-select form-select-sm worker-select"><option value="">Select Worker</option>${workerOpts}</select>
                             <select class="form-select form-select-sm firm-select" style="display:none;"><option value="">Select Firm</option>${firmOpts}</select>
                         </td>
-                        <td><input type="number" class="form-control form-control-sm quantity-input" value="${autoQtys[i]}" min="1" max="${remaining}"></td>
+                        <td><input type="number" class="form-control form-control-sm quantity-input" value="${autoQtys[i]}" min="1" max="${remaining}" data-max="${remaining}"></td>
                         <td>
                             <select class="form-select form-select-sm priority-select">
                                 <option value="Low">Low</option>
@@ -454,12 +556,33 @@ $(document).ready(function () {
                 `);
             }
 
-            tbody.find(".type-select").on("change", function () {
+            tbody.find(".type-select").off("change").on("change", function () {
                 const $row = $(this).closest("tr");
                 const isOutsource = $(this).val() === "outsource";
                 $row.find(".firm-select").toggle(isOutsource);
                 $row.find(".worker-select").toggle(!isOutsource);
                 $row.find(".sub-batch-display").text(isOutsource ? $row.find(".sub-batch-input-os").val() : $row.find(".sub-batch-input-ih").val());
+            });
+
+            // Manual qty edit → redistribute
+            tbody.off("input", ".quantity-input").on("input", ".quantity-input", function () {
+                const $input = $(this);
+                const $row = $input.closest(".assignment-row");
+                const rowIdx = Number($row.data("row-index"));
+
+                let manualVal = parseInt($input.val()) || 0;
+                if (manualVal < 0) manualVal = 0;
+                if (manualVal > remaining) {
+                    manualVal = remaining;
+                    $input.val(manualVal);
+                }
+
+                $input.addClass("manually-edited");
+
+                if (tbody.find(".assignment-row").length > 1) {
+                    redistributeQuantities(tbody, remaining, rowIdx, ".assignment-row");
+                    $input.val(manualVal).addClass("manually-edited");
+                }
             });
         }
 
@@ -554,6 +677,15 @@ $(document).ready(function () {
     /* ============================================================
        BULK ASSIGN
        ============================================================ */
+    function openBulkModal() {
+        bulkSelectedBatchIds = new Set();
+        bulkPieceSplits = {};
+        renderMultiSelectOptions();
+        renderBulkSelectedCards();
+        updateBulkSelectedCount();
+        $("#bulkAssignModal").modal("show");
+    }
+
     function renderMultiSelectOptions() {
         const container = $("#multiSelectDropdown");
         container.empty();
@@ -613,80 +745,173 @@ $(document).ready(function () {
         selectedBatches.forEach(batch => {
             const first = batch.items[0];
             const photoSrc = first.photo ? escapeHtml(first.photo) : PLACEHOLDER_IMG;
+            const perPieceTotal = getPoolTotal(first);
+            const perPieceAssigned = getPoolAssigned(first);
+            const perPieceRemaining = getPoolRemaining(first);
 
-            let rowsHtml = "";
+            container.append(`
+                <div class="bulk-item-card" data-batch-id="${escapeHtml(batch.batchId)}">
+                    <div class="bulk-item-header">
+                        <img src="${photoSrc}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}';">
+                        <div class="flex-grow-1">
+                            <div class="bulk-item-title">${escapeHtml(batch.batchId)} — Design: ${escapeHtml(first.designNumber || "-")}</div>
+                            <div class="bulk-item-sub"><strong>Brand:</strong> ${escapeHtml(first.brand || "-")} • <strong>Color:</strong> ${escapeHtml(first.color || "-")} • <strong>Pieces:</strong> ${batch.items.length} • <strong>Priority:</strong> ${escapeHtml(first.priority || "-")}</div>
+                            <div class="bulk-qty-summary">
+                                <span class="bulk-qty-pill total"><i class="bx bx-package"></i> Per-Piece Total: ${perPieceTotal}</span>
+                                <span class="bulk-qty-pill assigned"><i class="bx bx-check"></i> Per-Piece Assigned: ${perPieceAssigned}</span>
+                                <span class="bulk-qty-pill remaining"><i class="bx bx-time"></i> Per-Piece Remaining: ${perPieceRemaining}</span>
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <label class="small text-muted d-block mb-1" style="font-size:11px;">Split each piece into:</label>
+                            <div class="input-group input-group-sm" style="width:140px;">
+                                <input type="number" class="form-control form-control-sm bulk-global-split" data-batch-id="${escapeHtml(batch.batchId)}" value="1" min="1" max="50">
+                                <button type="button" class="btn btn-success bulk-apply-split-btn" data-batch-id="${escapeHtml(batch.batchId)}"><i class="bx bx-check"></i> Split</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="split-row-table">
+                            <colgroup>
+                                <col class="col-sub"><col class="col-piece"><col class="col-type"><col class="col-worker"><col class="col-qty"><col class="col-priority"><col class="col-date"><col class="col-copy">
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th>Sub-Batch</th><th>Piece</th><th>Type</th><th>Worker / Firm</th><th>Qty</th><th>Priority</th><th>Delivery Date</th>
+                                    <th class="copy-header-cell">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bulk-rows-tbody" data-batch-id="${escapeHtml(batch.batchId)}"></tbody>
+                        </table>
+                    </div>
+                </div>
+            `);
+
+            generateBatchRows(batch);
+        });
+    }
+
+    function generateBatchRows(batch) {
+        const $tbody = $(`.bulk-rows-tbody[data-batch-id="${batch.batchId}"]`);
+        $tbody.empty();
+        const defDate = defaultDate();
+
+        const maxSplit = Math.max(...batch.items.map(i => Number(bulkPieceSplits[i.id] || 1)), 1);
+
+        for (let s = 0; s < maxSplit; s++) {
+            const splitGroupRows = [];
+
             batch.items.forEach(item => {
-                const subBatchIH = peekSubBatchId(item.batchId, item.pieceItem, 0, "inhouse");
-                const subBatchOS = peekSubBatchId(item.batchId, item.pieceItem, 0, "outsource");
+                const splitCount = Number(bulkPieceSplits[item.id] || 1);
+                if (s >= splitCount) return;
+                const totalQty = Number(item.quantity) || 0;
+                const autoQtys = splitQuantity(totalQty, splitCount);
                 const workerOpts = WORKERS.map(w => `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`).join("");
                 const firmOpts = FIRMS.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join("");
-                rowsHtml += `
-                    <tr class="bulk-assignment-row" data-pool-id="${item.id}" data-batch-id="${escapeHtml(item.batchId)}">
-                        <td>
-                            <span class="fw-semibold text-primary bulk-sub-batch" style="font-size:11px;">${escapeHtml(subBatchIH)}</span>
-                            <input type="hidden" class="bulk-sub-ih" value="${escapeHtml(subBatchIH)}">
-                            <input type="hidden" class="bulk-sub-os" value="${escapeHtml(subBatchOS)}">
-                        </td>
-                        <td>
-                            <div style="font-size:11px;">
-                                <div class="fw-semibold">Piece ${item.pieceNumber}</div>
-                                <div class="text-muted">${escapeHtml(item.pieceItem || "-")}</div>
+                const subBatchIH = peekSubBatchId(item.batchId, item.pieceItem, s, "inhouse");
+                const subBatchOS = peekSubBatchId(item.batchId, item.pieceItem, s, "outsource");
+                splitGroupRows.push({ item, splitIndex: s, subBatchIH, subBatchOS, autoQty: autoQtys[s] || 0, workerOpts, firmOpts, totalQty });
+            });
+
+            if (!splitGroupRows.length) continue;
+            const groupSize = splitGroupRows.length;
+
+            splitGroupRows.forEach((row, rIdx) => {
+                const item = row.item;
+                let copyCellHtml = "";
+                if (rIdx === 0) {
+                    copyCellHtml = `
+                        <td class="copy-col-cell" rowspan="${groupSize}">
+                            <div class="copy-body-inner">
+                                <button type="button" class="btn copy-row-side-btn bulk-copy-split-group-btn" data-batch-id="${escapeHtml(batch.batchId)}" data-split-index="${row.splitIndex}" title="Copy first row values">
+                                    <i class="bx bx-copy"></i>
+                                </button>
                             </div>
                         </td>
+                    `;
+                }
+
+                $tbody.append(`
+                    <tr class="bulk-assignment-row"
+                        data-pool-id="${item.id}"
+                        data-batch-id="${escapeHtml(item.batchId)}"
+                        data-split-index="${row.splitIndex}"
+                        data-piece-number="${item.pieceNumber}"
+                        data-piece-qty="${row.autoQty}"
+                        data-piece-total="${row.totalQty}">
                         <td>
-                            <select class="form-select form-select-sm bulk-type-select">
-                                <option value="inhouse">In-House</option>
+                            <span class="sub-batch-label fw-semibold text-primary sub-batch-display" style="font-size:11px;">${escapeHtml(row.subBatchIH)}</span>
+                            <input type="hidden" class="sub-batch-input-ih" value="${escapeHtml(row.subBatchIH)}">
+                            <input type="hidden" class="sub-batch-input-os" value="${escapeHtml(row.subBatchOS)}">
+                        </td>
+                        <td><div class="fw-semibold" style="font-size:12px;">Piece ${escapeHtml(item.pieceNumber)}</div><div class="text-muted" style="font-size:11px;">${escapeHtml(item.pieceItem || "-")}</div></td>
+                        <td>
+                            <select class="form-select form-select-sm type-select">
+                                <option value="inhouse" selected>In-House</option>
                                 <option value="outsource">Outsource</option>
                             </select>
                         </td>
                         <td>
-                            <select class="form-select form-select-sm bulk-worker-select"><option value="">Worker</option>${workerOpts}</select>
-                            <select class="form-select form-select-sm bulk-firm-select mt-1" style="display:none;"><option value="">Firm</option>${firmOpts}</select>
+                            <select class="form-select form-select-sm worker-select" required><option value="">Select Worker</option>${row.workerOpts}</select>
+                            <select class="form-select form-select-sm firm-select mt-1" style="display:none;"><option value="">Select Firm</option>${row.firmOpts}</select>
                         </td>
-                        <td><input type="number" class="form-control form-control-sm bulk-qty-input" value="${item.quantity || 0}" min="1" style="width:80px;"></td>
+                        <td><input type="number" class="form-control form-control-sm quantity-input" value="${row.autoQty}" placeholder="Qty" min="1" max="${row.totalQty}" data-max="${row.totalQty}" style="width:70px;"></td>
                         <td>
-                            <select class="form-select form-select-sm bulk-priority-select">
+                            <select class="form-select form-select-sm priority-select">
                                 <option value="Low">Low</option>
                                 <option value="Medium" ${item.priority === "Medium" ? "selected" : ""}>Medium</option>
                                 <option value="High" ${item.priority === "High" ? "selected" : ""}>High</option>
                             </select>
                         </td>
-                        <td><input type="date" class="form-control form-control-sm bulk-date-input" value="${defaultDate()}"></td>
+                        <td><input type="date" class="form-control form-control-sm delivery-date-input" value="${defDate}"></td>
+                        ${copyCellHtml}
                     </tr>
-                `;
+                `);
             });
+        }
 
-            container.append(`
-                <div class="bulk-item-card mb-3" style="border:1px solid #e2e7f1;border-radius:10px;padding:10px;background:#fff;">
-                    <div style="display:flex;gap:10px;align-items:center;border-bottom:1px dashed #eef1f7;padding-bottom:8px;margin-bottom:8px;">
-                        <img src="${photoSrc}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}';">
-                        <div style="flex-grow:1;">
-                            <div style="font-weight:600;font-size:13px;">${escapeHtml(batch.batchId)} — Design: ${escapeHtml(first.designNumber || "-")}</div>
-                            <div style="font-size:11px;color:#6b7280;">
-                                <strong>Brand:</strong> ${escapeHtml(first.brand || "-")} • 
-                                <strong>Color:</strong> ${escapeHtml(first.color || "-")} • 
-                                <strong>Pieces:</strong> ${batch.items.length}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-bordered mb-0" style="font-size:12px;">
-                            <thead style="background:#f8f9fa;">
-                                <tr><th>Sub-Batch</th><th>Piece</th><th>Type</th><th>Worker / Firm</th><th>Qty</th><th>Priority</th><th>Delivery</th></tr>
-                            </thead>
-                            <tbody>${rowsHtml}</tbody>
-                        </table>
-                    </div>
-                </div>
-            `);
-        });
-
-        container.find(".bulk-type-select").off("change").on("change", function () {
+        // Type toggle
+        $tbody.off("change", ".type-select").on("change", ".type-select", function () {
             const $row = $(this).closest("tr");
             const isOutsource = $(this).val() === "outsource";
-            $row.find(".bulk-firm-select").toggle(isOutsource);
-            $row.find(".bulk-worker-select").toggle(!isOutsource);
-            $row.find(".bulk-sub-batch").text(isOutsource ? $row.find(".bulk-sub-os").val() : $row.find(".bulk-sub-ih").val());
+            $row.find(".firm-select").toggle(isOutsource);
+            $row.find(".worker-select").toggle(!isOutsource);
+            $row.find(".sub-batch-display").text(isOutsource ? $row.find(".sub-batch-input-os").val() : $row.find(".sub-batch-input-ih").val());
+        });
+
+        // Manual qty edit → redistribute within same piece group
+        $tbody.off("input", ".quantity-input").on("input", ".quantity-input", function () {
+            const $input = $(this);
+            const $row = $input.closest(".bulk-assignment-row");
+            const poolId = Number($row.data("pool-id"));
+            const pieceTotal = Number($row.data("piece-total")) || 0;
+
+            let manualVal = parseInt($input.val()) || 0;
+            if (manualVal < 0) manualVal = 0;
+            if (manualVal > pieceTotal) {
+                manualVal = pieceTotal;
+                $input.val(manualVal);
+            }
+
+            $input.addClass("manually-edited");
+
+            const $samePieceRows = $tbody.find(`.bulk-assignment-row[data-pool-id="${poolId}"]`);
+            if ($samePieceRows.length <= 1) return;
+
+            const $otherRows = $samePieceRows.not($row);
+            const remainingForOthers = Math.max(0, pieceTotal - manualVal);
+            const otherCount = $otherRows.length;
+
+            if (otherCount === 1) {
+                $otherRows.find(".quantity-input").val(remainingForOthers);
+            } else {
+                const base = Math.floor(remainingForOthers / otherCount);
+                const rem = remainingForOthers - (base * otherCount);
+                $otherRows.each(function (i) {
+                    const extra = (i >= (otherCount - rem)) ? 1 : 0;
+                    $(this).find(".quantity-input").val(base + extra);
+                });
+            }
         });
     }
 
@@ -706,14 +931,7 @@ $(document).ready(function () {
         $box.prepend(wrap);
     }
 
-    $("#bulkAssignBtn").on("click", function () {
-        bulkSelectedBatchIds = new Set();
-        renderMultiSelectOptions();
-        renderBulkSelectedCards();
-        updateBulkSelectedCount();
-        $("#bulkAssignModal").modal("show");
-    });
-
+    $("#bulkAssignBtn").on("click", openBulkModal);
     $("#multiSelectBox").on("click", function (e) {
         e.stopPropagation();
         $("#multiSelectDropdown").toggleClass("open");
@@ -744,28 +962,90 @@ $(document).ready(function () {
         renderMultiSelectOptions();
     });
 
+    $(document).on("click", ".bulk-apply-split-btn", function () {
+        const batchId = String($(this).data("batch-id"));
+        const count = parseInt($(`.bulk-global-split[data-batch-id="${batchId}"]`).val()) || 1;
+        if (count < 1) { $(`.bulk-global-split[data-batch-id="${batchId}"]`).val(1); return; }
+        const available = pool.filter(p => getPoolRemaining(p) > 0);
+        const batchItems = available.filter(p => String(p.batchId) === String(batchId))
+            .sort((a, b) => Number(a.pieceNumber) - Number(b.pieceNumber));
+        batchItems.forEach(item => { bulkPieceSplits[item.id] = count; });
+        generateBatchRows({ batchId, items: batchItems });
+        Swal.fire({ icon: "success", title: "Split Applied", text: `Each piece split into ${count} rows.`, timer: 1200, showConfirmButton: false });
+    });
+
+    $(document).on("click", ".bulk-copy-split-group-btn", function () {
+        const batchId = String($(this).data("batch-id"));
+        const splitIndex = Number($(this).data("split-index"));
+        if (!batchId || isNaN(splitIndex)) return;
+
+        const $card = $(`.bulk-item-card[data-batch-id="${batchId}"]`);
+        if (!$card.length) return;
+
+        const $groupRows = $card.find(`.bulk-assignment-row[data-split-index="${splitIndex}"]`);
+        if (!$groupRows.length) { Swal.fire({ icon: 'info', title: `C${splitIndex + 1} has no rows.` }); return; }
+        if ($groupRows.length < 2) { Swal.fire({ icon: 'info', title: `C${splitIndex + 1} only has 1 row.` }); return; }
+
+        const $first = $groupRows.first();
+        const type = $first.find(".type-select").val();
+        const worker = $first.find(".worker-select").val();
+        const firm = $first.find(".firm-select").val();
+        const priority = $first.find(".priority-select").val();
+        const deliveryDate = $first.find(".delivery-date-input").val();
+
+        if (!deliveryDate) {
+            Swal.fire({ icon: 'warning', title: 'Incomplete', text: `Fill C${splitIndex + 1} first row first.` });
+            return;
+        }
+        if (type === "inhouse" && !worker) {
+            Swal.fire({ icon: 'warning', title: 'Incomplete', text: `Fill worker for C${splitIndex + 1}.` });
+            return;
+        }
+        if (type === "outsource" && !firm) {
+            Swal.fire({ icon: 'warning', title: 'Incomplete', text: `Fill firm for C${splitIndex + 1}.` });
+            return;
+        }
+
+        $groupRows.each(function (i) {
+            if (i === 0) return;
+            const $row = $(this);
+            $row.find(".type-select").val(type).trigger("change");
+            $row.find(".worker-select").val(worker);
+            $row.find(".firm-select").val(firm);
+            $row.find(".priority-select").val(priority);
+            $row.find(".delivery-date-input").val(deliveryDate);
+        });
+
+        Swal.fire({ icon: "success", title: "Copied", text: `C${splitIndex + 1} values copied.`, timer: 1500, showConfirmButton: false });
+    });
+
     $("#saveBulkAssignBtn").on("click", function () {
         if (!bulkSelectedBatchIds.size) { Swal.fire({ icon: "warning", title: "No Selection" }); return; }
 
         const assignments = [];
         let valid = true;
+        let errorMsg = "";
 
-        $(".bulk-assignment-row").each(function () {
-            const poolId = Number($(this).data("pool-id"));
-            const type = $(this).find(".bulk-type-select").val();
-            const subBatch = type === "outsource" ? $(this).find(".bulk-sub-os").val() : $(this).find(".bulk-sub-ih").val();
-            const worker = type === "inhouse" ? $(this).find(".bulk-worker-select").val() : "";
-            const firm = type === "outsource" ? $(this).find(".bulk-firm-select").val() : "";
-            const qty = parseInt($(this).find(".bulk-qty-input").val()) || 0;
-            const priority = $(this).find(".bulk-priority-select").val();
-            const date = $(this).find(".bulk-date-input").val();
-            if (type === "inhouse" && !worker) { valid = false; return; }
-            if (type === "outsource" && !firm) { valid = false; return; }
-            if (qty < 1 || !date) { valid = false; return; }
-            assignments.push({ poolId, type, subBatch, worker, firm, qty, priority, date });
+        Array.from(bulkSelectedBatchIds).forEach(batchId => {
+            const $card = $(`.bulk-item-card[data-batch-id="${batchId}"]`);
+            if (!$card.length) return;
+            $card.find(".bulk-assignment-row").each(function () {
+                const poolId = Number($(this).data("pool-id"));
+                const type = $(this).find(".type-select").val();
+                const subBatch = type === "outsource" ? $(this).find(".sub-batch-input-os").val() : $(this).find(".sub-batch-input-ih").val();
+                const worker = type === "inhouse" ? $(this).find(".worker-select").val() : "";
+                const firm = type === "outsource" ? $(this).find(".firm-select").val() : "";
+                const qty = parseInt($(this).find(".quantity-input").val()) || 0;
+                const priority = $(this).find(".priority-select").val();
+                const date = $(this).find(".delivery-date-input").val();
+                if (type === "inhouse" && !worker) { valid = false; errorMsg = `Fill worker for ${subBatch}.`; return; }
+                if (type === "outsource" && !firm) { valid = false; errorMsg = `Fill firm for ${subBatch}.`; return; }
+                if (qty < 1 || !date) { valid = false; errorMsg = `Fill qty/date for ${subBatch}.`; return; }
+                assignments.push({ poolId, type, subBatch, worker, firm, qty, priority, date });
+            });
         });
 
-        if (!valid || !assignments.length) { Swal.fire({ icon: "warning", title: "Incomplete form" }); return; }
+        if (!valid || !assignments.length) { Swal.fire({ icon: "warning", title: "Incomplete form", text: errorMsg }); return; }
 
         let addedCount = 0;
         assignments.forEach(a => {
@@ -821,6 +1101,28 @@ $(document).ready(function () {
         $("#progressLivePreview").html(`<div class="d-flex justify-content-between"><span><strong>Eff:</strong> ${eff}</span><span><strong>Progress:</strong> ${progress}</span><span><strong>Passed:</strong> ${passed}</span><span><strong>Remaining:</strong> ${remaining}</span></div>`);
     }
 
+    function renderProgressHistory(stitchId) {
+        const $list = $("#progressHistoryList");
+        if (!$list.length) return;
+        $list.empty();
+
+        const history = getHistoryFor(stitchId);
+        if (!history.length) {
+            $list.html(`<div class="progress-history-empty">No previous assignment / progress recorded yet.</div>`);
+            return;
+        }
+
+        history.forEach(h => {
+            $list.append(`
+                <div class="progress-history-row">
+                    <div class="h-at"><i class="bx bx-time-five me-1"></i>${escapeHtml(h.at)}</div>
+                    <div class="h-action">${escapeHtml(h.action || "-")}</div>
+                    <div class="h-by">${escapeHtml(h.by || "")}</div>
+                </div>
+            `);
+        });
+    }
+
     $(document).on("click", ".progress-btn", function () {
         if ($(this).prop("disabled")) return;
         const id = Number($(this).data("id"));
@@ -834,6 +1136,7 @@ $(document).ready(function () {
         $("#progressTypeSelect").val("completed");
         $("#progressQty").val(0);
         refreshProgressNumbers(item);
+        renderProgressHistory(id);
         $("#progressModal").modal("show");
     });
 
@@ -989,19 +1292,14 @@ $(document).ready(function () {
         });
     });
 
-    /* ============================================================
-       VIEW DETAIL
-       ============================================================ */
-    function buildViewHtml(item) {
+        function buildViewHtml(item) {
         const photoSrc = item.photo ? escapeHtml(item.photo) : PLACEHOLDER_IMG;
         const now = new Date();
         const dateStr = now.toLocaleDateString("en-GB") + ", " + now.toLocaleTimeString("en-GB", { hour12: false });
-        const history = getHistoryFor(item.id);
-        const historyHtml = history.length
-            ? history.map(h => `<div style="font-size:11px;padding:4px 0;border-bottom:1px dashed #eef1f7;">• <strong>${escapeHtml(h.at)}</strong> — ${escapeHtml(h.action || "")}</div>`).join("")
-            : `<div class="text-muted small">No history yet.</div>`;
+        const qty = item.quantity || 0;
         const nameLabel = item.type === "outsource" ? "Firm Name" : "Worker Name";
         const nameVal = item.type === "outsource" ? item.firm : item.worker;
+        const typeLabel = item.type === "outsource" ? "Outsource" : "In-House";
 
         return `
             <div class="detail-print-wrap">
@@ -1016,25 +1314,21 @@ $(document).ready(function () {
                             <div class="detail-highlight-item"><span class="lbl">${escapeHtml(nameLabel)}</span><span class="val">${escapeHtml(nameVal || "-")}</span></div>
                             <div class="detail-highlight-item"><span class="lbl">Design Number</span><span class="val">${escapeHtml(item.designNumber || "-")}</span></div>
                             <div class="detail-highlight-item"><span class="lbl">Brand</span><span class="val">${escapeHtml(item.brand || "-")}</span></div>
-                            <div class="detail-highlight-item"><span class="lbl">Total Quantity</span><span class="val">${item.quantity || 0}</span></div>
+                            <div class="detail-highlight-item"><span class="lbl">Type</span><span class="val">${escapeHtml(typeLabel)}</span></div>
+                            <div class="detail-highlight-item"><span class="lbl">Total Quantity</span><span class="val">${qty}</span></div>
                         </div>
                         <div class="detail-info-grid">
                             <div class="detail-info-cell"><span class="lbl">Batch ID</span><span class="val">${escapeHtml(item.batchId || "-")}</span></div>
                             <div class="detail-info-cell"><span class="lbl">Sub-Batch</span><span class="val">${escapeHtml(item.subBatch || "-")}</span></div>
-                            <div class="detail-info-cell"><span class="lbl">Type</span><span class="val">${item.type === "outsource" ? "Outsource" : "In-House"}</span></div>
                             <div class="detail-info-cell"><span class="lbl">Color</span><span class="val">${escapeHtml(item.color || "-")}</span></div>
                             <div class="detail-info-cell"><span class="lbl">Piece Type</span><span class="val">${escapeHtml(item.pieceType || "-")}</span></div>
                             <div class="detail-info-cell"><span class="lbl">Priority</span><span class="val">${escapeHtml(item.priority || "-")}</span></div>
                             <div class="detail-info-cell"><span class="lbl">Delivery Date</span><span class="val">${escapeHtml(formatDate(item.deliveryDate))}</span></div>
-                            <div class="detail-info-cell"><span class="lbl">Progress</span><span class="val">${item.progress || 0}</span></div>
-                            <div class="detail-info-cell"><span class="lbl">Passed</span><span class="val">${item.passedQty || 0}</span></div>
                         </div>
-                        <h6 style="color:#161617;font-weight:700;margin-top:16px;">History</h6>
-                        <div style="max-height:150px;overflow-y:auto;background:#fafbfd;padding:8px;border-radius:6px;">${historyHtml}</div>
                     </div>
                     <div>
                         <div class="detail-photo-box">
-                            <img src="${photoSrc}" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}';">
+                            <img src="${photoSrc}" alt="Batch Photo" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}';">
                         </div>
                     </div>
                 </div>
@@ -1082,6 +1376,7 @@ $(document).ready(function () {
                 const deliveryCls = getDeliveryClass(item.deliveryDate);
                 const typeLabel = item.type === "outsource" ? "Outsource" : "In-House";
                 const nameVal = item.type === "outsource" ? (item.firm || "-") : (item.worker || "-");
+                const remaining = (item.quantity || 0) - (item.progress || 0);
                 tableRows += `
                     <tr>
                         <td>${isFirst ? serial : ""}</td>
@@ -1094,11 +1389,11 @@ $(document).ready(function () {
                         <td>${item.quantity}</td>
                         <td>${item.progress || 0}</td>
                         <td>${item.damage || 0}</td>
-                        <td>${(item.quantity || 0) - (item.progress || 0)}</td>
+                        <td>${remaining}</td>
                         <td><span class="priority-badge ${pc}">${escapeHtml(item.priority || "-")}</span></td>
                         <td><span class="badge ${deliveryCls} delivery-date-badge">${formatDate(item.deliveryDate)}</span></td>
                         <td><span class="status-badge passed">Passed</span></td>
-                        <td><button class="btn btn-sm view-row-btn view-from-list-btn" data-id="${item.id}"><i class="bx bx-show"></i></button></td>
+                        <td><button class="btn btn-sm view-row-btn batch-history-btn" data-batch-id="${escapeHtml(batchId)}" title="View Batch History"><i class="bx bx-show"></i></button></td>
                     </tr>
                 `;
             });
@@ -1129,14 +1424,88 @@ $(document).ready(function () {
         $("#listAllModal").modal("show");
     });
 
-    $(document).on("click", ".view-from-list-btn", function () {
-        const id = Number($(this).data("id"));
-        const item = workData.find(d => Number(d.id) === id);
-        if (!item) return;
-        $("#viewDetailBody").html(buildViewHtml(item));
-        $("#viewDetailModal").modal("show");
+    /* ============================================================
+       NESTED BATCH HISTORY
+       ============================================================ */
+    function buildBatchHistoryHtml(batchId) {
+        const history = readStorage(WORK_HISTORY_KEY);
+        const batchRows = workData.filter(d => String(d.batchId) === String(batchId));
+        if (!batchRows.length) return `<div class="text-center text-muted py-5">No assignments found for batch ${escapeHtml(batchId)}.</div>`;
+
+        const subBatchMap = {};
+        batchRows.forEach(r => {
+            const key = String(r.subBatch || "");
+            if (!subBatchMap[key]) subBatchMap[key] = [];
+            subBatchMap[key].push(r);
+        });
+
+        const subBatchKeys = Object.keys(subBatchMap).sort();
+        const now = new Date();
+        const dateStr = now.toLocaleDateString("en-GB") + ", " + now.toLocaleTimeString("en-GB", { hour12: false });
+        const first = batchRows[0];
+
+        let html = `
+            <div style="border-bottom: 2px solid #161617; padding-bottom: 12px; margin-bottom: 18px;">
+                <h4 style="margin: 0; font-weight: 700; color: #161617; letter-spacing: 0.5px;">BATCH HISTORY</h4>
+                <small style="color: #6b7280; display: block; margin-top: 4px;">Batch ID: <strong>${escapeHtml(batchId)}</strong> • Design: <strong>${escapeHtml(first.designNumber || "-")}</strong> • Brand: <strong>${escapeHtml(first.brand || "-")}</strong></small>
+                <small style="color: #9ca3af; display: block; margin-top: 2px;">Generated: ${escapeHtml(dateStr)}</small>
+            </div>
+        `;
+
+        subBatchKeys.forEach((subBatch, idx) => {
+            const items = subBatchMap[subBatch];
+            const firstItem = items[0];
+            const nameVal = firstItem.type === "outsource" ? (firstItem.firm || "-") : (firstItem.worker || "-");
+            const qty = firstItem.quantity || 0;
+            const progress = firstItem.progress || 0;
+            const passedQty = firstItem.passedQty || 0;
+            const damage = firstItem.damage || 0;
+            const effectiveTotal = Math.max(0, qty - damage);
+            const remaining = Math.max(0, effectiveTotal - progress);
+
+            const itemIds = items.map(i => i.id);
+            const allEvents = history.filter(h => itemIds.includes(Number(h.stitchId)))
+                .sort((a, b) => String(a.at).localeCompare(String(b.at)));
+
+            let eventsHtml = "";
+            if (allEvents.length) {
+                allEvents.forEach(h => {
+                    eventsHtml += `<tr><td style="white-space:nowrap;">${escapeHtml(h.at)}</td><td>${escapeHtml(h.action || "")}</td><td>${escapeHtml(h.by || "-")}</td></tr>`;
+                });
+            } else {
+                eventsHtml = `<tr><td colspan="3" class="text-center text-muted">No history events</td></tr>`;
+            }
+
+            html += `
+                <div style="border: 1px solid #e2e7f1; border-radius: 8px; margin-bottom: 16px; overflow: hidden;">
+                    <div style="background: #f8f9fa; padding: 10px 14px; border-bottom: 1px solid #e2e7f1;">
+                        <div style="font-size: 13px; font-weight: 700; color: #161617;">${idx + 1}. ${escapeHtml(subBatch)} — ${escapeHtml(nameVal)}</div>
+                        <div style="font-size: 11px; color: #6b7280; margin-top: 3px;">
+                            <strong>Piece:</strong> ${escapeHtml(firstItem.pieceType || "-")} •
+                            <strong>Qty:</strong> ${qty} • <strong>Progress:</strong> ${progress} •
+                            <strong>Damage:</strong> ${damage} • <strong>Passed:</strong> ${passedQty} •
+                            <strong>Remaining:</strong> ${remaining}
+                        </div>
+                    </div>
+                    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                        <thead><tr style="background: #fafbfd;"><th style="padding:8px 12px; text-align:left; font-weight:600; color:#4b5563; font-size:11px; text-transform:uppercase; border-bottom:1px solid #e2e7f1;">Date & Time</th><th style="padding:8px 12px; text-align:left; font-weight:600; color:#4b5563; font-size:11px; text-transform:uppercase; border-bottom:1px solid #e2e7f1;">Action</th><th style="padding:8px 12px; text-align:left; font-weight:600; color:#4b5563; font-size:11px; text-transform:uppercase; border-bottom:1px solid #e2e7f1;">By</th></tr></thead>
+                        <tbody>${eventsHtml}</tbody>
+                    </table>
+                </div>
+            `;
+        });
+
+        return html;
+    }
+
+    $(document).on("click", ".batch-history-btn", function () {
+        const batchId = String($(this).data("batch-id"));
+        if (!batchId) return;
+        $("#batchHistoryBody").html(buildBatchHistoryHtml(batchId));
+        $("#batchHistoryModal").modal("show");
     });
 
+    $("#printBatchHistoryBtn").on("click", function () { window.print(); });
     $("#printListAllBtn").on("click", function () { window.print(); });
 
     /* ============================================================

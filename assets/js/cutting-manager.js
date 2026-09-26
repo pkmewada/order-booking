@@ -55,7 +55,6 @@ $(document).ready(function () {
         catch (e) { return false; }
     }
     function loadData() {
-        // 🆕 Only pick pieces whose currentStage.type === "cutting"
         approvedPool = readStorage(APPROVED_POOL_KEY).filter(p =>
             p.currentStage && p.currentStage.type === "cutting"
         );
@@ -65,7 +64,6 @@ $(document).ready(function () {
     function saveData() {
         saveStorage(CUTTING_DATA_KEY, cuttingData);
         localStorage.setItem(CUTTING_NEXT_ID_KEY, String(nextId));
-        // Note: approvedPool is not saved here — it's updated by pushToNextStage
     }
 
     /* ============================================================
@@ -83,10 +81,19 @@ $(document).ready(function () {
         } catch (e) { /* silent */ }
     }
 
+    function parseHistoryTime(str) {
+        const m = String(str).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2}):(\d{2})/);
+        if (!m) return 0;
+        const [, d, mo, y, h, mi, se] = m;
+        return new Date(
+            `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}T${h.padStart(2, "0")}:${mi}:${se}`
+        ).getTime();
+    }
+
     function getHistoryForAssignment(cuttingId) {
         return readStorage(CUTTING_HISTORY_KEY)
             .filter(h => Number(h.cuttingId) === Number(cuttingId))
-            .sort((a, b) => String(a.at).localeCompare(String(b.at)));
+            .sort((a, b) => parseHistoryTime(a.at) - parseHistoryTime(b.at));
     }
 
     function sanitizePieceName(name) {
@@ -229,6 +236,46 @@ $(document).ready(function () {
     }
     function getPoolRemaining(item) {
         return Math.max(0, getPoolTotal(item) - getPoolAssigned(item));
+    }
+
+    /* ============================================================
+       MANUAL SPLIT — auto-distribute remaining qty
+       ============================================================ */
+    function redistributeQuantities($tbody, totalRemaining, changedRowIdx) {
+        const $rows = $tbody.find(".assignment-row, .bulk-assignment-row");
+        if (!$rows.length) return;
+
+        const rowCount = $rows.length;
+        if (rowCount === 1) {
+            $rows.eq(0).find(".quantity-input").val(totalRemaining);
+            return;
+        }
+
+        const manualVal = parseInt($rows.eq(changedRowIdx).find(".quantity-input").val()) || 0;
+
+        // Remaining to distribute among the other rows
+        const remainingForOthers = Math.max(0, totalRemaining - manualVal);
+        const otherRowsCount = rowCount - 1;
+
+        if (otherRowsCount === 1) {
+            $rows.each(function (i) {
+                if (i === changedRowIdx) return;
+                $(this).find(".quantity-input").val(remainingForOthers);
+            });
+            return;
+        }
+
+        // Distribute evenly among other rows (last gets remainder)
+        const base = Math.floor(remainingForOthers / otherRowsCount);
+        const rem = remainingForOthers - (base * otherRowsCount);
+
+        let otherIdx = 0;
+        $rows.each(function (i) {
+            if (i === changedRowIdx) return;
+            const extra = (otherIdx >= (otherRowsCount - rem)) ? 1 : 0;
+            $(this).find(".quantity-input").val(base + extra);
+            otherIdx++;
+        });
     }
 
     /* ================= TABLE 1: APPROVED POOL ================= */
@@ -594,7 +641,7 @@ $(document).ready(function () {
     $("#printListDetailBtn").on("click", function () { window.print(); });
 
     /* ============================================================
-       LIST ALL MODAL
+       LIST ALL MODAL — only ONE view button per row
        ============================================================ */
     function buildListAllHtml() {
         const byBatch = {};
@@ -664,7 +711,7 @@ $(document).ready(function () {
                     <td><span class="priority-badge ${priorityClass}">${escapeHtml(item.priority || "-")}</span></td>
                     <td>${deliveryHtml}</td>
                     <td><span class="status-badge passed">Passed</span></td>
-                    <td><button class="btn btn-sm view-row-btn batch-history-btn" data-batch-id="${escapeHtml(batchId)}"><i class="bx bx-show"></i></button></td>
+                    <td><button class="btn btn-sm view-row-btn batch-history-btn" data-batch-id="${escapeHtml(batchId)}" title="View Batch History"><i class="bx bx-show"></i></button></td>
                 </tr>
             `;
         });
@@ -859,10 +906,10 @@ $(document).ready(function () {
                 const subBatch = peekNextSubBatchId(poolItem.batchId, poolItem.pieceItem, i);
                 const autoQty = autoQtys[i];
                 tbody.append(`
-                    <tr class="assignment-row">
+                    <tr class="assignment-row" data-row-index="${i}">
                         <td><span class="sub-batch-label fw-semibold text-primary">${escapeHtml(subBatch)}</span><input type="hidden" class="sub-batch-input" value="${escapeHtml(subBatch)}"></td>
                         <td><select class="form-select form-select-sm worker-select" required><option value="">Select Worker</option>${workerOpts}</select></td>
-                        <td><input type="number" class="form-control form-control-sm quantity-input" value="${autoQty}" placeholder="Qty" min="1" max="${remaining}"></td>
+                        <td><input type="number" class="form-control form-control-sm quantity-input" value="${autoQty}" placeholder="Qty" min="1" max="${remaining}" data-max="${remaining}"></td>
                         <td><span style="font-size:12px;color:#4b5563;font-weight:500;">${escapeHtml(poolItem.brand || "-")}</span></td>
                         <td>
                             <select class="form-select form-select-sm priority-select">
@@ -877,10 +924,41 @@ $(document).ready(function () {
             }
 
             if (defaultWorker) tbody.find(".worker-select").val(defaultWorker);
+
+            // ✅ Manual qty edit → redistribute remaining rows
+            tbody.off("input", ".quantity-input").on("input", ".quantity-input", function () {
+                const $input = $(this);
+                const $row = $input.closest(".assignment-row");
+                const rowIdx = Number($row.data("row-index"));
+
+                // Clamp manual value to total remaining
+                let manualVal = parseInt($input.val()) || 0;
+                if (manualVal < 0) manualVal = 0;
+                if (manualVal > remaining) {
+                    manualVal = remaining;
+                    $input.val(manualVal);
+                }
+
+                // Mark as manually edited
+                $input.addClass("manually-edited");
+
+                // If there's only one row → nothing to redistribute
+                if (tbody.find(".assignment-row").length > 1) {
+                    redistributeQuantities(tbody, remaining, rowIdx);
+                    // Keep the manually edited value intact & re-mark
+                    $input.val(manualVal).addClass("manually-edited");
+                }
+            });
+
+            // Remove manual-edited flag when user clears and re-splits
+            $("#applySplitBtn").off("click").on("click", function () {
+                const c = parseInt($("#splitCount").val()) || 1;
+                renderRows(c);
+            });
         }
 
         renderRows(baseRows);
-        $("#applySplitBtn").click(function () {
+        $("#applySplitBtn").off("click").on("click", function () {
             const c = parseInt($("#splitCount").val()) || 1;
             renderRows(c);
         });
@@ -1017,6 +1095,29 @@ $(document).ready(function () {
         `);
     }
 
+    /* ✅ NEW: Render assignment history into the modal */
+    function renderProgressHistory(cuttingId) {
+        const $list = $("#progressHistoryList");
+        if (!$list.length) return;
+        $list.empty();
+
+        const history = getHistoryForAssignment(cuttingId);
+        if (!history.length) {
+            $list.html(`<div class="progress-history-empty">No previous assignment / progress recorded yet.</div>`);
+            return;
+        }
+
+        history.forEach(h => {
+            $list.append(`
+                <div class="progress-history-row">
+                    <div class="h-at"><i class="bx bx-time-five me-1"></i>${escapeHtml(h.at)}</div>
+                    <div class="h-action">${escapeHtml(h.action || "-")}</div>
+                    <div class="h-by">${escapeHtml(h.by || "")}</div>
+                </div>
+            `);
+        });
+    }
+
     $(document).on("click", ".progress-btn", function () {
         if ($(this).prop("disabled")) return;
         const id = Number($(this).data("id"));
@@ -1030,6 +1131,10 @@ $(document).ready(function () {
         $("#progressTypeSelect").val("completed");
         $("#progressQty").val(0);
         refreshProgressModalNumbers(item);
+
+        // ✅ NEW: Render history inside the modal
+        renderProgressHistory(id);
+
         $("#progressModal").modal("show");
     });
 
@@ -1346,7 +1451,7 @@ $(document).ready(function () {
                 const autoQtys = splitQuantity(totalQty, splitCount);
                 const workerOpts = WORKERS.map(w => `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`).join("");
                 const subBatch = peekNextSubBatchId(item.batchId, item.pieceItem, s);
-                splitGroupRows.push({ item, splitIndex: s, subBatch, autoQty: autoQtys[s] || 0, workerOpts });
+                splitGroupRows.push({ item, splitIndex: s, subBatch, autoQty: autoQtys[s] || 0, workerOpts, totalQty });
             });
 
             if (!splitGroupRows.length) continue;
@@ -1373,11 +1478,12 @@ $(document).ready(function () {
                         data-batch-id="${escapeHtml(item.batchId)}"
                         data-split-index="${row.splitIndex}"
                         data-piece-number="${item.pieceNumber}"
-                        data-piece-qty="${row.autoQty}">
+                        data-piece-qty="${row.autoQty}"
+                        data-piece-total="${row.totalQty}">
                         <td><span class="sub-batch-label fw-semibold text-primary" style="font-size:11px;">${escapeHtml(row.subBatch)}</span><input type="hidden" class="sub-batch-input" value="${escapeHtml(row.subBatch)}"></td>
                         <td><div class="fw-semibold" style="font-size:12px;">Piece ${escapeHtml(item.pieceNumber)}</div><div class="text-muted" style="font-size:11px;">${escapeHtml(item.pieceItem || "-")}</div></td>
                         <td><select class="form-select form-select-sm worker-select" required><option value="">Select Worker</option>${row.workerOpts}</select></td>
-                        <td><input type="number" class="form-control form-control-sm quantity-input" value="${row.autoQty}" placeholder="Qty" min="1" max="${row.autoQty}" style="width:70px;"></td>
+                        <td><input type="number" class="form-control form-control-sm quantity-input" value="${row.autoQty}" placeholder="Qty" min="1" max="${row.totalQty}" data-max="${row.totalQty}" style="width:70px;"></td>
                         <td>
                             <select class="form-select form-select-sm priority-select">
                                 <option value="Low">Low</option>
@@ -1391,6 +1497,44 @@ $(document).ready(function () {
                 `);
             });
         }
+
+        // ✅ Manual qty edit → redistribute remaining rows within same piece group
+        $tbody.off("input", ".quantity-input").on("input", ".quantity-input", function () {
+            const $input = $(this);
+            const $row = $input.closest(".bulk-assignment-row");
+            const poolId = Number($row.data("pool-id"));
+            const splitIndex = Number($row.data("split-index"));
+            const pieceTotal = Number($row.data("piece-total")) || 0;
+
+            // Clamp value
+            let manualVal = parseInt($input.val()) || 0;
+            if (manualVal < 0) manualVal = 0;
+            if (manualVal > pieceTotal) {
+                manualVal = pieceTotal;
+                $input.val(manualVal);
+            }
+
+            $input.addClass("manually-edited");
+
+            // Only one row for this piece? nothing to redistribute
+            const $samePieceRows = $tbody.find(`.bulk-assignment-row[data-pool-id="${poolId}"]`);
+            if ($samePieceRows.length <= 1) return;
+
+            const $otherRows = $samePieceRows.not($row);
+            const remainingForOthers = Math.max(0, pieceTotal - manualVal);
+            const otherCount = $otherRows.length;
+
+            if (otherCount === 1) {
+                $otherRows.find(".quantity-input").val(remainingForOthers);
+            } else {
+                const base = Math.floor(remainingForOthers / otherCount);
+                const rem = remainingForOthers - (base * otherCount);
+                $otherRows.each(function (i) {
+                    const extra = (i >= (otherCount - rem)) ? 1 : 0;
+                    $(this).find(".quantity-input").val(base + extra);
+                });
+            }
+        });
     }
 
     function updateBulkSelectedCount() {

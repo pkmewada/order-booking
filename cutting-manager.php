@@ -554,6 +554,90 @@
     }
     .history-block strong { color: #161617; }
 
+    /* ======================================================
+       ✅ NEW: PROGRESS MODAL — HISTORY SECTION
+       ====================================================== */
+    .progress-history-wrap {
+        margin-top: 14px;
+        border: 1px solid #e2e7f1;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #fafbfd;
+    }
+
+    .progress-history-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: #f1f3f9;
+        border-bottom: 1px solid #e2e7f1;
+        font-size: 12px;
+        font-weight: 700;
+        color: #18243d;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+
+    .progress-history-head i {
+        font-size: 15px;
+        color: #161617;
+    }
+
+    .progress-history-body {
+        max-height: 200px;
+        overflow-y: auto;
+        padding: 6px 4px;
+    }
+
+    .progress-history-row {
+        display: grid;
+        grid-template-columns: 140px 1fr 90px;
+        gap: 8px;
+        align-items: center;
+        padding: 6px 12px;
+        font-size: 12px;
+        border-bottom: 1px dashed #eef1f7;
+    }
+
+    .progress-history-row:last-child {
+        border-bottom: none;
+    }
+
+    .progress-history-row .h-at {
+        color: #6b7280;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+    .progress-history-row .h-action {
+        color: #18243d;
+        font-weight: 600;
+    }
+
+    .progress-history-row .h-by {
+        color: #9ca3af;
+        font-size: 11px;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .progress-history-empty {
+        padding: 14px;
+        text-align: center;
+        color: #9aa6c2;
+        font-size: 12px;
+        font-style: italic;
+    }
+
+    /* ✅ NEW: Manual split qty input highlight */
+    .quantity-input.manually-edited {
+        background: #fffbeb !important;
+        border-color: #fcd34d !important;
+        font-weight: 700;
+        color: #92400e;
+    }
+
     @media print {
         body * { visibility: hidden; }
         #viewDetailModal, #viewDetailModal *,
@@ -782,7 +866,18 @@
                     </div>
                 </div>
 
-                <div class="alert alert-info mb-0" id="progressLivePreview" style="font-size:13px;"></div>
+                <div class="alert alert-info mb-3" id="progressLivePreview" style="font-size:13px;"></div>
+
+                <!-- ✅ NEW: PREVIOUS ASSIGNMENT HISTORY -->
+                <div class="progress-history-wrap">
+                    <div class="progress-history-head">
+                        <i class="bx bx-history"></i>
+                        Previous Assignment / Progress History
+                    </div>
+                    <div class="progress-history-body" id="progressHistoryList">
+                        <!-- filled by JS -->
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

@@ -1,5 +1,4 @@
 <?php require_once __DIR__ . '/includes/header.php'; ?>
-
 <style>
     #refreshBatchBtn {
         background-color: #161617 !important;
@@ -146,10 +145,12 @@
         margin-top: 2px;
     }
 
-    /* ---------- Photo in modal ---------- */
+    /* ---------- Photo in modal (portrait box: narrow + tall) ---------- */
     .batch-photo-box {
         width: 100%;
-        aspect-ratio: 1 / 1;
+        max-width: 230px;
+        margin: 0 auto;
+        aspect-ratio: 2 / 3;      /* portrait like 854x1280 */
         border: 1px solid #dfe5f1;
         border-radius: 8px;
         background: #f8f9fc;
@@ -162,7 +163,7 @@
     .batch-photo-box img {
         width: 100%;
         height: 100%;
-        object-fit: cover;
+        object-fit: contain;      /* show full photo, no crop */
     }
 
     /* ---------- Photo in table (clickable) ---------- */
@@ -236,6 +237,40 @@
     .priority-badge.priority-low {
         background: #fdd835;
         color: #161617 !important;
+    }
+
+    /* ---------- Passed date/time chip (after approval) ---------- */
+    .passed-chip {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        padding: 6px 10px;
+        border-radius: 7px;
+        background: #e8f7ee;
+        border: 1px solid #b7e4c7;
+        color: #146c43;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+
+    .passed-chip i {
+        font-size: 14px;
+        margin-right: 4px;
+    }
+
+    .passed-chip .passed-line {
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .passed-chip .passed-time {
+        font-weight: 500;
+        color: #157347;
+        font-size: 11px;
+        margin-left: 18px;
     }
 </style>
 

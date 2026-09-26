@@ -142,6 +142,33 @@ $(document).ready(function () {
     }
 
     /* ======================================================
+       PASSED DATE/TIME FORMAT
+       ====================================================== */
+
+    function formatPassedDateTime(isoString) {
+        if (!isoString) return { date: "-", time: "-" };
+
+        const d = new Date(isoString);
+        if (isNaN(d.getTime())) return { date: "-", time: "-" };
+
+        const day = String(d.getDate()).padStart(2, "0");
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const year = d.getFullYear();
+
+        let hours = d.getHours();
+        const minutes = String(d.getMinutes()).padStart(2, "0");
+        const ampm = hours >= 12 ? "PM" : "AM";
+        hours = hours % 12;
+        if (hours === 0) hours = 12;
+        const hourStr = String(hours).padStart(2, "0");
+
+        return {
+            date: `${day}/${month}/${year}`,
+            time: `${hourStr}:${minutes} ${ampm}`
+        };
+    }
+
+    /* ======================================================
        DESIGN NUMBER UNIQUENESS
        ====================================================== */
 
@@ -430,6 +457,8 @@ $(document).ready(function () {
             quantity: quantity,
             priority: priority,
             status: oldBatch ? oldBatch.status : "pending",
+            // Preserve passedAt when editing an already-approved batch
+            passedAt: oldBatch ? (oldBatch.passedAt || "") : "",
             pieces: pieces.map((piece, index) => ({
                 number: getPieceNumber(piece, index),
                 item: getPieceItem(piece),
@@ -503,9 +532,31 @@ $(document).ready(function () {
             const priorityClass = getPriorityClass(batch.priority);
             const isApproved = batch.status === "approved";
 
-            const passButtonHtml = isApproved
-                ? ""
-                : `<button type="button" class="btn btn-sm btn-success pass-batch-btn" data-id="${escapeHtml(batch.id)}" title="Pass"><i class="bx bx-right-arrow-alt"></i></button>`;
+            let actionHtml = "";
+
+            if (isApproved) {
+                // After Pass → show only Passed Date + Time chip
+                const passed = formatPassedDateTime(batch.passedAt);
+
+                actionHtml = `
+                    <div class="passed-chip" title="Approved on ${escapeHtml(passed.date)} at ${escapeHtml(passed.time)}">
+                        <span class="passed-line">
+                            <i class="bx bx-check-circle"></i>
+                            Passed: ${escapeHtml(passed.date)}
+                        </span>
+                        <span class="passed-time">${escapeHtml(passed.time)}</span>
+                    </div>
+                `;
+            } else {
+                actionHtml = `
+                    <div class="d-flex gap-1 flex-wrap">
+                        <button type="button" class="btn btn-sm btn-primary view-batch-btn" data-id="${escapeHtml(batch.id)}" title="View"><i class="bx bx-show"></i></button>
+                        <button type="button" class="btn btn-sm btn-primary edit-batch-btn" data-id="${escapeHtml(batch.id)}" title="Edit"><i class="bx bx-edit"></i></button>
+                        <button type="button" class="btn btn-sm btn-success pass-batch-btn" data-id="${escapeHtml(batch.id)}" title="Pass"><i class="bx bx-right-arrow-alt"></i></button>
+                        <button type="button" class="btn btn-sm btn-danger delete-batch-btn" data-id="${escapeHtml(batch.id)}" title="Delete"><i class="bx bx-trash"></i></button>
+                    </div>
+                `;
+            }
 
             tbody.append(`
                 <tr>
@@ -516,14 +567,7 @@ $(document).ready(function () {
                     <td><span class="color-text">${escapeHtml(batch.color || "-")}</span></td>
                     <td>${escapeHtml(batch.quantity || "0")}</td>
                     <td><span class="priority-badge ${priorityClass}">${escapeHtml(batch.priority || "-")}</span></td>
-                    <td>
-                        <div class="d-flex gap-1 flex-wrap">
-                            <button type="button" class="btn btn-sm btn-primary view-batch-btn" data-id="${escapeHtml(batch.id)}" title="View"><i class="bx bx-show"></i></button>
-                            <button type="button" class="btn btn-sm btn-primary edit-batch-btn" data-id="${escapeHtml(batch.id)}" title="Edit"><i class="bx bx-edit"></i></button>
-                            ${passButtonHtml}
-                            <button type="button" class="btn btn-sm btn-danger delete-batch-btn" data-id="${escapeHtml(batch.id)}" title="Delete"><i class="bx bx-trash"></i></button>
-                        </div>
-                    </td>
+                    <td>${actionHtml}</td>
                 </tr>
             `);
         });
@@ -591,11 +635,20 @@ $(document).ready(function () {
         }).then(function (result) {
             if (!result.isConfirmed) return;
 
+            // Mark approved + record current date/time
             batch.status = "approved";
+            batch.passedAt = new Date().toISOString();
 
             let approvedBatches = readStorage(APPROVED_BATCH_STORAGE_KEY);
             const alreadyApproved = approvedBatches.some(item => Number(item.id) === id);
-            if (!alreadyApproved) approvedBatches.push({ ...batch });
+
+            if (alreadyApproved) {
+                const idx = approvedBatches.findIndex(item => Number(item.id) === id);
+                approvedBatches[idx] = { ...batch };
+            } else {
+                approvedBatches.push({ ...batch });
+            }
+
             if (!saveStorage(APPROVED_BATCH_STORAGE_KEY, approvedBatches)) return;
             if (!saveStorage(BATCH_STORAGE_KEY, batchData)) return;
 

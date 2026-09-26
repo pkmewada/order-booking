@@ -59,10 +59,10 @@ $(document).ready(function () {
 
     function statusText(status) {
         const map = {
-            pending:     { label: "Pending",     cls: "pending" },
+            pending: { label: "Pending", cls: "pending" },
             in_progress: { label: "In Progress", cls: "in_progress" },
-            pass:        { label: "Pass",        cls: "pass" },
-            stopped:     { label: "Stopped",     cls: "stopped" }
+            pass: { label: "Pass", cls: "pass" },
+            stopped: { label: "Stopped", cls: "stopped" }
         };
         const s = map[status] || map.pending;
         return `<span class="status-badge ${s.cls}">${s.label}</span>`;
@@ -449,7 +449,9 @@ $(document).ready(function () {
             $actions.html(`<button type="button" class="btn btn-success approve-piece-btn" data-piece="${pieceNumber}"><i class="bx bx-check-circle me-1"></i> Approve</button>`);
         } else {
             $actions.html(`
-                <button type="button" class="btn btn-success approve-piece-btn" data-piece="${pieceNumber}" disabled><i class="bx bx-check-circle me-1"></i> Approve</button>
+                <button type="button" class="btn approve-piece-btn" data-piece="${pieceNumber}" disabled>
+    <i class="bx bx-check-circle me-1"></i> Approve
+</button>
                 <button type="button" class="btn btn-info confirm-piece-btn" data-piece="${pieceNumber}"><i class="bx bx-time-five me-1"></i> Confirm</button>
                 <button type="button" class="btn btn-warning pass-piece-btn" data-piece="${pieceNumber}"><i class="bx bx-right-arrow-alt me-1"></i> Pass</button>
             `);
