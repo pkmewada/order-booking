@@ -1,5 +1,6 @@
-$(document).ready(function () {
+$(document).ready(async function () {
     "use strict";
+    try { await Production.initialize(); } catch(error) { Swal.fire({icon:"error",title:"Recovery required",text:error.message}); return; }
 
     const BATCH_STORAGE_KEY = "batchData";
     const REQUIREMENT_STORAGE_KEY = "requirementData";
@@ -15,13 +16,7 @@ $(document).ready(function () {
             '</svg>'
         );
 
-    const FIXED_FLOW_STAGES = ["Cutting", "Stitching", "Ironing"];
 
-    const STAGE_SEQUENCE = [
-        "Before Cutting", "Cutting", "After Cutting",
-        "Before Stitching", "Stitching", "After Stitching",
-        "Before Ironing", "Ironing", "After Ironing"
-    ];
 
     let batchData = [];
     let currentBatchId = null;
@@ -60,7 +55,7 @@ $(document).ready(function () {
     function statusText(status) {
         const map = {
             pending: { label: "Pending", cls: "pending" },
-            in_progress: { label: "In Progress", cls: "in_progress" },
+            in_progress: { label: "Pass", cls: "requirements_pending" },
             pass: { label: "Pass", cls: "pass" },
             stopped: { label: "Stopped", cls: "stopped" }
         };
@@ -100,30 +95,7 @@ $(document).ready(function () {
        BUILD PIECE ROUTE
        ============================================================ */
     function buildPieceRoute(piece) {
-        const route = [];
-        const worksByStage = {};
-
-        (piece.additionalWorks || []).forEach(w => {
-            const stage = String(w.stage || "").trim();
-            if (!stage) return;
-            if (!worksByStage[stage]) worksByStage[stage] = [];
-            worksByStage[stage].push(w.workType);
-        });
-
-        STAGE_SEQUENCE.forEach(stage => {
-            if (worksByStage[stage] && worksByStage[stage].length) {
-                route.push({
-                    type: "additional_work",
-                    stage: stage,
-                    works: worksByStage[stage]
-                });
-            }
-            if (stage === "Cutting") route.push({ type: "cutting", stage: "Cutting" });
-            if (stage === "Stitching") route.push({ type: "stitching", stage: "Stitching" });
-            if (stage === "Ironing") route.push({ type: "ironing", stage: "Ironing" });
-        });
-
-        return route;
+        return Production.buildRoute(piece);
     }
 
     /* ============================================================
@@ -166,39 +138,7 @@ $(document).ready(function () {
         return "pending";
     }
 
-    function normalizeBatchPieces() {
-        batchData = batchData.map(batch => {
-            const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
-            const newPieces = pieces.map((piece, index) => {
-                const pieceNumber = getPieceNumber(piece, index);
-                const allMaterials = getPieceMaterials(piece);
-                if (!allMaterials.length) return piece;
-                if (piece?.approval?.stopped) return piece;
-                const mode = piece.approval?.mode;
-                if (mode !== "confirm" && mode !== "pass") return piece;
-                const merged = buildMergedAvailability(
-                    piece.approval?.itemAvailability,
-                    batch.batchId,
-                    pieceNumber,
-                    allMaterials
-                );
-                const newStatus = deriveStatus(merged, allMaterials);
-                return {
-                    ...piece,
-                    materials: allMaterials,
-                    approval: {
-                        ...piece.approval,
-                        status: newStatus,
-                        itemAvailability: merged,
-                        availableItems: allMaterials.filter(m => merged[m] === "yes"),
-                        missingItems: allMaterials.filter(m => merged[m] !== "yes")
-                    }
-                };
-            });
-            return { ...batch, pieces: newPieces };
-        });
-        saveStorage(APPROVED_BATCH_STORAGE_KEY, batchData);
-    }
+    function normalizeBatchPieces() { /* Approval status is committed with its requirement transaction. */ }
 
     function loadData() {
         let approved = readStorage(APPROVED_BATCH_STORAGE_KEY);
@@ -292,17 +232,7 @@ $(document).ready(function () {
 
     /* ================= FLOW CHART ================= */
     function buildFlowNodes(works) {
-        const flowItems = [];
-        FIXED_FLOW_STAGES.forEach(function (stageName) {
-            flowItems.push({ type: "fixed", label: stageName, order: STAGE_SEQUENCE.indexOf(stageName) });
-        });
-        (works || []).forEach(function (work) {
-            const stage = work.stage || "";
-            const order = STAGE_SEQUENCE.indexOf(stage);
-            flowItems.push({ type: "work", label: work.workType || "Work", order: order === -1 ? 99 : order });
-        });
-        flowItems.sort((a, b) => a.order - b.order);
-        return flowItems;
+        return Production.buildRoute({additionalWorks: works || []}).map((r,order) => ({type:r.type === "additional_work" ? "work" : "fixed",label:r.stage,order}));
     }
 
     function renderFlowChart(batch) {
@@ -532,254 +462,26 @@ $(document).ready(function () {
     });
 
     /* ================= PUSH TO APPROVED POOL ================= */
-    function pushToApprovedPool(batch, piece, pieceNumber, availableItems, mode, availability, allMaterials) {
-        if (isBatchStopped(batch)) return null;
 
-        const pool = readStorage(APPROVED_POOL_KEY);
-        const materials = allMaterials || getPieceMaterials(piece);
-        const pieceRoute = buildPieceRoute(piece);
-        const firstStage = pieceRoute.length ? pieceRoute[0] : { type: "cutting", stage: "Cutting" };
-
-        const existingIdx = pool.findIndex(p =>
-            String(p.batchId) === String(batch.batchId) &&
-            Number(p.pieceNumber) === Number(pieceNumber)
-        );
-
-        if (existingIdx !== -1) {
-            const prev = pool[existingIdx];
-            const mergedAvailability = { ...(prev.itemAvailability || {}) };
-            Object.entries(availability).forEach(([k, v]) => {
-                if (v === "yes") mergedAvailability[k] = "yes";
-                else if (mergedAvailability[k] !== "yes") mergedAvailability[k] = "no";
-            });
-            const mergedMaterials = [...new Set([...(prev.materials || []), ...materials])];
-            const mergedAvailable = mergedMaterials.filter(m => mergedAvailability[m] === "yes");
-
-            pool[existingIdx] = {
-                ...prev,
-                materials: mergedMaterials,
-                itemAvailability: mergedAvailability,
-                availableItems: mergedAvailable,
-                mode: mode,
-                status: "pending",
-                route: pieceRoute,
-                currentStage: firstStage,
-                stageHistory: [
-                    ...(prev.stageHistory || []),
-                    { at: new Date().toLocaleString("en-GB"), stage: firstStage.stage, type: firstStage.type, action: "entered" }
-                ],
-                updatedAt: new Date().toLocaleString("en-GB")
-            };
-            saveStorage(APPROVED_POOL_KEY, pool);
-            return pool[existingIdx];
-        }
-
-        const nextId = pool.length ? Math.max(...pool.map(p => Number(p.id) || 0)) + 1 : 1;
-
-        const entry = {
-            id: nextId,
-            batchId: batch.batchId,
-            bomId: batch.bomId || "",
-            brand: batch.brand || "",
-            designNumber: batch.designNumber || "",
-            color: batch.color || "",
-            pieceNumber: pieceNumber,
-            pieceItem: getPieceItem(piece),
-            quantity: batch.quantity || 0,
-            priority: batch.priority || "Medium",
-            photo: batch.photo || "",
-            availableItems: [...availableItems],
-            materials: materials,
-            itemAvailability: { ...availability },
-            additionalWorks: getPieceWorks(piece),
-            mode: mode,
-            status: "pending",
-            route: pieceRoute,
-            currentStage: firstStage,
-            stageHistory: [
-                { at: new Date().toLocaleString("en-GB"), stage: firstStage.stage, type: firstStage.type, action: "entered" }
-            ],
-            createdAt: new Date().toLocaleString("en-GB")
-        };
-
-        pool.push(entry);
-        saveStorage(APPROVED_POOL_KEY, pool);
-        return entry;
-    }
 
     /* ================= CREATE REQUIREMENT ================= */
-    function createRequirement(batch, piece, pieceNumber, missingItems, availability, allMaterials) {
-        if (isBatchStopped(batch)) return null;
-        const requirementData = readStorage(REQUIREMENT_STORAGE_KEY);
-        const materials = allMaterials || getPieceMaterials(piece);
 
-        const existingIdx = requirementData.findIndex(r =>
-            String(r.batchId) === String(batch.batchId) &&
-            Number(r.pieceNumber) === Number(pieceNumber) &&
-            r.status !== "completed"
-        );
-
-        if (existingIdx !== -1) {
-            const existing = requirementData[existingIdx];
-            const mergedMissing = [...new Set([...(existing.missingItems || []), ...missingItems])];
-            requirementData[existingIdx] = {
-                ...existing,
-                missingItems: mergedMissing,
-                itemAvailability: { ...(existing.itemAvailability || {}), ...availability },
-                materials: materials,
-                remarks: piece?.approval?.remarks || existing.remarks,
-                status: "pending",
-                updatedAt: new Date().toLocaleString("en-GB")
-            };
-            saveStorage(REQUIREMENT_STORAGE_KEY, requirementData);
-            return requirementData[existingIdx];
-        }
-
-        const nextId = requirementData.length ? Math.max(...requirementData.map(r => Number(r.id) || 0)) + 1 : 1;
-
-        const requirement = {
-            id: nextId,
-            requirementId: `REQ-${String(nextId).padStart(3, "0")}`,
-            batchId: batch.batchId,
-            bomId: batch.bomId || "",
-            brand: batch.brand || "",
-            designNumber: batch.designNumber || "",
-            color: batch.color || "",
-            pieceNumber: pieceNumber,
-            pieceItem: getPieceItem(piece),
-            quantity: batch.quantity || 0,
-            priority: batch.priority || "Medium",
-            photo: batch.photo || "",
-            materials: materials,
-            additionalWorks: getPieceWorks(piece),
-            missingItems: [...missingItems],
-            itemAvailability: { ...availability },
-            remarks: piece?.approval?.remarks || "",
-            status: "pending",
-            createdAt: new Date().toLocaleString("en-GB")
-        };
-
-        requirementData.push(requirement);
-        saveStorage(REQUIREMENT_STORAGE_KEY, requirementData);
-        return requirement;
-    }
 
     /* ================= PROCESS PIECE ================= */
     function processPiece(pieceNumber, mode) {
         const batch = getCurrentBatch();
         if (!batch) return;
-        if (isBatchStopped(batch)) {
-            showMessage("warning", "This batch is stopped. Resume it first to continue.");
-            return;
-        }
-        const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
-        const pieceIndex = pieces.findIndex((p, i) => getPieceNumber(p, i) === pieceNumber);
-        if (pieceIndex === -1) return;
-
-        const piece = pieces[pieceIndex];
-        if (isPieceStopped(piece)) { showMessage("warning", "This piece is stopped."); return; }
-        if (isPieceLocked(piece)) { showMessage("info", "This piece is already locked."); return; }
-
-        const materials = getPieceMaterials(piece);
-        if (!materials.length) { showMessage("warning", "This piece has no item list."); return; }
-
-        const availability = computeAvailability(pieceNumber, materials, piece);
-        const availableItems = materials.filter(m => availability[m] === "yes");
-        const missingItems = materials.filter(m => availability[m] === "no");
-        const remarks = $(`.piece-remarks[data-piece="${pieceNumber}"]`).val().trim();
-
-        if (mode === "approve" && missingItems.length) { showMessage("warning", "Approve requires all items present."); return; }
-        if (mode === "confirm") {
-            if (!availableItems.length) { showMessage("warning", "At least one item must be present."); return; }
-            if (!missingItems.length) { showMessage("info", "All items present — use Approve."); return; }
-        }
-        if (mode === "pass" && !availableItems.length) { showMessage("warning", "At least one item must be present to Pass."); return; }
-
-        let titleText = "", htmlText = "", confirmText = "", confirmColor = "#198754";
-
-        if (mode === "approve") {
-            titleText = `Approve Piece ${pieceNumber}?`;
-            htmlText = `<div class="text-start"><p><strong>${availableItems.length} items present</strong></p><p class="text-success">Pass to next stage (Status: <b>Pass</b>)</p></div>`;
-            confirmText = "Yes, Approve & Pass";
-        } else if (mode === "confirm") {
-            titleText = `Confirm Piece ${pieceNumber}?`;
-            htmlText = `<div class="text-start"><p><strong>${availableItems.length} items present</strong></p><p><strong>${missingItems.length} items missing</strong> → Requirement</p><hr><p class="text-muted mb-0">Status <b>Pending</b>. Nothing goes forward.</p></div>`;
-            confirmText = "Yes, Confirm";
-        } else {
-            titleText = `Force Pass Piece ${pieceNumber}?`;
-            htmlText = `<div class="text-start"><p><strong>${availableItems.length} items present</strong> → Next stage (In Progress)</p><p><strong>${missingItems.length} items missing</strong> → Requirement</p><hr><p class="mb-1"><strong>Missing:</strong></p><ul>${missingItems.map(m => `<li>${escapeHtml(m)}</li>`).join("") || "<li>None</li>"}</ul></div>`;
-            confirmText = "Yes, Pass Anyway";
-            confirmColor = "#dc3545";
-        }
-
-        Swal.fire({
-            title: titleText, html: htmlText, icon: "question",
-            showCancelButton: true, confirmButtonText: confirmText, cancelButtonText: "Cancel",
-            confirmButtonColor: confirmColor
-        }).then(function (result) {
+        const piece = batch.pieces.find((p,i) => getPieceNumber(p,i) === pieceNumber);
+        if (!piece) return;
+        const availability = computeAvailability(pieceNumber, getPieceMaterials(piece), piece);
+        const remarks = $(`.piece-remarks[data-piece="${pieceNumber}"]`).val() || "";
+        Swal.fire({ title: mode === "confirm" ? "Confirm pending requirements?" : "Pass piece?",
+            icon: "question", showCancelButton: true, confirmButtonText: "Confirm" }).then(async result => {
             if (!result.isConfirmed) return;
-
-            const freshBatch = getCurrentBatch();
-            if (!freshBatch || isBatchStopped(freshBatch)) {
-                showMessage("warning", "Batch was stopped. Action cancelled.");
-                return;
-            }
-            const freshPiece = (freshBatch.pieces || []).find((p, i) => getPieceNumber(p, i) === pieceNumber);
-            if (freshPiece && isPieceStopped(freshPiece)) {
-                showMessage("warning", "Piece was stopped. Action cancelled.");
-                return;
-            }
-
-            let newStatus;
-            if (mode === "approve") newStatus = "pass";
-            else if (mode === "confirm") newStatus = "pending";
-            else newStatus = "in_progress";
-
-            const updatedPieces = [...pieces];
-            updatedPieces[pieceIndex] = {
-                ...piece,
-                materials: materials,
-                approval: {
-                    status: newStatus,
-                    itemAvailability: availability,
-                    availableItems: availableItems,
-                    missingItems: missingItems,
-                    remarks: remarks,
-                    mode: mode,
-                    locked: true,
-                    updatedAt: new Date().toLocaleString("en-GB")
-                }
-            };
-
-            updateBatchPieces(batch, updatedPieces);
-
-            if (mode === "approve") {
-                pushToApprovedPool(batch, updatedPieces[pieceIndex], pieceNumber, availableItems, "pass", availability, materials);
-            } else if (mode === "pass") {
-                pushToApprovedPool(batch, updatedPieces[pieceIndex], pieceNumber, availableItems, "in_progress", availability, materials);
-                if (missingItems.length) {
-                    createRequirement(batch, updatedPieces[pieceIndex], pieceNumber, missingItems, availability, materials);
-                }
-            } else if (mode === "confirm") {
-                createRequirement(batch, updatedPieces[pieceIndex], pieceNumber, missingItems, availability, materials);
-            }
-
-            loadData();
-            const freshBatch2 = getCurrentBatch();
-            if (freshBatch2) renderApprovalPieces(freshBatch2);
-            renderTable();
-
-            if (mode === "confirm") {
-                Swal.fire({ icon: "info", title: "Confirmed — Pending", text: "Requirement created. Nothing passed forward.", timer: 2500, showConfirmButton: false });
-            } else if (mode === "pass" && missingItems.length) {
-                Swal.fire({
-                    icon: "success", title: "Passed (In Progress)",
-                    html: `<p><strong>${availableItems.length}</strong> items → next stage</p><p><strong>${missingItems.length}</strong> items → Requirement</p>`,
-                    showCancelButton: true, confirmButtonText: "Open Requirement", cancelButtonText: "Close"
-                }).then(function (r) { if (r.isConfirmed) window.location.href = "requirment.php"; });
-            } else {
-                Swal.fire({ icon: "success", title: "Approved & Passed", text: `Piece ${pieceNumber} passed to next stage.`, timer: 1800, showConfirmButton: false });
-            }
+            try {
+                await Production.approve(batch.batchId, [{ pieceNumber, mode, availability, remarks }]);
+                loadData(); renderTable(); const fresh = getCurrentBatch(); if (fresh) renderApprovalPieces(fresh);
+            } catch (error) { Swal.fire({ icon: "error", title: "Approval cancelled", text: error.message }); }
         });
     }
 
@@ -791,148 +493,38 @@ $(document).ready(function () {
     $(document).on("click", ".pass-piece-btn", function () { processPiece(Number($(this).data("piece")), "pass"); });
 
     /* ================= APPROVE ALL ================= */
-    $(document).on("click", "#approveAllBtn", function () {
-        const batch = getCurrentBatch();
-        if (!batch) return;
-        if (isBatchStopped(batch)) { showMessage("warning", "This batch is stopped. Resume it first."); return; }
-
-        const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
-        const readyPieces = [];
-
-        pieces.forEach((piece, index) => {
-            if (isPieceLocked(piece) || isPieceStopped(piece)) return;
-            const pieceNumber = getPieceNumber(piece, index);
-            const materials = getPieceMaterials(piece);
-            if (!materials.length) return;
-            const availability = computeAvailability(pieceNumber, materials, piece);
-            const allYes = materials.every(m => availability[m] === "yes");
-            if (allYes) readyPieces.push({ piece, index, materials, availability });
-        });
-
-        if (!readyPieces.length) { showMessage("warning", "No pieces are ready to approve."); return; }
-
-        Swal.fire({
-            title: "Approve All Ready Pieces?",
-            html: `<div class="text-start"><p><strong>${readyPieces.length}</strong> pieces will be approved and passed forward.</p></div>`,
-            icon: "question",
-            showCancelButton: true,
-            confirmButtonText: "Yes, Approve All",
-            cancelButtonText: "Cancel",
-            confirmButtonColor: "#198754"
-        }).then(function (result) {
-            if (!result.isConfirmed) return;
-
-            const freshBatch = getCurrentBatch();
-            if (!freshBatch || isBatchStopped(freshBatch)) { showMessage("warning", "Batch was stopped."); return; }
-
-            const updatedPieces = [...pieces];
-
-            readyPieces.forEach(({ piece, index, materials, availability }) => {
-                const pieceNumber = getPieceNumber(piece, index);
-                const availableItems = materials.filter(m => availability[m] === "yes");
-
-                updatedPieces[index] = {
-                    ...piece,
-                    materials: materials,
-                    approval: {
-                        status: "pass",
-                        itemAvailability: availability,
-                        availableItems: availableItems,
-                        missingItems: [],
-                        remarks: piece.approval?.remarks || "",
-                        mode: "approve",
-                        locked: true,
-                        updatedAt: new Date().toLocaleString("en-GB")
-                    }
-                };
-
-                pushToApprovedPool(batch, updatedPieces[index], pieceNumber, availableItems, "pass", availability, materials);
-            });
-
-            updateBatchPieces(batch, updatedPieces);
-            loadData();
-            const freshBatch2 = getCurrentBatch();
-            if (freshBatch2) renderApprovalPieces(freshBatch2);
-            renderTable();
-
-            Swal.fire({ icon: "success", title: "Approved", text: `${readyPieces.length} pieces approved & passed.`, timer: 2000, showConfirmButton: false });
-        });
+    $(document).on("click", "#approveAllBtn", async function () {
+        const batch = getCurrentBatch(); if (!batch) return;
+        const requests = batch.pieces.map((piece,i) => ({ piece, pieceNumber: getPieceNumber(piece,i) }))
+            .filter(({piece}) => !isPieceLocked(piece) && !isPieceStopped(piece))
+            .map(({piece,pieceNumber}) => ({ pieceNumber, mode: "approve", availability: computeAvailability(pieceNumber,getPieceMaterials(piece),piece) }))
+            .filter(request => Object.values(request.availability).length && Object.values(request.availability).every(v => v === "yes"));
+        if (!requests.length) return;
+        const result = await Swal.fire({ title: "Approve all ready pieces?", icon: "question", showCancelButton: true });
+        if (!result.isConfirmed) return;
+        try { await Production.approve(batch.batchId, requests); loadData(); renderTable(); const fresh=getCurrentBatch(); if(fresh) renderApprovalPieces(fresh); }
+        catch(error) { Swal.fire({icon:"error",title:"Approval cancelled",text:error.message}); }
     });
 
     /* ================= STOP / RESUME BATCH ================= */
-    $(document).on("click", ".stop-batch-btn", function () {
-        const batchId = $(this).data("id");
-        const batch = batchData.find(b => String(b.id) === String(batchId));
-        if (!batch) { showMessage("danger", "Batch not found."); return; }
-
-        Swal.fire({
-            title: "Stop this Batch?",
-            html: `<div class="text-start"><p><strong>Batch:</strong> ${escapeHtml(batch.batchId || "-")}</p><p class="text-danger mb-0"><i class="bx bx-block me-1"></i>This batch will be <b>frozen</b>.</p></div>`,
-            icon: "warning",
-            showCancelButton: true,
-            confirmButtonText: "Yes, Stop it",
-            cancelButtonText: "Cancel",
-            confirmButtonColor: "#dc3545"
-        }).then(function (result) {
-            if (!result.isConfirmed) return;
-            const idx = batchData.findIndex(b => String(b.id) === String(batchId));
-            if (idx === -1) return;
-            batchData[idx] = { ...batchData[idx], stopped: true, stoppedAt: new Date().toLocaleString("en-GB") };
-            saveStorage(APPROVED_BATCH_STORAGE_KEY, batchData);
-            loadData();
-            renderTable();
-            if (currentBatchId && String(currentBatchId) === String(batchId)) {
-                const b = getCurrentBatch();
-                if (b) { renderFlowChart(b); renderApprovalPieces(b); }
-            }
-            Swal.fire({ icon: "success", title: "Batch Stopped", timer: 2000, showConfirmButton: false });
-        });
+    $(document).on("click", ".stop-batch-btn", async function () {
+        const id = $(this).data("id");
+        const result = await Swal.fire({ title: "Stop this batch?", icon: "question", showCancelButton: true });
+        if (!result.isConfirmed) return;
+        try { await Production.setBatchStopped(id, true); loadData(); renderTable(); const b=getCurrentBatch(); if(b) renderApprovalPieces(b); }
+        catch(error) { Swal.fire({icon:"error",title:"Batch update cancelled",text:error.message}); }
     });
 
-    $(document).on("click", ".resume-batch-btn", function () {
-        const batchId = $(this).data("id");
-        const batch = batchData.find(b => String(b.id) === String(batchId));
-        if (!batch) { showMessage("danger", "Batch not found."); return; }
-
-        Swal.fire({
-            title: "Resume this Batch?",
-            text: "The batch will be unfrozen and can move forward again.",
-            icon: "question",
-            showCancelButton: true,
-            confirmButtonText: "Yes, Resume",
-            cancelButtonText: "Cancel",
-            confirmButtonColor: "#1e88e5"
-        }).then(function (result) {
-            if (!result.isConfirmed) return;
-            const idx = batchData.findIndex(b => String(b.id) === String(batchId));
-            if (idx === -1) return;
-            const updated = { ...batchData[idx] };
-            delete updated.stopped;
-            delete updated.stoppedAt;
-            updated.resumedAt = new Date().toLocaleString("en-GB");
-            batchData[idx] = updated;
-            saveStorage(APPROVED_BATCH_STORAGE_KEY, batchData);
-            loadData();
-            renderTable();
-            if (currentBatchId && String(currentBatchId) === String(batchId)) {
-                const b = getCurrentBatch();
-                if (b) { renderFlowChart(b); renderApprovalPieces(b); }
-            }
-            Swal.fire({ icon: "success", title: "Batch Resumed", timer: 1800, showConfirmButton: false });
-        });
+    $(document).on("click", ".resume-batch-btn", async function () {
+        const id = $(this).data("id");
+        const result = await Swal.fire({ title: "Resume this batch?", icon: "question", showCancelButton: true });
+        if (!result.isConfirmed) return;
+        try { await Production.setBatchStopped(id, false); loadData(); renderTable(); const b=getCurrentBatch(); if(b) renderApprovalPieces(b); }
+        catch(error) { Swal.fire({icon:"error",title:"Batch update cancelled",text:error.message}); }
     });
 
     /* ================= UPDATE BATCH ================= */
-    function updateBatchPieces(batch, updatedPieces) {
-        const index = batchData.findIndex(b => String(b.id) === String(batch.id));
-        if (index === -1) return;
-        batchData[index] = {
-            ...batchData[index],
-            pieces: updatedPieces,
-            updatedAt: new Date().toLocaleString("en-GB")
-        };
-        saveStorage(APPROVED_BATCH_STORAGE_KEY, batchData);
-    }
+
 
     $(document).on("click", ".open-approval-btn", function () {
         openApprovalModal($(this).data("id"));

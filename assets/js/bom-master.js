@@ -28,32 +28,8 @@ $(document).ready(function () {
         "Hand Work"
     ];
 
-    const STAGES = [
-        "Before Cutting",
-        "Before Stitching",
-        "Before Ironing",
-        "After Cutting",
-        "After Stitching",
-        "After Ironing"
-    ];
 
-    const FIXED_FLOW_STAGES = [
-        "Cutting",
-        "Stitching",
-        "Ironing"
-    ];
 
-    const FLOW_STAGE_ORDER = [
-        "Before Cutting",
-        "Cutting",
-        "After Cutting",
-        "Before Stitching",
-        "Stitching",
-        "After Stitching",
-        "Before Ironing",
-        "Ironing",
-        "After Ironing"
-    ];
 
     const DEFAULT_WORK_ROWS = 3;
 
@@ -329,12 +305,7 @@ $(document).ready(function () {
                         ${optionList(WORK_TYPES, workType)}
                     </select>
 
-                    <select
-                        class="work-stage"
-                        data-piece="${pieceNumber}"
-                    >
-                        ${optionList(STAGES, stage)}
-                    </select>
+
 
                     <button
                         type="button"
@@ -645,9 +616,7 @@ $(document).ready(function () {
                         .find(".work-type")
                         .val();
 
-                    const stage = $(this)
-                        .find(".work-stage")
-                        .val();
+                    const stage = workType ? "After Cutting" : "";
 
                     if (workType && stage) {
 
@@ -784,7 +753,7 @@ $(document).ready(function () {
 
         $("#pieceConfigBody").html(`
             <tr>
-                
+
             </tr>
         `);
 
@@ -908,9 +877,7 @@ $(document).ready(function () {
                 .find(".work-type")
                 .val();
 
-            const stage = $(this)
-                .find(".work-stage")
-                .val();
+            const stage = type ? "After Cutting" : "";
 
             if (
                 (type && !stage) ||
@@ -923,7 +890,7 @@ $(document).ready(function () {
         if (invalidWork) {
 
             alertMsg(
-                "Please select both Work and Stage.",
+                "Please select an Additional Work.",
                 "warning"
             );
 
@@ -1149,7 +1116,7 @@ $(document).ready(function () {
                 ? piece.additionalWorks.map(work => `
                     <div>
                         ${escapeHtml(work.workType)}
-                        — ${escapeHtml(work.stage)}
+
                     </div>
                 `).join("")
 
@@ -1548,36 +1515,9 @@ $(document).ready(function () {
        ====================================================== */
 
     function buildFlowNodes(works) {
-
-        const flowItems = [];
-
-        FIXED_FLOW_STAGES.forEach(function (stageName) {
-            flowItems.push({
-                type: "fixed",
-                label: stageName,
-                sub: "",
-                order: FLOW_STAGE_ORDER.indexOf(stageName)
-            });
-        });
-
-        (works || []).forEach(function (work) {
-
-            const stage = work.stage || "";
-            const order = FLOW_STAGE_ORDER.indexOf(stage);
-
-            flowItems.push({
-                type: "work",
-                label: work.workType || "Work",
-                sub: stage,
-                order: order === -1 ? 99 : order
-            });
-        });
-
-        flowItems.sort(function (a, b) {
-            return a.order - b.order;
-        });
-
-        return flowItems;
+        return Production.buildRoute({ additionalWorks: works || [] }).map((r, order) => ({
+            type: r.type === "additional_work" ? "work" : "fixed", label: r.stage, sub: "", order
+        }));
     }
 
     function renderBomFlowChart() {

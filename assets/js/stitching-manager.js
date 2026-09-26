@@ -1,5 +1,6 @@
-$(document).ready(function () {
+$(document).ready(async function () {
     "use strict";
+    try { await Production.initialize(); } catch (error) { Swal.fire({icon: "error", title: "Recovery required", text: error.message}); return; }
 
     const APPROVED_POOL_KEY = "approvedPool";
     const WORK_STORAGE_KEY = "stitchingData";
@@ -44,6 +45,29 @@ $(document).ready(function () {
     let bulkSelectedBatchIds = new Set();
     let bulkPieceSplits = {};
 
+    async function productionAction(action, modal) {
+        try {
+            const result = await action();
+            loadData(); renderAvailableTable(); renderInhouseTable(); renderOutsourceTable();
+            if (modal) $(modal).modal("hide");
+            return result;
+        } catch (error) {
+            Swal.fire({ icon: "error", title: "Production action cancelled", text: error.message });
+            loadData(); renderAvailableTable(); renderInhouseTable(); renderOutsourceTable();
+            return null;
+        }
+    }
+    function collectAssignments(selector, bulk) {
+        return $(selector).toArray().map(element => {
+            const row = $(element), type = row.find(".type-select").val() || "inhouse";
+            return { poolId: bulk ? Number(row.data("pool-id")) : Number($("#batchSelect").val()),
+                type, worker: type === "outsource" ? "" : row.find(".worker-select").val(),
+                firm: type === "outsource" ? row.find(".firm-select").val() : "",
+                quantity: Number(row.find(".quantity-input").val()), priority: row.find(".priority-select").val(),
+                deliveryDate: row.find(".delivery-date-input").val() };
+        });
+    }
+
     /* ================= HELPERS ================= */
     function escapeHtml(v) {
         return String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
@@ -65,14 +89,12 @@ $(document).ready(function () {
         );
     }
     function loadData() {
-        pool = readStorage(APPROVED_POOL_KEY).filter(isThisStage);
-        workData = readStorage(WORK_STORAGE_KEY);
-        nextId = Number(localStorage.getItem(WORK_NEXT_ID_KEY)) || 1;
+        const view = Production.views("stitchingData");
+        pool = view.pool;
+        workData = view.works;
+        nextId = Math.max(0, ...workData.map(w => Number(w.id) || 0)) + 1;
     }
-    function saveData() {
-        saveStorage(WORK_STORAGE_KEY, workData);
-        localStorage.setItem(WORK_NEXT_ID_KEY, String(nextId));
-    }
+    function saveData() { throw new Error("Use the shared production transaction API."); }
 
     function pushHistory(entry) {
         const h = readStorage(WORK_HISTORY_KEY);
@@ -82,7 +104,7 @@ $(document).ready(function () {
 
     function parseHistoryTime(str) {
         const m = String(str).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2}):(\d{2})/);
-        if (!m) return 0;
+        if (!m) return Date.parse(str) || 0;
         const [, d, mo, y, h, mi, se] = m;
         return new Date(`${y}-${mo.padStart(2,"0")}-${d.padStart(2,"0")}T${h.padStart(2,"0")}:${mi}:${se}`).getTime();
     }
@@ -144,21 +166,11 @@ $(document).ready(function () {
     }
     function computeStatus(item) {
         if (item.stopped) return "stopped";
-        const qty = item.quantity || 0, damage = item.damage || 0;
-        const progress = item.progress || 0, passed = item.passedQty || 0;
-        const eff = Math.max(0, qty - damage);
-        if (progress === 0) return "pending";
-        if (eff > 0 && progress >= eff && passed >= progress) return "passed";
-        return "in_progress";
+        return Production.status(item);
     }
-    function isFullyPassed(item) {
-        const qty = item.quantity || 0, damage = item.damage || 0;
-        const progress = item.progress || 0, passed = item.passedQty || 0;
-        const eff = Math.max(0, qty - damage);
-        return eff > 0 && progress >= eff && passed >= progress;
-    }
+    function isFullyPassed(item) { return Production.status(item) === "passed"; }
     function isUntouched(item) {
-        return (item.progress || 0) === 0 && (item.damage || 0) === 0 && (item.passedQty || 0) === 0;
+        return (item.completedQty || 0) === 0 && (item.damageQty || 0) === 0 && (item.passedQty || 0) === 0;
     }
 
     function buildPager($c, cur, tot, items, size, onChange, label) {
@@ -183,12 +195,11 @@ $(document).ready(function () {
         $c.append($p);
     }
 
-    function getPoolTotal(p) { return Number(p.quantity) || 0; }
+    function getPoolTotal(p) { return Number(p.stageBalances?.[Production.managers["stitchingData"]]?.inputQty) || 0; }
     function getPoolAssigned(p) {
-        return workData.filter(d => Number(d.poolId) === Number(p.id))
-            .reduce((s, d) => s + Math.max(0, (Number(d.quantity) || 0) - (Number(d.passedQty) || 0)), 0);
+        return workData.filter(w => String(w.poolId) === String(p.id)).reduce((n,w) => n + w.assignedQty, 0);
     }
-    function getPoolRemaining(p) { return Math.max(0, getPoolTotal(p) - getPoolAssigned(p)); }
+    function getPoolRemaining(p) { return Production.calculateAvailableQty(p, workData, Production.managers["stitchingData"]); }
     function getBusyWorkersExcluding(poolId, type) {
         const busy = new Set();
         workData.forEach(row => {
@@ -297,7 +308,7 @@ $(document).ready(function () {
             items.forEach((it, idx) => {
                 const total = getPoolTotal(it);
                 const assigned = getPoolAssigned(it);
-                const remaining = Math.max(0, total - assigned);
+                const remaining = getPoolRemaining(it);
                 const qtyHtml = `<span class="qty-pair"><span class="qty-total">${total}</span><span class="qty-sep">/</span><span class="qty-assigned ${assigned === 0 ? "zero" : ""}">${assigned}</span></span>`;
                 const statusHtml = assigned === 0
                     ? `<span class="status-badge not_assigned">Not Assigned</span>`
@@ -356,10 +367,10 @@ $(document).ready(function () {
             const items = grouped[batchId];
             serial++;
             items.forEach((item, idx) => {
-                const qty = item.quantity || 0, damage = item.damage || 0;
-                const progress = item.progress || 0, passed = item.passedQty || 0;
-                const eff = Math.max(0, qty - damage);
-                const remaining = Math.max(0, eff - progress);
+                const qty = item.assignedQty || 0, damage = item.damageQty || 0;
+                const progress = item.completedQty || 0, passed = item.passedQty || 0;
+                const eff = Production.calculateProductionMath(item).effectiveQty;
+                const remaining = Production.calculateProductionMath(item).uncompletedQty;
                 const pct = eff > 0 ? Math.min(100, Math.round((progress / eff) * 100)) : 0;
                 const pc = getPriorityClass(item.priority);
                 const statusKey = computeStatus(item);
@@ -367,7 +378,7 @@ $(document).ready(function () {
                 if (statusKey === "stopped") statusHtml = `<span class="status-badge stopped">Stopped</span>`;
                 else if (statusKey === "pending") statusHtml = `<span class="status-badge pending">Pending</span>`;
                 else if (statusKey === "passed") statusHtml = `<span class="status-badge passed">Passed</span>`;
-                else statusHtml = `<span class="status-badge in_progress">In Progress</span>`;
+                else statusHtml = `<span class="status-badge in_progress">${({assigned:"Assigned",ready_to_pass:"Ready to Pass",partial:"Partial"})[statusKey] || "Pending"}</span>`;
 
                 let deliveryHtml = `<span class="text-muted">Not Set</span>`;
                 if (item.deliveryDate) {
@@ -378,7 +389,7 @@ $(document).ready(function () {
                 const isFirst = idx === 0;
                 const damageHtml = damage > 0 ? `<span class="damage-badge">${damage}</span>` : `<span class="damage-empty">-</span>`;
                 const isStopped = !!item.stopped;
-                const canPass = !isStopped && progress > passed;
+                const canPass = !isStopped && Production.calculateProductionMath(item).passableQty > 0;
 
                 const nameVal = type === "inhouse" ? (item.worker || "-") : (item.firm || "-");
 
@@ -400,7 +411,7 @@ $(document).ready(function () {
                         <td>
                             <div class="d-flex gap-1">
                                 <button class="btn btn-sm btn-primary progress-btn" data-id="${item.id}" ${isStopped ? "disabled" : ""}><i class="bx bx-edit"></i></button>
-                                ${progress > 0 ? `<button class="btn btn-sm pass-row-btn pass-row-action-btn" data-id="${item.id}" ${canPass ? "" : "disabled"}><i class="bx bx-right-arrow-alt"></i></button>` : ""}
+                                ${canPass ? `<button class="btn btn-sm pass-row-btn pass-row-action-btn" data-id="${item.id}" ${canPass ? "" : "disabled"}><i class="bx bx-right-arrow-alt"></i></button>` : ""}
                                 ${isUntouched(item) ? `<button class="btn btn-sm stop-row-btn stop-row-action-btn" data-id="${item.id}"><i class="bx bx-stop"></i></button>` : ""}
                                 <button class="btn btn-sm view-row-btn view-row-action-btn" data-id="${item.id}"><i class="bx bx-show"></i></button>
                             </div>
@@ -430,7 +441,7 @@ $(document).ready(function () {
         select.append('<option value="">Choose Batch</option>');
         pool.filter(p => getPoolRemaining(p) > 0).forEach(item => {
             const rem = getPoolRemaining(item);
-            select.append(`<option value="${item.id}">${escapeHtml(item.batchId)} - ${escapeHtml(item.brand)} - Piece ${item.pieceNumber} (${escapeHtml(item.pieceItem)}) - Rem ${rem}/${item.quantity}</option>`);
+            select.append(`<option value="${item.id}">${escapeHtml(item.batchId)} - ${escapeHtml(item.brand)} - Piece ${item.pieceNumber} (${escapeHtml(item.pieceItem)}) - Rem ${rem}/${item.assignedQty}</option>`);
         });
     }
 
@@ -613,68 +624,8 @@ $(document).ready(function () {
         generateAssignRows(item, getPoolRemaining(item));
     });
 
-    $("#saveAssignBtn").on("click", function () {
-        const poolId = Number($("#batchSelect").val());
-        if (!poolId) { Swal.fire({ icon: "warning", title: "Select Batch" }); return; }
-        const poolItem = pool.find(p => Number(p.id) === poolId);
-        if (!poolItem) return;
-
-        const rows = [];
-        let valid = true;
-        $(".assignment-row").each(function () {
-            const type = $(this).find(".type-select").val();
-            const subBatch = type === "outsource" ? $(this).find(".sub-batch-input-os").val() : $(this).find(".sub-batch-input-ih").val();
-            const worker = type === "inhouse" ? $(this).find(".worker-select").val() : "";
-            const firm = type === "outsource" ? $(this).find(".firm-select").val() : "";
-            const quantity = parseInt($(this).find(".quantity-input").val()) || 0;
-            const priority = $(this).find(".priority-select").val();
-            const deliveryDate = $(this).find(".delivery-date-input").val();
-            if (type === "inhouse" && !worker) { valid = false; return false; }
-            if (type === "outsource" && !firm) { valid = false; return false; }
-            if (quantity < 1 || !deliveryDate) { valid = false; return false; }
-            rows.push({ type, subBatch, worker, firm, quantity, priority, deliveryDate });
-        });
-
-        if (!valid || !rows.length) { Swal.fire({ icon: "warning", title: "Incomplete" }); return; }
-        const totalAssigned = rows.reduce((s, r) => s + r.quantity, 0);
-        const remaining = getPoolRemaining(poolItem);
-        if (totalAssigned > remaining) { Swal.fire({ icon: "warning", title: "Over Quantity" }); return; }
-
-        let addedNew = 0;
-        rows.forEach(row => {
-            const newId = nextId++;
-            workData.push({
-                id: newId,
-                poolId: poolItem.id,
-                type: row.type,
-                batchId: poolItem.batchId,
-                brand: poolItem.brand,
-                designNumber: poolItem.designNumber,
-                color: poolItem.color,
-                pieceType: `Piece ${poolItem.pieceNumber} (${poolItem.pieceItem})`,
-                pieceNumber: poolItem.pieceNumber,
-                subBatch: row.subBatch,
-                worker: row.worker,
-                firm: row.firm,
-                quantity: row.quantity,
-                priority: row.priority,
-                deliveryDate: row.deliveryDate,
-                progress: 0,
-                damage: 0,
-                passedQty: 0,
-                photo: poolItem.photo || "",
-                workType: WORK_TYPE
-            });
-            pushHistory({ stitchId: newId, batchId: poolItem.batchId, subBatch: row.subBatch, action: `Assigned ${row.quantity} pcs to ${row.worker || row.firm} (${row.type})`, by: "Manager" });
-            addedNew++;
-        });
-
-        saveData();
-        renderAvailableTable();
-        renderInhouseTable();
-        renderOutsourceTable();
-        $("#assignModal").modal("hide");
-        Swal.fire({ icon: "success", title: "Assigned", text: `${addedNew} assignments created.`, timer: 1800, showConfirmButton: false });
+    $("#saveAssignBtn").on("click", async function () {
+        await productionAction(() => Production.assign("stitchingData", collectAssignments(".assignment-row", false)), "#assignModal");
     });
 
     /* ============================================================
@@ -807,7 +758,7 @@ $(document).ready(function () {
             batch.items.forEach(item => {
                 const splitCount = Number(bulkPieceSplits[item.id] || 1);
                 if (s >= splitCount) return;
-                const totalQty = Number(item.quantity) || 0;
+                const totalQty = Number(item.assignedQty) || 0;
                 const autoQtys = splitQuantity(totalQty, splitCount);
                 const workerOpts = WORKERS.map(w => `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`).join("");
                 const firmOpts = FIRMS.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join("");
@@ -1022,81 +973,18 @@ $(document).ready(function () {
         Swal.fire({ icon: "success", title: "Copied", text: `C${splitIndex + 1} values copied.`, timer: 1500, showConfirmButton: false });
     });
 
-    $("#saveBulkAssignBtn").on("click", function () {
-        if (!bulkSelectedBatchIds.size) { Swal.fire({ icon: "warning", title: "No Selection" }); return; }
-
-        const assignments = [];
-        let valid = true;
-        let errorMsg = "";
-
-        Array.from(bulkSelectedBatchIds).forEach(batchId => {
-            const $card = $(`.bulk-item-card[data-batch-id="${batchId}"]`);
-            if (!$card.length) return;
-            $card.find(".bulk-assignment-row").each(function () {
-                const poolId = Number($(this).data("pool-id"));
-                const type = $(this).find(".type-select").val();
-                const subBatch = type === "outsource" ? $(this).find(".sub-batch-input-os").val() : $(this).find(".sub-batch-input-ih").val();
-                const worker = type === "inhouse" ? $(this).find(".worker-select").val() : "";
-                const firm = type === "outsource" ? $(this).find(".firm-select").val() : "";
-                const qty = parseInt($(this).find(".quantity-input").val()) || 0;
-                const priority = $(this).find(".priority-select").val();
-                const date = $(this).find(".delivery-date-input").val();
-                if (type === "inhouse" && !worker) { valid = false; errorMsg = `Fill worker for ${subBatch}.`; return; }
-                if (type === "outsource" && !firm) { valid = false; errorMsg = `Fill firm for ${subBatch}.`; return; }
-                if (qty < 1 || !date) { valid = false; errorMsg = `Fill qty/date for ${subBatch}.`; return; }
-                assignments.push({ poolId, type, subBatch, worker, firm, qty, priority, date });
-            });
-        });
-
-        if (!valid || !assignments.length) { Swal.fire({ icon: "warning", title: "Incomplete form", text: errorMsg }); return; }
-
-        let addedCount = 0;
-        assignments.forEach(a => {
-            const poolItem = pool.find(p => Number(p.id) === a.poolId);
-            if (!poolItem) return;
-            const newId = nextId++;
-            workData.push({
-                id: newId,
-                poolId: poolItem.id,
-                type: a.type,
-                batchId: poolItem.batchId,
-                brand: poolItem.brand,
-                designNumber: poolItem.designNumber,
-                color: poolItem.color,
-                pieceType: `Piece ${poolItem.pieceNumber} (${poolItem.pieceItem})`,
-                pieceNumber: poolItem.pieceNumber,
-                subBatch: a.subBatch,
-                worker: a.worker,
-                firm: a.firm,
-                quantity: a.qty,
-                priority: a.priority,
-                deliveryDate: a.date,
-                progress: 0,
-                damage: 0,
-                passedQty: 0,
-                photo: poolItem.photo || "",
-                workType: WORK_TYPE
-            });
-            pushHistory({ stitchId: newId, batchId: poolItem.batchId, subBatch: a.subBatch, action: `Bulk assigned ${a.qty} pcs to ${a.worker || a.firm} (${a.type})`, by: "Manager" });
-            addedCount++;
-        });
-
-        saveData();
-        renderAvailableTable();
-        renderInhouseTable();
-        renderOutsourceTable();
-        $("#bulkAssignModal").modal("hide");
-        Swal.fire({ icon: "success", title: "Assigned", text: `${addedCount} assignments created.`, timer: 1800, showConfirmButton: false });
+    $("#saveBulkAssignBtn").on("click", async function () {
+        await productionAction(() => Production.assign("stitchingData", collectAssignments(".bulk-assignment-row", true)), "#bulkAssignModal");
     });
 
     /* ============================================================
        PROGRESS MODAL
        ============================================================ */
     function refreshProgressNumbers(item) {
-        const progress = item.progress || 0, damage = item.damage || 0;
-        const passed = item.passedQty || 0, qty = item.quantity || 0;
-        const eff = Math.max(0, qty - damage);
-        const remaining = Math.max(0, eff - progress);
+        const progress = item.completedQty || 0, damage = item.damageQty || 0;
+        const passed = item.passedQty || 0, qty = item.assignedQty || 0;
+        const eff = Production.calculateProductionMath(item).effectiveQty;
+        const remaining = Production.calculateProductionMath(item).uncompletedQty;
         $("#progressTotal").val(qty);
         $("#progressPassed").val(passed);
         $("#progressRemaining").val(remaining);
@@ -1129,9 +1017,9 @@ $(document).ready(function () {
     $(document).on("click", ".progress-btn", function () {
         if ($(this).prop("disabled")) return;
         const id = Number($(this).data("id"));
+        loadData();
         const item = workData.find(d => Number(d.id) === id);
         if (!item) return;
-        if (isFullyPassed(item)) { Swal.fire({ icon: "info", title: "Fully Passed" }); return; }
 
         currentEditingId = id;
         $("#progressSubBatch").val(item.subBatch);
@@ -1148,206 +1036,50 @@ $(document).ready(function () {
         if (!item) return;
         const type = $("#progressTypeSelect").val();
         const addQty = parseInt($("#progressQty").val()) || 0;
-        const progress = item.progress || 0, damage = item.damage || 0;
-        const passed = item.passedQty || 0, qty = item.quantity || 0;
-        const previewProgress = type === "completed" ? progress + addQty : progress;
-        const previewDamage = type === "damage" ? damage + addQty : damage;
-        const eff = Math.max(0, qty - previewDamage);
-        const remaining = Math.max(0, eff - previewProgress);
+        const progress = item.completedQty || 0, damage = item.damageQty || 0;
+        const passed = item.passedQty || 0, qty = item.assignedQty || 0;
+        const previewProgress = type === "set_completed" ? addQty : type === "completed" ? progress + addQty : progress;
+        const previewDamage = type === "set_damage" ? addQty : type === "damage" ? damage + addQty : damage;
+        const eff = Production.calculateProductionMath({ ...item, damageQty: previewDamage }).effectiveQty;
+        const remaining = Production.calculateProductionMath({ ...item, completedQty: previewProgress, damageQty: previewDamage }).uncompletedQty;
         $("#progressLivePreview").html(`<div class="d-flex justify-content-between"><span><strong>Eff:</strong> ${eff}</span><span><strong>Progress:</strong> ${previewProgress}</span><span><strong>Passed:</strong> ${passed}</span><span><strong>Remaining:</strong> ${remaining}</span></div>`);
     });
 
-    $("#updateProgressBtn").on("click", function () {
-        const item = workData.find(d => Number(d.id) === currentEditingId);
-        if (!item) return;
-        const type = $("#progressTypeSelect").val();
-        const addQty = parseInt($("#progressQty").val()) || 0;
-        const qty = item.quantity || 0;
-        const existingProgress = item.progress || 0;
-        const existingDamage = item.damage || 0;
-        const eff = Math.max(0, qty - existingDamage);
-        const remainingBefore = Math.max(0, eff - existingProgress);
-        if (addQty < 0) { Swal.fire({ icon: "warning", title: "Invalid" }); return; }
-        if (addQty > remainingBefore) { Swal.fire({ icon: "warning", title: "Too Much", text: `Max ${remainingBefore}` }); return; }
-
-        if (type === "completed") {
-            item.progress = existingProgress + addQty;
-            pushHistory({ stitchId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Progress +${addQty} (total ${item.progress})`, by: "Manager" });
-        } else {
-            item.damage = existingDamage + addQty;
-            pushHistory({ stitchId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Damage +${addQty} (total ${item.damage})`, by: "Manager" });
-        }
-
-        const finalEff = Math.max(0, item.quantity - (item.damage || 0));
-        const finalProgress = item.progress || 0;
-        const finalPassed = item.passedQty || 0;
-
-        if (finalEff > 0 && finalProgress >= finalEff && finalPassed < finalProgress) {
-            const autoPassQty = finalProgress - finalPassed;
-            if (!pushToNextStage(item, autoPassQty)) { saveData(); renderInhouseTable(); renderOutsourceTable(); $("#progressModal").modal("hide"); return; }
-            item.passedQty = finalProgress;
-            pushHistory({ stitchId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Auto-passed ${autoPassQty} pcs`, by: "System" });
-            saveData();
-            renderInhouseTable();
-            renderOutsourceTable();
-            $("#progressModal").modal("hide");
-            Swal.fire({ icon: "success", title: "Auto-Passed", text: `${finalProgress} pcs completed & auto-passed.`, timer: 2200, showConfirmButton: false });
-            return;
-        }
-
-        saveData();
-        renderInhouseTable();
-        renderOutsourceTable();
-        $("#progressModal").modal("hide");
-        Swal.fire({ icon: "success", title: "Updated", timer: 1200, showConfirmButton: false });
+    $("#updateProgressBtn").on("click", async function () {
+        const type = $("#progressTypeSelect").val(), qty = Number($("#progressQty").val());
+        if (type === "recover") { await productionAction(() => Production.recoverRepair("stitchingData", currentEditingId, qty), "#progressModal"); return; }
+        const fields = { completed: "addCompleted", damage: "addDamage", set_completed: "completedQty", set_damage: "damageQty", set_assigned: "assignedQty" };
+        await productionAction(() => Production.edit("stitchingData", [{ id: currentEditingId, [fields[type]]: qty }]), "#progressModal");
     });
 
     /* ============================================================
        PASS TO NEXT STAGE
        ============================================================ */
-    function pushToNextStage(item, qty) {
-        qty = Number(qty) || 0;
-        const poolData = readStorage(APPROVED_POOL_KEY);
-        const now = new Date().toLocaleString("en-GB");
-        const samePiece = p => String(p.batchId) === String(item.batchId) && Number(p.pieceNumber) === Number(item.pieceNumber);
-
-        // Source = the pool entry this assignment belongs to (poolId), still sitting at this stage.
-        let srcIdx = poolData.findIndex(p => Number(p.id) === Number(item.poolId) && isThisStage(p));
-        if (srcIdx === -1) srcIdx = poolData.findIndex(p => samePiece(p) && isThisStage(p));
-        const source = srcIdx !== -1 ? poolData[srcIdx] : null;
-        // Old data: the entry may already have been moved forward by the previous logic — use it only for metadata.
-        const template = source || poolData.find(p => Number(p.id) === Number(item.poolId)) || poolData.find(samePiece);
-        if (!template) { Swal.fire({ icon: "error", title: "Pool Entry Not Found" }); return false; }
-
-        const srcBefore = source ? (Number(source.quantity) || 0) : 0;
-        if (qty <= 0 || (source && qty > srcBefore)) {
-            Swal.fire({ icon: "warning", title: "Invalid Quantity", text: `Cannot pass ${qty} pcs${source ? ` (stage holds ${srcBefore})` : ""}.` });
-            return false;
-        }
-
-        const route = template.route || [];
-        const currentStage = source ? (source.currentStage || {}) : (route.find(r => isThisStage({ currentStage: r })) || {});
-        const curIdx = route.findIndex(r => r.stage === currentStage.stage && r.type === currentStage.type);
-        if (!source && curIdx === -1) { Swal.fire({ icon: "error", title: "Stage Not In Route" }); return false; }
-        const nextStage = (curIdx !== -1 && curIdx + 1 < route.length)
-            ? route[curIdx + 1]
-            : { type: "packing", stage: "Packing" };
-
-        // Destination = same batch + piece already at the exact next route stage (type + stage name).
-        const dstIdx = poolData.findIndex((p, i) => i !== srcIdx && samePiece(p) &&
-            p.currentStage && p.currentStage.type === nextStage.type && p.currentStage.stage === nextStage.stage);
-        const dstBefore = dstIdx !== -1 ? (Number(poolData[dstIdx].quantity) || 0) : 0;
-        const entered = { at: now, stage: nextStage.stage, type: nextStage.type, action: "entered", fromQty: qty };
-
-        if (source) {
-            poolData[srcIdx] = {
-                ...source,
-                quantity: srcBefore - qty,
-                stageHistory: [
-                    ...(source.stageHistory || []),
-                    { at: now, stage: currentStage.stage, type: currentStage.type, action: `passed ${qty} pcs to ${nextStage.stage}`, qty }
-                ],
-                updatedAt: now
-            };
-        }
-
-        let finalDstIdx = dstIdx;
-        if (dstIdx !== -1) {
-            const dst = poolData[dstIdx];
-            poolData[dstIdx] = { ...dst, quantity: dstBefore + qty, stageHistory: [...(dst.stageHistory || []), entered], updatedAt: now };
-        } else {
-            const newId = poolData.reduce((m, p) => Math.max(m, Number(p.id) || 0), 0) + 1;
-            poolData.push({
-                ...template,
-                id: newId,
-                quantity: qty,
-                currentStage: nextStage,
-                stageHistory: [...(template.stageHistory || []), entered],
-                createdAt: now,
-                updatedAt: now
-            });
-            finalDstIdx = poolData.length - 1;
-        }
-
-        // Quantity conservation guard
-        if ((source && srcBefore !== poolData[srcIdx].quantity + qty) || poolData[finalDstIdx].quantity !== dstBefore + qty) {
-            Swal.fire({ icon: "error", title: "Quantity Mismatch", text: "Pass cancelled." });
-            return false;
-        }
-        saveStorage(APPROVED_POOL_KEY, poolData);
-        return true;
+    function pushToNextStage(item) {
+        return Production.pass("stitchingData", [item.id]);
     }
 
-    $(document).on("click", ".pass-row-action-btn", function () {
-        if ($(this).prop("disabled")) return;
+    $(document).on("click", ".pass-row-action-btn", async function () {
         const id = Number($(this).data("id"));
-        const item = workData.find(d => Number(d.id) === id);
-        if (!item) return;
-        if (isFullyPassed(item)) { Swal.fire({ icon: "info", title: "Already Passed" }); return; }
-
-        const progress = item.progress || 0, passed = item.passedQty || 0;
-        const passable = progress - passed;
-        if (passable <= 0) { Swal.fire({ icon: "info", title: "Nothing to Pass" }); return; }
-
-        Swal.fire({
-            title: "Pass to Next Stage?",
-            html: `<div class="text-start">
-                    <p><strong>Sub-Batch:</strong> ${escapeHtml(item.subBatch)}</p>
-                    <p><strong>${item.type === "outsource" ? "Firm" : "Worker"}:</strong> ${escapeHtml(item.worker || item.firm || "-")}</p>
-                    <p><strong>Completed:</strong> ${progress}</p>
-                    <p><strong>Already Passed:</strong> ${passed}</p>
-                    <hr>
-                    <p><strong>Pass now:</strong> <span class="text-success fw-bold">${passable}</span></p>
-                   </div>`,
-            icon: "question",
-            showCancelButton: true,
-            confirmButtonColor: "#198754",
-            confirmButtonText: "Yes, Pass",
-            cancelButtonText: "Cancel"
-        }).then(r => {
-            if (!r.isConfirmed) return;
-            if (!pushToNextStage(item, passable)) return;
-            item.passedQty = progress;
-            pushHistory({ stitchId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Passed ${passable} pcs`, by: "Manager" });
-            saveData();
-            renderInhouseTable();
-            renderOutsourceTable();
-            Swal.fire({ icon: "success", title: "Passed", timer: 1800, showConfirmButton: false });
-        });
+        const result = await Swal.fire({ title: "Pass completed quantity?", icon: "question", showCancelButton: true, confirmButtonText: "Yes, Pass" });
+        if (!result.isConfirmed) return;
+        const passed = await productionAction(() => Production.pass("stitchingData", [id]));
+        if (passed && !passed.some(p => p.qty > 0)) Swal.fire({ icon: "info", title: "Nothing to Pass" });
     });
 
     /* ============================================================
        STOP ROW
        ============================================================ */
-    $(document).on("click", ".stop-row-action-btn", function () {
+    $(document).on("click", ".stop-row-action-btn", async function () {
         const id = Number($(this).data("id"));
-        const item = workData.find(d => Number(d.id) === id);
-        if (!item) return;
-        Swal.fire({
-            title: "Stop this Assignment?",
-            html: `<div class="text-start"><p><strong>Sub-Batch:</strong> ${escapeHtml(item.subBatch)}</p><p><strong>${item.type === "outsource" ? "Firm" : "Worker"}:</strong> ${escapeHtml(item.worker || item.firm || "-")}</p><p class="text-danger mb-0">Frozen.</p></div>`,
-            icon: "warning",
-            showCancelButton: true,
-            confirmButtonText: "Yes, Stop",
-            cancelButtonText: "Cancel",
-            confirmButtonColor: "#dc3545"
-        }).then(r => {
-            if (!r.isConfirmed) return;
-            item.stopped = true;
-            item.stoppedAt = new Date().toLocaleString("en-GB");
-            pushHistory({ stitchId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: "Stopped", by: "Manager" });
-            saveData();
-            renderInhouseTable();
-            renderOutsourceTable();
-            Swal.fire({ icon: "success", title: "Stopped", timer: 1500, showConfirmButton: false });
-        });
+        await productionAction(() => Production.stop("stitchingData", id));
     });
 
         function buildViewHtml(item) {
         const photoSrc = item.photo ? escapeHtml(item.photo) : PLACEHOLDER_IMG;
         const now = new Date();
         const dateStr = now.toLocaleDateString("en-GB") + ", " + now.toLocaleTimeString("en-GB", { hour12: false });
-        const qty = item.quantity || 0;
+        const qty = item.assignedQty || 0;
         const nameLabel = item.type === "outsource" ? "Firm Name" : "Worker Name";
         const nameVal = item.type === "outsource" ? item.firm : item.worker;
         const typeLabel = item.type === "outsource" ? "Outsource" : "In-House";
@@ -1427,7 +1159,7 @@ $(document).ready(function () {
                 const deliveryCls = getDeliveryClass(item.deliveryDate);
                 const typeLabel = item.type === "outsource" ? "Outsource" : "In-House";
                 const nameVal = item.type === "outsource" ? (item.firm || "-") : (item.worker || "-");
-                const remaining = (item.quantity || 0) - (item.progress || 0);
+                const remaining = (item.assignedQty || 0) - (item.completedQty || 0);
                 tableRows += `
                     <tr>
                         <td>${isFirst ? serial : ""}</td>
@@ -1437,9 +1169,9 @@ $(document).ready(function () {
                         <td>${escapeHtml(item.pieceType || "-")}</td>
                         <td><span class="badge bg-info">${typeLabel}</span></td>
                         <td>${escapeHtml(nameVal)}</td>
-                        <td>${item.quantity}</td>
-                        <td>${item.progress || 0}</td>
-                        <td>${item.damage || 0}</td>
+                        <td>${item.assignedQty}</td>
+                        <td>${item.completedQty || 0}</td>
+                        <td>${item.damageQty || 0}</td>
                         <td>${remaining}</td>
                         <td><span class="priority-badge ${pc}">${escapeHtml(item.priority || "-")}</span></td>
                         <td><span class="badge ${deliveryCls} delivery-date-badge">${formatDate(item.deliveryDate)}</span></td>
@@ -1507,12 +1239,12 @@ $(document).ready(function () {
             const items = subBatchMap[subBatch];
             const firstItem = items[0];
             const nameVal = firstItem.type === "outsource" ? (firstItem.firm || "-") : (firstItem.worker || "-");
-            const qty = firstItem.quantity || 0;
-            const progress = firstItem.progress || 0;
+            const qty = firstItem.assignedQty || 0;
+            const progress = firstItem.completedQty || 0;
             const passedQty = firstItem.passedQty || 0;
-            const damage = firstItem.damage || 0;
-            const effectiveTotal = Math.max(0, qty - damage);
-            const remaining = Math.max(0, effectiveTotal - progress);
+            const damage = firstItem.damageQty || 0;
+            const effectiveTotal = Production.calculateProductionMath(firstItem).effectiveQty;
+            const remaining = Production.calculateProductionMath(firstItem).uncompletedQty;
 
             const itemIds = items.map(i => i.id);
             const allEvents = history.filter(h => itemIds.includes(Number(h.stitchId)))
@@ -1595,4 +1327,6 @@ $(document).ready(function () {
             renderOutsourceTable();
         }
     }, 2000);
+    installProductionControls("stitchingData", () => { loadData(); renderAvailableTable(); renderInhouseTable(); renderOutsourceTable(); });
+
 });

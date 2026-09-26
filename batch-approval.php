@@ -240,6 +240,10 @@
         color: #161617 !important;
     }
 
+    .status-badge.requirements_pending {
+        background: #fd7e14;
+    }
+
     .status-badge.in_progress {
         background: #1e88e5;
     }
@@ -777,6 +781,7 @@
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
+<script src="assets/js/production-engine.js"></script>
 <script src="assets/js/batch-approval.js"></script>
 </body>
 

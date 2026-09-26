@@ -1,4 +1,9 @@
 {
+  "scripts": {
+    "test": "node --test tests/production-engine.test.cjs",
+    "verify": "node tests/verify-source.cjs",
+    "test:browser": "node tests/browser-production.cjs"
+  },
   "dependencies": {
     "sweetalert2": "^11.26.25"
   }

@@ -1091,6 +1091,10 @@
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Update Type</label>
                         <select class="form-select" id="progressTypeSelect">
+<option value="set_completed">Set completed total (edit)</option>
+<option value="set_damage">Set damage total (edit)</option>
+<option value="set_assigned">Set assigned total (edit)</option>
+<option value="recover">Recover linked repair quantity</option>
                             <option value="completed" selected>Completed (+)</option>
                             <option value="damage">Damage (+)</option>
                         </select>
@@ -1181,6 +1185,8 @@
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
+<script src="assets/js/production-engine.js"></script>
+<script src="assets/js/production-controls.js"></script>
 <script src="assets/js/stitching-manager.js"></script>
 </body>
 

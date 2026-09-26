@@ -1,5 +1,6 @@
-$(document).ready(function () {
+$(document).ready(async function () {
     "use strict";
+    try { await Production.initialize(); } catch(error) { Swal.fire({icon:"error",title:"Recovery required",text:error.message}); return; }
 
     const REQUIREMENT_STORAGE_KEY = "requirementData";
     const BATCH_STORAGE_KEY = "batchData";
@@ -91,72 +92,9 @@ $(document).ready(function () {
         return full;
     }
 
-    function applyMergedToPiece(batchId, pieceNumber, mergedAvailability, fullMaterials) {
-        const yesCount = fullMaterials.filter(m => mergedAvailability[m] === "yes").length;
-        let newStatus;
-        if (fullMaterials.length > 0 && yesCount === fullMaterials.length) newStatus = "pass";
-        else if (yesCount > 0) newStatus = "in_progress";
-        else newStatus = "pending";
 
-        [APPROVED_BATCH_STORAGE_KEY, BATCH_STORAGE_KEY].forEach(key => {
-            const batchData = readStorage(key);
-            const bIdx = batchData.findIndex(b => String(b.batchId) === String(batchId));
-            if (bIdx === -1) return;
-            const batch = batchData[bIdx];
-            const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
-            const pieceIdx = pieces.findIndex(p => Number(p.number) === Number(pieceNumber));
-            if (pieceIdx === -1) return;
-            const piece = pieces[pieceIdx];
-            const approval = piece.approval || {};
-            const finalMaterials = fullMaterials.length
-                ? fullMaterials
-                : (Array.isArray(piece.materials) && piece.materials.length ? piece.materials : []);
-            pieces[pieceIdx] = {
-                ...piece,
-                materials: finalMaterials,
-                approval: {
-                    ...approval,
-                    status: newStatus,
-                    itemAvailability: mergedAvailability,
-                    availableItems: finalMaterials.filter(m => mergedAvailability[m] === "yes"),
-                    missingItems: finalMaterials.filter(m => mergedAvailability[m] !== "yes"),
-                    syncedAt: new Date().toLocaleString("en-GB")
-                }
-            };
-            batchData[bIdx] = { ...batch, pieces };
-            saveStorage(key, batchData);
-        });
-    }
 
-    function syncRequirementTickToBatch(req, item, checked) {
-        const fullMaterials = getPieceFullMaterials(req.batchId, req.pieceNumber, req.materials);
-        const merged = buildMergedAvailability(
-            null,
-            req.batchId,
-            req.pieceNumber,
-            fullMaterials,
-            { [item]: checked ? "yes" : "no" }
-        );
 
-        const approvedBatchData = readStorage(APPROVED_BATCH_STORAGE_KEY);
-        const bIdx = approvedBatchData.findIndex(b => String(b.batchId) === String(req.batchId));
-        if (bIdx !== -1) {
-            const batch = approvedBatchData[bIdx];
-            const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
-            const pieceIdx = pieces.findIndex(p => Number(p.number) === Number(req.pieceNumber));
-            if (pieceIdx !== -1) {
-                const pieceAvail = pieces[pieceIdx].approval?.itemAvailability || {};
-                Object.entries(pieceAvail).forEach(([k, v]) => {
-                    if (v === "yes") merged[k] = "yes";
-                    else if (merged[k] !== "yes" && merged[k] === undefined) merged[k] = v;
-                });
-            }
-        }
-        fullMaterials.forEach(m => {
-            if (merged[m] === undefined) merged[m] = "no";
-        });
-        applyMergedToPiece(req.batchId, req.pieceNumber, merged, fullMaterials);
-    }
 
     function renderRequirements() {
         const container = $("#requirementCardsContainer");
@@ -266,35 +204,10 @@ $(document).ready(function () {
     }
 
     /* ============== CHECKBOX TOGGLE ============== */
-    $(document).on("change", ".req-item-check", function () {
-        const reqId = Number($(this).data("req-id"));
-        const item = $(this).data("item");
-        const checked = $(this).is(":checked");
-
-        const req = requirements.find(r => Number(r.id) === reqId);
-        if (!req) return;
-
-        if (!req.itemAvailability) req.itemAvailability = {};
-        req.itemAvailability[item] = checked ? "yes" : "no";
-
-        const missing = Array.isArray(req.missingItems) ? req.missingItems : [];
-        const receivedCount = missing.filter(m => req.itemAvailability[m] === "yes").length;
-        if (receivedCount === missing.length && missing.length > 0) req.status = "pending";
-        else if (receivedCount > 0) req.status = "partial";
-        else req.status = "pending";
-
-        saveStorage(REQUIREMENT_STORAGE_KEY, requirements);
-        syncRequirementTickToBatch(req, item, checked);
-
-        const $row = $(this).closest(".req-item-row");
-        $row.toggleClass("received", checked);
-        $row.find(".req-missing-badge, .req-received-badge").remove();
-        if (checked) $row.append('<span class="req-received-badge ms-auto">Received</span>');
-        else $row.append('<span class="req-missing-badge ms-auto">Missing</span>');
-
-        const $card = $(`.requirement-card[data-req-id="${reqId}"]`);
-        $card.find(".badge").replaceWith(getStatusBadge(req.status));
-        checkMergeButton(reqId);
+    $(document).on("change", ".req-item-check", async function () {
+        const id=Number($(this).data("req-id")), material=$(this).data("item"), checked=$(this).is(":checked");
+        try { await Production.tickRequirement(id,material,checked); loadRequirements(); renderRequirements(); }
+        catch(error) { Swal.fire({icon:"error",title:"Requirement update cancelled",text:error.message}); loadRequirements(); renderRequirements(); }
     });
 
     /* ============== MERGE AND PASS ============== */
@@ -304,205 +217,10 @@ $(document).ready(function () {
     });
 
     function mergeAndPass(reqId) {
-        const reqIndex = requirements.findIndex(r => Number(r.id) === reqId);
-        if (reqIndex === -1) return;
-
-        const req = requirements[reqIndex];
-        const missing = Array.isArray(req.missingItems) ? req.missingItems : [];
-        const availability = req.itemAvailability || {};
-        const receivedItems = missing.filter(i => availability[i] === "yes");
-        const remainingItems = missing.filter(i => availability[i] !== "yes");
-        const isPartial = remainingItems.length > 0;
-
-        if (!receivedItems.length) return;
-
-        let htmlText = `
-            <div class="text-start">
-                <p><strong>Batch:</strong> ${escapeHtml(req.batchId)}</p>
-                <p><strong>Piece:</strong> ${escapeHtml(req.pieceNumber)} (${escapeHtml(req.pieceItem)})</p>
-                <hr>
-                <p class="text-success"><strong>${receivedItems.length} items received</strong> → Pass to next stage</p>
-        `;
-        if (isPartial) {
-            htmlText += `<p class="text-warning"><strong>${remainingItems.length} items still missing</strong> → Stay in Requirement</p>`;
-        } else {
-            htmlText += `<p class="text-success">All items received! Full pass.</p>`;
-        }
-        htmlText += `</div>`;
-
-        Swal.fire({
-            title: isPartial ? "Pass Partial?" : "Pass All?",
-            html: htmlText,
-            icon: "question",
-            showCancelButton: true,
-            confirmButtonText: isPartial ? "Yes, Pass Partial" : "Yes, Pass All",
-            cancelButtonText: "Cancel",
-            confirmButtonColor: "#198754"
-        }).then(function (result) {
+        Swal.fire({ title: "Confirm received materials?", icon: "question", showCancelButton: true }).then(async result => {
             if (!result.isConfirmed) return;
-
-            const trueFullMaterials = getPieceFullMaterials(req.batchId, req.pieceNumber, req.materials);
-
-            const overrides = {};
-            receivedItems.forEach(m => { overrides[m] = "yes"; });
-            remainingItems.forEach(m => { overrides[m] = "no"; });
-
-            const approvedBatchData = readStorage(APPROVED_BATCH_STORAGE_KEY);
-            const bIdx = approvedBatchData.findIndex(b => String(b.batchId) === String(req.batchId));
-            let pieceAvailability = {};
-            if (bIdx !== -1) {
-                const batch = approvedBatchData[bIdx];
-                const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
-                const pieceIdx = pieces.findIndex(p => Number(p.number) === Number(req.pieceNumber));
-                if (pieceIdx !== -1) pieceAvailability = pieces[pieceIdx].approval?.itemAvailability || {};
-            }
-
-            const finalAvailability = buildMergedAvailability(
-                pieceAvailability,
-                req.batchId,
-                req.pieceNumber,
-                trueFullMaterials,
-                overrides
-            );
-
-            const availableItems = trueFullMaterials.filter(m => finalAvailability[m] === "yes");
-
-            /* ---- Push to Approved Pool with route --- */
-            const pool = readStorage(APPROVED_POOL_KEY);
-            const existingIdx = pool.findIndex(p =>
-                String(p.batchId) === String(req.batchId) &&
-                Number(p.pieceNumber) === Number(req.pieceNumber)
-            );
-
-            // 🆕 Build route from BOM (piece.additionalWorks + fixed stages)
-            function buildPieceRoute(piece) {
-                const STAGE_SEQUENCE = [
-                    "Before Cutting", "Cutting", "After Cutting",
-                    "Before Stitching", "Stitching", "After Stitching",
-                    "Before Ironing", "Ironing", "After Ironing"
-                ];
-                const route = [];
-                const worksByStage = {};
-                (piece.additionalWorks || []).forEach(w => {
-                    const stage = String(w.stage || "").trim();
-                    if (!stage) return;
-                    if (!worksByStage[stage]) worksByStage[stage] = [];
-                    worksByStage[stage].push(w.workType);
-                });
-                STAGE_SEQUENCE.forEach(stage => {
-                    if (worksByStage[stage] && worksByStage[stage].length) {
-                        route.push({ type: "additional_work", stage, works: worksByStage[stage] });
-                    }
-                    if (stage === "Cutting") route.push({ type: "cutting", stage: "Cutting" });
-                    if (stage === "Stitching") route.push({ type: "stitching", stage: "Stitching" });
-                    if (stage === "Ironing") route.push({ type: "ironing", stage: "Ironing" });
-                });
-                return route;
-            }
-
-            // Get the piece object (from approved batch data) to build route
-            let pieceObject = { additionalWorks: [] };
-            if (bIdx !== -1) {
-                const batch = approvedBatchData[bIdx];
-                const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
-                const pieceIdx = pieces.findIndex(p => Number(p.number) === Number(req.pieceNumber));
-                if (pieceIdx !== -1) pieceObject = pieces[pieceIdx];
-            }
-
-            const pieceRoute = buildPieceRoute(pieceObject);
-            const firstStage = pieceRoute.length ? pieceRoute[0] : { type: "cutting", stage: "Cutting" };
-
-            if (existingIdx !== -1) {
-                const prev = pool[existingIdx];
-                const mergedAvail = { ...(prev.itemAvailability || {}) };
-                Object.entries(finalAvailability).forEach(([k, v]) => {
-                    if (v === "yes") mergedAvail[k] = "yes";
-                    else if (mergedAvail[k] !== "yes") mergedAvail[k] = "no";
-                });
-                const mergedMaterials = [...new Set([...(prev.materials || []), ...trueFullMaterials])];
-                const mergedAvailable = mergedMaterials.filter(m => mergedAvail[m] === "yes");
-
-                pool[existingIdx] = {
-                    ...prev,
-                    materials: mergedMaterials,
-                    itemAvailability: mergedAvail,
-                    availableItems: mergedAvailable,
-                    mode: "pass",
-                    status: "pending",
-                    route: pieceRoute,
-                    currentStage: firstStage,
-                    stageHistory: [
-                        ...(prev.stageHistory || []),
-                        { at: new Date().toLocaleString("en-GB"), stage: firstStage.stage, type: firstStage.type, action: "re-entered from requirement" }
-                    ],
-                    updatedAt: new Date().toLocaleString("en-GB")
-                };
-            } else {
-                const nextId = pool.length ? Math.max(...pool.map(p => Number(p.id) || 0)) + 1 : 1;
-                pool.push({
-                    id: nextId,
-                    batchId: req.batchId,
-                    bomId: req.bomId || "",
-                    brand: req.brand,
-                    designNumber: req.designNumber,
-                    color: req.color,
-                    pieceNumber: req.pieceNumber,
-                    pieceItem: req.pieceItem,
-                    quantity: req.quantity,
-                    priority: req.priority || "Medium",
-                    photo: req.photo || "",
-                    availableItems: availableItems,
-                    materials: trueFullMaterials,
-                    itemAvailability: finalAvailability,
-                    additionalWorks: req.additionalWorks || [],
-                    fromRequirement: req.requirementId,
-                    mode: "pass",
-                    status: "pending",
-                    route: pieceRoute,
-                    currentStage: firstStage,
-                    stageHistory: [
-                        { at: new Date().toLocaleString("en-GB"), stage: firstStage.stage, type: firstStage.type, action: "entered from requirement" }
-                    ],
-                    createdAt: new Date().toLocaleString("en-GB")
-                });
-            }
-            saveStorage(APPROVED_POOL_KEY, pool);
-
-            /* ---- Update requirement ---- */
-            if (isPartial) {
-                requirements[reqIndex] = {
-                    ...req,
-                    missingItems: remainingItems,
-                    itemAvailability: remainingItems.reduce((acc, m) => {
-                        acc[m] = finalAvailability[m] || "no";
-                        return acc;
-                    }, {}),
-                    status: "in_progress",
-                    updatedAt: new Date().toLocaleString("en-GB")
-                };
-            } else {
-                requirements[reqIndex] = {
-                    ...req,
-                    missingItems: [...missing],
-                    itemAvailability: { ...finalAvailability },
-                    status: "completed",
-                    completedAt: new Date().toLocaleString("en-GB")
-                };
-            }
-            saveStorage(REQUIREMENT_STORAGE_KEY, requirements);
-
-            applyMergedToPiece(req.batchId, req.pieceNumber, finalAvailability, trueFullMaterials);
-            renderRequirements();
-
-            Swal.fire({
-                icon: "success",
-                title: isPartial ? "Partial Passed" : "Passed",
-                html: isPartial
-                    ? `<p><strong>${receivedItems.length}</strong> items passed to next stage.</p><p><strong>${remainingItems.length}</strong> items still in Requirement.</p>`
-                    : `<p>All items received and passed to <strong>next stage</strong>.</p>`,
-                timer: 2200,
-                showConfirmButton: false
-            });
+            try { await Production.receiveRequirement(reqId); loadRequirements(); renderRequirements(); }
+            catch(error) { Swal.fire({icon:"error",title:"Requirement update cancelled",text:error.message}); }
         });
     }
 
