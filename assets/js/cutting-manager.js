@@ -54,10 +54,13 @@ $(document).ready(function () {
         try { localStorage.setItem(key, JSON.stringify(value)); return true; }
         catch (e) { return false; }
     }
-    function loadData() {
-        approvedPool = readStorage(APPROVED_POOL_KEY).filter(p =>
+    function isThisStage(p) {
+        return !!(
             p.currentStage && p.currentStage.type === "cutting"
         );
+    }
+    function loadData() {
+        approvedPool = readStorage(APPROVED_POOL_KEY).filter(isThisStage);
         cuttingData = readStorage(CUTTING_DATA_KEY);
         nextId = Number(localStorage.getItem(CUTTING_NEXT_ID_KEY)) || 1;
     }
@@ -232,7 +235,7 @@ $(document).ready(function () {
     function getPoolAssigned(item) {
         return cuttingData
             .filter(d => Number(d.poolId) === Number(item.id))
-            .reduce((s, d) => s + (Number(d.quantity) || 0), 0);
+            .reduce((s, d) => s + Math.max(0, (Number(d.quantity) || 0) - (Number(d.passedQty) || 0)), 0);
     }
     function getPoolRemaining(item) {
         return Math.max(0, getPoolTotal(item) - getPoolAssigned(item));
@@ -1201,7 +1204,7 @@ $(document).ready(function () {
 
         if (finalEff > 0 && finalProgress >= finalEff && finalPassed < finalProgress) {
             const autoPassQty = finalProgress - finalPassed;
-            pushRowToNextStage(item, autoPassQty);
+            if (!pushRowToNextStage(item, autoPassQty)) { saveData(); renderCuttingTable(); $("#progressModal").modal("hide"); return; }
             item.passedQty = finalProgress;
             pushHistory({ cuttingId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Auto-passed ${autoPassQty} pcs to next stage`, by: "System" });
             saveData();
@@ -1219,29 +1222,76 @@ $(document).ready(function () {
 
     /* ================= PASS TO NEXT STAGE ================= */
     function pushRowToNextStage(item, qty) {
-        const pool = readStorage(APPROVED_POOL_KEY);
-        const idx = pool.findIndex(p => String(p.batchId) === String(item.batchId) && Number(p.pieceNumber) === Number(item.pieceNumber));
-        if (idx === -1) return;
+        qty = Number(qty) || 0;
+        const poolData = readStorage(APPROVED_POOL_KEY);
+        const now = new Date().toLocaleString("en-GB");
+        const samePiece = p => String(p.batchId) === String(item.batchId) && Number(p.pieceNumber) === Number(item.pieceNumber);
 
-        const entry = pool[idx];
-        const route = entry.route || [];
-        const currentStage = entry.currentStage || {};
+        // Source = the pool entry this assignment belongs to (poolId), still sitting at this stage.
+        let srcIdx = poolData.findIndex(p => Number(p.id) === Number(item.poolId) && isThisStage(p));
+        if (srcIdx === -1) srcIdx = poolData.findIndex(p => samePiece(p) && isThisStage(p));
+        const source = srcIdx !== -1 ? poolData[srcIdx] : null;
+        // Old data: the entry may already have been moved forward by the previous logic — use it only for metadata.
+        const template = source || poolData.find(p => Number(p.id) === Number(item.poolId)) || poolData.find(samePiece);
+        if (!template) { Swal.fire({ icon: "error", title: "Pool Entry Not Found" }); return false; }
+
+        const srcBefore = source ? (Number(source.quantity) || 0) : 0;
+        if (qty <= 0 || (source && qty > srcBefore)) {
+            Swal.fire({ icon: "warning", title: "Invalid Quantity", text: `Cannot pass ${qty} pcs${source ? ` (stage holds ${srcBefore})` : ""}.` });
+            return false;
+        }
+
+        const route = template.route || [];
+        const currentStage = source ? (source.currentStage || {}) : (route.find(r => isThisStage({ currentStage: r })) || {});
         const curIdx = route.findIndex(r => r.stage === currentStage.stage && r.type === currentStage.type);
+        if (!source && curIdx === -1) { Swal.fire({ icon: "error", title: "Stage Not In Route" }); return false; }
         const nextStage = (curIdx !== -1 && curIdx + 1 < route.length)
             ? route[curIdx + 1]
             : { type: "packing", stage: "Packing" };
 
-        pool[idx] = {
-            ...entry,
-            currentStage: nextStage,
-            quantity: qty,
-            stageHistory: [
-                ...(entry.stageHistory || []),
-                { at: new Date().toLocaleString("en-GB"), stage: nextStage.stage, type: nextStage.type, action: "entered", fromQty: qty }
-            ],
-            updatedAt: new Date().toLocaleString("en-GB")
-        };
-        saveStorage(APPROVED_POOL_KEY, pool);
+        // Destination = same batch + piece already at the exact next route stage (type + stage name).
+        const dstIdx = poolData.findIndex((p, i) => i !== srcIdx && samePiece(p) &&
+            p.currentStage && p.currentStage.type === nextStage.type && p.currentStage.stage === nextStage.stage);
+        const dstBefore = dstIdx !== -1 ? (Number(poolData[dstIdx].quantity) || 0) : 0;
+        const entered = { at: now, stage: nextStage.stage, type: nextStage.type, action: "entered", fromQty: qty };
+
+        if (source) {
+            poolData[srcIdx] = {
+                ...source,
+                quantity: srcBefore - qty,
+                stageHistory: [
+                    ...(source.stageHistory || []),
+                    { at: now, stage: currentStage.stage, type: currentStage.type, action: `passed ${qty} pcs to ${nextStage.stage}`, qty }
+                ],
+                updatedAt: now
+            };
+        }
+
+        let finalDstIdx = dstIdx;
+        if (dstIdx !== -1) {
+            const dst = poolData[dstIdx];
+            poolData[dstIdx] = { ...dst, quantity: dstBefore + qty, stageHistory: [...(dst.stageHistory || []), entered], updatedAt: now };
+        } else {
+            const newId = poolData.reduce((m, p) => Math.max(m, Number(p.id) || 0), 0) + 1;
+            poolData.push({
+                ...template,
+                id: newId,
+                quantity: qty,
+                currentStage: nextStage,
+                stageHistory: [...(template.stageHistory || []), entered],
+                createdAt: now,
+                updatedAt: now
+            });
+            finalDstIdx = poolData.length - 1;
+        }
+
+        // Quantity conservation guard
+        if ((source && srcBefore !== poolData[srcIdx].quantity + qty) || poolData[finalDstIdx].quantity !== dstBefore + qty) {
+            Swal.fire({ icon: "error", title: "Quantity Mismatch", text: "Pass cancelled." });
+            return false;
+        }
+        saveStorage(APPROVED_POOL_KEY, poolData);
+        return true;
     }
 
     $(document).on("click", ".pass-row-action-btn", function () {
@@ -1276,7 +1326,7 @@ $(document).ready(function () {
             cancelButtonText: 'Cancel'
         }).then((r) => {
             if (!r.isConfirmed) return;
-            pushRowToNextStage(item, passableQty);
+            if (!pushRowToNextStage(item, passableQty)) return;
             item.passedQty = progress;
             pushHistory({ cuttingId: item.id, batchId: item.batchId, subBatch: item.subBatch, action: `Passed ${passableQty} pcs to next stage`, by: "Manager" });
             saveData();
