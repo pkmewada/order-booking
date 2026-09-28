@@ -951,7 +951,7 @@ include __DIR__ . "/includes/header.php";
 <?php include __DIR__ . "/includes/footer.php"; ?>
 
 <script src="assets/js/production-engine.js"></script>
-<script src="assets/js/bom-master.js"></script>
+<script src="assets/js/bom-master.js?v=<?php echo time(); ?>"></script>
 
 </body>
 
