@@ -28,6 +28,11 @@ $(document).ready(function () {
         "Hand Work"
     ];
 
+    const STAGES = [
+        "Before Cutting",
+        "After Cutting",
+        "After Stitching"
+    ];
 
 
 
