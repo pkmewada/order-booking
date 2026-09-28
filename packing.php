@@ -1,8 +1,8 @@
 <?php require_once __DIR__ . '/includes/header.php'; ?>
 
 <style>
-    #refreshHandworkBtn { background-color: #161617 !important; border-color: #161617 !important; color: #fff !important; }
-    #refreshHandworkBtn:hover { background-color: #2b2b2d !important; border-color: #2b2b2d !important; }
+    #refreshPackingBtn { background-color: #161617 !important; border-color: #161617 !important; color: #fff !important; }
+    #refreshPackingBtn:hover { background-color: #2b2b2d !important; border-color: #2b2b2d !important; }
 
     #listAllBtn, #bulkAssignBtn {
         background-color: #161617 !important; border-color: #161617 !important;
@@ -34,8 +34,8 @@
     .pagination-wrap .pager .page-btn:disabled { opacity: .5; cursor: not-allowed; }
 
     .assignment-row td { vertical-align: middle; padding: 6px 8px; }
-    #assignRowsContainer .table th, #bulkRowsContainer .table th { background: #f8f9fa; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 10px; border-bottom: 2px solid #dee2e6; }
-    #assignRowsContainer .table td, #bulkRowsContainer .table td { padding: 6px 8px; vertical-align: middle; }
+    #assignRowsContainer .table th { background: #f8f9fa; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 10px; border-bottom: 2px solid #dee2e6; }
+    #assignRowsContainer .table td { padding: 6px 8px; vertical-align: middle; }
 
     .color-text { font-size: 13px; font-weight: 600; color: #18243d; }
 
@@ -164,22 +164,16 @@
 
         <div class="my-4 page-header-breadcrumb d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div>
-                <h1 class="page-title fw-medium fs-18 mb-2">Hand Work Manager</h1>
+                <h1 class="page-title fw-medium fs-18 mb-2">Packing Manager</h1>
                 <nav>
                     <ol class="breadcrumb mb-0">
-                        <li class="breadcrumb-item"><a href="javascript:void(0);">Additional Work</a></li>
-                        <li class="breadcrumb-item active">Hand Work</li>
+                        <li class="breadcrumb-item"><a href="javascript:void(0);">Production</a></li>
+                        <li class="breadcrumb-item active">Packing</li>
                     </ol>
                 </nav>
             </div>
-            <div class="d-flex gap-2">
-                <button class="btn" id="listAllBtn">
-                    <i class="bx bx-list-ul align-middle me-1"></i> List
-                </button>
-                <button class="btn" id="bulkAssignBtn">
-                    <i class="bx bx-layer-plus align-middle me-1"></i> Bulk Assign Hand Work
-                </button>
-                <button class="btn" id="refreshHandworkBtn">
+            <div class="d-flex gap-2"><button class="btn btn-dark" id="holdListBtn">Hold List</button>
+                <button class="btn" id="refreshPackingBtn">
                     <i class="bx bx-refresh align-middle"></i>
                 </button>
             </div>
@@ -191,7 +185,7 @@
                     <div class="card-header">
                         <div class="card-title">
                             <i class="bx bx-check-circle text-success me-2"></i>
-                            Approved Items — Ready for Hand Work
+                            Received Items — Ready for Packing
                         </div>
                     </div>
                     <div class="card-body">
@@ -200,7 +194,7 @@
                                 <thead>
                                     <tr>
                                         <th>Batch ID</th><th>Photo</th><th>Brand</th><th>Design</th><th>Color</th>
-                                        <th>Piece</th><th>Item</th><th>Quantity</th><th>Priority</th><th>Status</th><th>Action</th>
+                                        <th>Piece</th><th>Item / Size</th><th>Quantity</th><th>Priority</th><th>Status</th><th>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody id="availableList"></tbody>
@@ -218,7 +212,7 @@
                     <div class="card-header">
                         <div class="card-title">
                             <i class="bx bx-cut text-primary me-2"></i>
-                            Hand Work Assignments
+                            Packing Assignments
                         </div>
                     </div>
                     <div class="card-body">
@@ -226,7 +220,7 @@
                             <table class="table table-bordered text-nowrap w-100">
                                 <thead>
                                     <tr>
-                                        <th>#</th><th>Batch ID</th><th>Sub-Batch</th><th>Brand</th><th>Piece Type</th><th>Worker</th>
+                                        <th>#</th><th>Batch ID</th><th>Packing Lot</th><th>Brand</th><th>Piece Type</th><th>Worker</th>
                                         <th>Quantity</th><th>Progress</th><th>Damage</th><th>Remaining</th>
                                         <th>Priority</th><th>Delivery Date</th><th>Status</th><th>Actions</th>
                                     </tr>
@@ -242,184 +236,9 @@
     </div>
 </div>
 
-<!-- ASSIGN MODAL -->
-<div class="modal fade" id="assignModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Assign Hand Work Worker</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="assignForm">
-                    <div class="mb-3">
-                        <label class="form-label">Select Batch (From Approved Pool)</label>
-                        <select class="form-select" id="batchSelect" required>
-                            <option value="">Choose Batch</option>
-                        </select>
-                    </div>
-                    <div id="assignRowsContainer"></div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="saveAssignBtn">
-                    <i class="bx bx-save"></i> Assign
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- BULK ASSIGN MODAL — FULL WIDTH -->
-<div class="modal fade" id="bulkAssignModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered" style="max-width:100%; width:100%; height:100%; margin:0;">
-        <div class="modal-content" style="height:100vh; border-radius:0; border:none;">
-            <div class="modal-header py-2">
-                <h5 class="modal-title"><i class="bx bx-layer-plus me-1"></i> Bulk Assign Hand Work</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" style="overflow-y:auto; padding:12px 20px;">
-                <div class="bulk-toolbar">
-                    <label class="mb-0 fw-semibold">Select Batches:</label>
-                    <div class="multi-select-wrap" style="flex:1 1 420px; max-width:640px;">
-                        <div class="multi-select-box" id="multiSelectBox">
-                            <span class="placeholder" id="multiSelectPlaceholder">Click to choose batches...</span>
-                        </div>
-                        <div class="multi-select-dropdown" id="multiSelectDropdown"></div>
-                    </div>
-                    <span class="ms-auto badge bg-primary" id="selectedCountBadge">0 batch(es) selected</span>
-                </div>
-                <div id="bulkItemsContainer"></div>
-            </div>
-            <div class="modal-footer py-2">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary btn-sm" id="saveBulkAssignBtn">
-                    <i class="bx bx-save me-1"></i> Assign Selected
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- UPDATE PROGRESS MODAL -->
-<div class="modal fade" id="progressModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Update Progress</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3"><label class="form-label">Sub-Batch</label><input type="text" class="form-control" id="progressSubBatch" readonly></div>
-                <div class="mb-3"><label class="form-label">Worker</label><input type="text" class="form-control" id="progressWorker" readonly></div>
-                <div class="row">
-                    <div class="col-md-4 mb-3"><label class="form-label">Total Assigned</label><input type="text" class="form-control" id="progressTotal" readonly></div>
-                    <div class="col-md-4 mb-3"><label class="form-label">Already Passed</label><input type="text" class="form-control" id="progressPassed" readonly></div>
-                    <div class="col-md-4 mb-3"><label class="form-label">Remaining</label><input type="text" class="form-control" id="progressRemaining" readonly></div>
-                </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Update Type</label>
-                        <select class="form-select" id="progressTypeSelect">
-<option value="set_completed">Set completed total (edit)</option>
-<option value="set_damage">Set damage total (edit)</option>
-<option value="set_assigned">Set assigned total (edit)</option>
-<option value="recover">Recover linked repair quantity</option>
-                            <option value="completed" selected>Completed (+)</option>
-                            <option value="damage">Damage (+)</option>
-                        </select>
-                        <small class="text-muted">Damage moves to Repair &amp; reduces total</small>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Add Quantity (+)</label>
-                        <input type="number" class="form-control" id="progressQty" min="0" value="0">
-                        <small class="text-muted">Max addable: <span id="progressMax">0</span></small>
-                    </div>
-                </div>
-                <div class="alert alert-info mb-3" id="progressLivePreview" style="font-size:13px;"></div>
-
-                <div class="progress-history-wrap">
-                    <div class="progress-history-head">
-                        <i class="bx bx-history"></i>
-                        Previous Assignment / Progress History
-                    </div>
-                    <div class="progress-history-body" id="progressHistoryList"></div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="updateProgressBtn">
-                    <i class="bx bx-save"></i> Update
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- VIEW DETAIL MODAL -->
-<div class="modal fade" id="viewDetailModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Assignment Details</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="viewDetailBody"></div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-dark" id="printDetailBtn">
-                    <i class="bx bx-printer me-1"></i> Print / Download
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- LIST ALL MODAL -->
-<div class="modal fade" id="listAllModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered" style="max-width:99vw; width:99vw;">
-        <div class="modal-content" style="height:96vh;">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bx bx-list-ul me-1"></i> All Passed Hand Work Assignments</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="listAllBody" style="overflow-y:auto;"></div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-dark" id="printListAllBtn">
-                    <i class="bx bx-printer me-1"></i> Print / Download
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- NESTED BATCH HISTORY MODAL -->
-<div class="modal fade" id="batchHistoryModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered" style="max-width:1000px;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bx bx-history me-1"></i> Batch History</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="batchHistoryBody"></div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-dark" id="printBatchHistoryBtn">
-                    <i class="bx bx-printer me-1"></i> Print / Download
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
+<div class="modal fade" id="assignModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Assign Packing Worker</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><label class="form-label" for="batchSelect">Select Batch (Received for Packing)</label><select class="form-select mb-3" id="batchSelect"></select><div id="assignRowsContainer"></div></div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" id="saveAssignBtn"><i class="bx bx-save"></i> Assign</button></div></div></div></div>
+<div class="modal fade" id="holdModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered" style="width:99vw;max-width:99vw"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Packing Hold List</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><div class="table-responsive"><table class="table table-bordered text-nowrap"><thead><tr><th>Batch ID</th><th>Photo</th><th>Brand</th><th>Design</th><th>Color</th><th>Piece</th><th>Item / Size</th><th>Quantity</th><th>Priority</th><th>Status</th><th>Action</th></tr></thead><tbody id="holdList"></tbody></table></div></div></div></div></div>
+<div class="modal fade" id="progressModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Packing Lot Progress</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body" id="progressBody"></div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" id="updateProgressBtn">Save Progress</button></div></div></div></div>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
-
-<script src="assets/js/production-engine.js"></script>
-<script src="assets/js/production-controls.js"></script>
-<link rel="stylesheet" href="assets/css/assignment-details.css?v=<?= filemtime(__DIR__ . "/assets/css/assignment-details.css") ?>">
-<script src="assets/js/assignment-details.js?v=<?= filemtime(__DIR__ . "/assets/js/assignment-details.js") ?>"></script>
-<script src="assets/js/handwork.js?v=<?= filemtime(__DIR__ . "/assets/js/handwork.js") ?>"></script>
-</body>
-</html>
+<script src="assets/js/production-engine.js?v=<?= filemtime(__DIR__.'/assets/js/production-engine.js') ?>"></script>
+<script src="assets/js/packing.js?v=<?= filemtime(__DIR__.'/assets/js/packing.js') ?>"></script>

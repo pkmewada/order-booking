@@ -972,44 +972,7 @@ $(document).ready(async function () {
        VIEW DETAIL (Cutting Manager style — no history in view)
        ============================================================ */
     function buildViewHtml(item) {
-        const photoSrc = item.photo ? escapeHtml(item.photo) : PLACEHOLDER_IMG;
-        const now = new Date();
-        const dateStr = now.toLocaleDateString("en-GB") + ", " + now.toLocaleTimeString("en-GB", { hour12: false });
-        const qty = item.assignedQty || 0;
-
-        return `
-            <div class="detail-print-wrap">
-                <div class="detail-header-line">
-                    <h4>ASSIGNMENT DETAILS</h4>
-                    <small>${escapeHtml(dateStr)}</small>
-                </div>
-                <div class="detail-divider"></div>
-                <div class="detail-split-layout">
-                    <div>
-                        <div class="detail-highlight-grid">
-                            <div class="detail-highlight-item"><span class="lbl">Worker Name</span><span class="val">${escapeHtml(item.worker || "-")}</span></div>
-                            <div class="detail-highlight-item"><span class="lbl">Design Number</span><span class="val">${escapeHtml(item.designNumber || "-")}</span></div>
-                            <div class="detail-highlight-item"><span class="lbl">Brand</span><span class="val">${escapeHtml(item.brand || "-")}</span></div>
-                            <div class="detail-highlight-item"><span class="lbl">Total Quantity</span><span class="val">${qty}</span></div>
-                        </div>
-                        <div class="detail-info-grid">
-                            <div class="detail-info-cell"><span class="lbl">Batch ID</span><span class="val">${escapeHtml(item.batchId || "-")}</span></div>
-                            <div class="detail-info-cell"><span class="lbl">Sub-Batch</span><span class="val">${escapeHtml(item.subBatch || "-")}</span></div>
-                            <div class="detail-info-cell"><span class="lbl">Color</span><span class="val">${escapeHtml(item.color || "-")}</span></div>
-                            <div class="detail-info-cell"><span class="lbl">Piece Type</span><span class="val">${escapeHtml(item.pieceType || "-")}</span></div>
-                            <div class="detail-info-cell"><span class="lbl">Priority</span><span class="val">${escapeHtml(item.priority || "-")}</span></div>
-                            <div class="detail-info-cell"><span class="lbl">Delivery Date</span><span class="val">${escapeHtml(formatDate(item.deliveryDate))}</span></div>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="detail-photo-box">
-                            <img src="${photoSrc}" alt="Batch Photo" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}';">
-                        </div>
-                    </div>
-                </div>
-                <div class="detail-signature"><span class="sig-line">Signature .....</span></div>
-            </div>
-        `;
+        return AssignmentDetails.render(item);
     }
 
     $(document).on("click", ".view-row-action-btn", function () {

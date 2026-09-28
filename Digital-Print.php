@@ -418,6 +418,8 @@
 
 <script src="assets/js/production-engine.js"></script>
 <script src="assets/js/production-controls.js"></script>
-<script src="assets/js/digital-print.js"></script>
+<link rel="stylesheet" href="assets/css/assignment-details.css?v=<?= filemtime(__DIR__ . "/assets/css/assignment-details.css") ?>">
+<script src="assets/js/assignment-details.js?v=<?= filemtime(__DIR__ . "/assets/js/assignment-details.js") ?>"></script>
+<script src="assets/js/digital-print.js?v=<?= filemtime(__DIR__ . "/assets/js/digital-print.js") ?>"></script>
 </body>
 </html>

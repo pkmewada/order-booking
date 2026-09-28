@@ -89,7 +89,7 @@
             stroke: #000 !important;
         }
 
-        html[data-theme-mode="light"] .main-menu .slide.active > .side-menu__item,
+        html[data-theme-mode="light"] .main-menu .slide.active>.side-menu__item,
         html[data-theme-mode="light"] .main-menu .side-menu__item.active,
         html[data-theme-mode="light"] .main-menu .side-menu__item.active .side-menu__label {
             color: #000 !important;
@@ -108,7 +108,7 @@
             border-color: #e9edf5 !important;
         }
 
-        html[data-theme-mode="light"] .slide-menu .side-menu__label1 > a {
+        html[data-theme-mode="light"] .slide-menu .side-menu__label1>a {
             color: #161617 !important;
             font-weight: 600 !important;
         }
@@ -271,7 +271,7 @@
             color: #161617 !important;
         }
 
-        html[data-theme-mode="light"] .page-header-breadcrumb .breadcrumb-item + .breadcrumb-item::before {
+        html[data-theme-mode="light"] .page-header-breadcrumb .breadcrumb-item+.breadcrumb-item::before {
             color: #161617 !important;
         }
     </style>
@@ -1119,6 +1119,19 @@
                                             <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path>
                                         </svg>
                                         <span class="side-menu__label">Ironing</span>
+                                    </a>
+                                </li>
+
+                                <li class="slide">
+                                    <a href="packing" class="side-menu__item">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
+                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
+                                            <path d="m3.3 7 8.7 5 8.7-5"></path>
+                                            <path d="M12 22V12"></path>
+                                        </svg>
+                                        <span class="side-menu__label">Packing</span>
                                     </a>
                                 </li>
 

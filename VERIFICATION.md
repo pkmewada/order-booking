@@ -42,3 +42,15 @@ The first two require Node and the configured XAMPP PHP path. The browser test a
 - BOM browser checks passed: four timing options, Before Cutting route preview, active-only batch choices and live exclusion after a BOM becomes inactive.
 - Existing unrelated ApexCharts and Simplebar template errors still occur; no production-script exceptions were detected.
 - Existing approved production routes remain stored snapshots. Timing changes apply to newly approved production.
+
+
+## Packing two-table workflow
+
+80 engine tests passed (75 existing, 5 packing). Source checks passed: 190 JavaScript files and 33 PHP pages. Isolated Edge checks passed for real Ironing-to-Packing receipts, batch grouping, one Assign button, no bulk button, minimum paired quantity, shared lot rows, Hold/Restore across reload, lot progress and Stitching engine loading. Packing screenshot was visually reviewed. Existing unrelated theme-script exceptions remain outside this change.
+
+
+## Assignment View / Print layout
+
+All eight manager View buttons now use the shared assignment-details renderer and scoped stylesheet. The reference layout uses a narrow summary panel, a roughly 70% image panel, a full-width six-cell details grid and a signature line. Outsourced stitching retains Firm Name. Images use contain sizing. Print / Download prints an isolated A4 sheet for browser Save as PDF, excluding modal chrome and underlying tables.
+
+Validation: source syntax/PHP checks passed; tests/browser-assignment-details.cjs exercised View and print in Cutting, Stitching, Embroidery, Digital Print, Screen Print, Hand Work, Peco and Ironing. The generated PDF contains one A4 page; screen and print-layout screenshots were visually reviewed. No production quantities, routing or assignment actions were changed.

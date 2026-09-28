@@ -44,7 +44,7 @@ Approval, requirement, work, pool, repair and packing changes use a shared trans
 | `stitchingData` / `stitchingData_history` | In-house and outsourced stitching |
 | `ironingData` / `ironingData_history` | Ironing |
 | `packingPool` | Exactly-once receipts from Ironing |
-| `packingData` / `packingData_history` | Engine-supported packing assignments; no Packing manager page currently exists |
+| `packingData` / `packingData_history` | Packing worker assignments shown in packing.php |
 | `repairData` | Linked outstanding damage and recovery |
 | `productionTransaction` | Temporary rollback journal; removed after successful commit |
 
@@ -166,3 +166,14 @@ node tests/browser-production.cjs
 The engine suite covers each of the eight managers: single/multiple/bulk assignment, partial/full completion, damage, partial/full/duplicate pass, edit after pass, damage after partial pass, atomic bulk damage/pass, reload through a new engine instance, assignment editing, and stage transitions. It also tests packing protection, write-failure rollback, explicit repair recovery, requirements and legacy normalization.
 
 The browser test launches PHP and headless Edge using a temporary profile. It exercises existing page controls and reloads. It requires the local PHP/Edge paths in the test and access to the site's existing CDN dependencies. See `VERIFICATION.md` for the actual recorded results and remaining limitations.
+
+
+## Packing table workflow
+
+packing.php uses the existing production table/modal style with Received Items and Packing Assignments tables. There is one Assign action per batch and no bulk assignment. Packing receipts continue to come from the existing stage engine; Ironing UI and routing are unchanged.
+
+Paired-set availability is the minimum unassigned Packing balance across all required batch pieces. Missing pieces have zero availability. A 600-set assignment from 700/600/650 receipts atomically reserves 600 of each piece, preserving 100/0/50 unassigned balances. Rows share a packingLotId and are grouped under one batch/lot in the lower table. Existing size metadata is displayed where available.
+
+Packing holds are recorded in packingHolds under the shared transaction lock. Hold moves only the unassigned batch balance out of the received table; Restore brings it back. New receipts do not clear a hold. Packing progress updates remain per-piece totals under one lot edit action. Completion is terminal and does not create another production transfer.
+
+Verification: node --test tests/production-engine.test.cjs tests/packing.test.cjs and node tests/browser-packing.cjs.

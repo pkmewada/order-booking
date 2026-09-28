@@ -13,7 +13,7 @@
     };
     const additional = ["Embroidery", "Digital Print", "Screen Print", "Hand Work", "Peco"];
     const historyKeys = Object.fromEntries(Object.keys(managers).map(k => [k, k === "cuttingData" ? "cuttingHistory" : `${k}_history`]));
-    const keys = ["approvedPool", ...Object.keys(managers), ...Object.values(historyKeys), "repairData", "packingPool", "approvedBatchData", "batchData", "requirementData"];
+    const keys = ["approvedPool", ...Object.keys(managers), ...Object.values(historyKeys), "repairData", "packingPool", "approvedBatchData", "batchData", "requirementData", "packingHolds"];
     const journalKey = "productionTransaction";
     const copy = value => JSON.parse(JSON.stringify(value));
     const same = (a, b) => String(a) === String(b);
@@ -240,8 +240,7 @@
             return { works: s[key], pool: s.approvedPool.filter(p => stageInput(p, stage) > 0).map(p => ({ ...p,
                 quantity: stageInput(p, stage), currentStage: p.route.find(r => r.stage === stage) })) };
         }
-        async function assign(key, requests) {
-            return transaction(s => {
+        function assignInState(s, key, requests) {
                 if (!requests.length) throw new Error("No assignment rows.");
                 const stage = managers[key], rows = s[key], results = [];
                 for (const request of requests) {
@@ -263,8 +262,8 @@
                     audit(p, { stage, qty, action: "assigned", sourceWorkId: id, sourceKey: key });
                 }
                 return results;
-            });
         }
+        async function assign(key, requests) { return transaction(s => assignInState(s, key, requests)); }
         async function edit(key, requests) {
             if (new Set(requests.map(r => String(r.id))).size !== requests.length) throw new Error("Each assignment may appear only once in a bulk edit.");
             return transaction(s => requests.map(request => {
@@ -450,7 +449,43 @@
                 syncBatch(s,batch); return req;
             });
         }
+
+        function packingBatches(s = readState()) {
+            const ids = [...new Set(s.approvedPool.filter(p => stageInput(p, 'Packing') > 0).map(p => String(p.batchId)))];
+            return ids.map(batchId => {
+                const pools = s.approvedPool.filter(p => same(p.batchId, batchId));
+                const batch = [...s.approvedBatchData, ...s.batchData].find(b => same(b.batchId, batchId));
+                const required = batch?.pieces?.length ? batch.pieces : pools.map(p => ({ number: p.pieceNumber, item: p.pieceItem, size: p.size }));
+                const pieces = required.map(piece => {
+                    const pool = pools.find(p => same(p.pieceNumber, piece.number));
+                    const received = pool ? stageInput(pool, 'Packing') : 0;
+                    const available = pool ? calculateAvailableQty(pool, s.packingData, 'Packing') : 0;
+                    return { number: piece.number, item: piece.item || pool?.pieceItem || 'Piece', size: piece.size || pool?.size || '',
+                        poolId: pool?.id, received, available, assigned: received - available };
+                });
+                return { ...pools[0], batchId, pieces, available: Math.min(...pieces.map(p => p.available)),
+                    held: s.packingHolds.some(h => same(h.batchId, batchId)) };
+            });
+        }
+        async function assignPacking(request) {
+            return transaction(s => {
+                const batch = packingBatches(s).find(b => same(b.batchId, request.batchId));
+                if (!batch || batch.held) throw new Error('Batch is unavailable or on hold.');
+                const qty = number(request.quantity, 'Paired sets');
+                if (!qty || qty > batch.available) throw new Error('Only ' + batch.available + ' paired sets are available.');
+                const lotId = batch.batchId + '-PK' + (Math.max(0, ...s.packingData.map(w => Number(w.id) || 0)) + 1);
+                return assignInState(s, 'packingData', batch.pieces.map(p => ({ ...request, poolId: p.poolId, size: p.size, packingLotId: lotId })));
+            });
+        }
+        async function setPackingHold(batchId, held) {
+            return transaction(s => {
+                if (!packingBatches(s).some(b => same(b.batchId, batchId))) throw new Error('Batch not found.');
+                s.packingHolds = s.packingHolds.filter(h => !same(h.batchId, batchId));
+                if (held) s.packingHolds.push({ batchId, at: time() });
+            });
+        }
         return { views, assign, edit, pass, stop, recoverRepair, transaction, readState,
+            packingBatches, assignPacking, setPackingHold,
             approve, tickRequirement, receiveRequirement, setBatchStopped,
             calculateAvailableQty, validateAssignment, pushToNextStage, pushToPackingPool,
             initialize: () => locks?.request ? locks.request("garment-production", { mode: "exclusive" }, recover) : Promise.resolve() };
