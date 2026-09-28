@@ -13,7 +13,7 @@ let socket,seq=0;const pending=new Map(),errors=[];
 async function until(fn,label,timeout=30000) {const start=Date.now();while(Date.now()-start<timeout){try{const v=await fn();if(v)return v;}catch{}await delay(100);}throw Error(`Timed out: ${label}`);}
 function send(method,params={}){return new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});socket.send(JSON.stringify({id,method,params}));});}
 async function evaluate(expression){const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result.value;}
-async function navigate(page){await send('Page.navigate',{url:`http://127.0.0.1:${port}/${page}`});try{await until(()=>evaluate('typeof Production !== "undefined" && typeof jQuery !== "undefined" && document.querySelector(".footer")'),'page '+page,30000);}catch(error){console.error(await evaluate('JSON.stringify({url:location.href,ready:document.readyState,title:document.title,jquery:typeof jQuery,production:typeof Production,body:document.body?.innerText.slice(0,500)})'));throw error;}await delay(250);}
+async function navigate(page){await send('Page.navigate',{url:`http://127.0.0.1:${port}/${page}`});try{await until(()=>evaluate('(typeof Production !== "undefined" || location.pathname.endsWith("/batch.php")) && typeof jQuery !== "undefined" && document.readyState === "complete" && document.querySelector(".footer")'),'page '+page,30000);}catch(error){console.error(await evaluate('JSON.stringify({url:location.href,ready:document.readyState,title:document.title,jquery:typeof jQuery,production:typeof Production,body:document.body?.innerText.slice(0,500)})'));throw error;}await delay(250);}
 async function seed(stage){
  const route=P.buildRoute({additionalWorks:['Embroidery','Digital Print','Screen Print','Hand Work','Peco'].map(workType=>({workType}))});
  const keys=['approvedPool','repairData','packingPool','approvedBatchData','batchData','requirementData','productionTransaction',...Object.keys(P.managers),...Object.keys(P.managers).map(k=>k==='cuttingData'?'cuttingHistory':k+'_history')];
@@ -22,7 +22,7 @@ async function seed(stage){
 }
 async function autoConfirm(){await evaluate(`window.__alerts=[];Swal.fire=async options=>{window.__alerts.push(options);return {isConfirmed:true,value:options.inputValue};};`);}
 (async()=>{
- const tabs=await until(async()=>{const r=await fetch(`http://127.0.0.1:${debugPort}/json/list`);return r.json();},'Edge debugger');
+ const tabs=await until(async()=>{const r=await fetch(`http://127.0.0.1:${debugPort}/json/list`,{signal:AbortSignal.timeout(3000)});return r.json();},'Edge debugger');
  const tab=tabs.find(tab=>tab.type==='page' && tab.url==='about:blank') || tabs.find(tab=>tab.type==='page');
  if(!tab) throw Error('No browser page target was created.');
  socket=new WebSocket(tab.webSocketDebuggerUrl);await new Promise(resolve=>socket.addEventListener('open',resolve,{once:true}));
@@ -31,7 +31,7 @@ async function autoConfirm(){await evaluate(`window.__alerts=[];Swal.fire=async 
  await send('Network.setBlockedURLs',{urls:['*qrcode*','*xlsx*','*cdn.datatables.net*','*fonts.googleapis.com*','*fonts.gstatic.com*']});
  await navigate('cutting-manager.php');
  const pages=[['cutting-manager.php','cuttingData'],['Embroidery.php','addWork_embroidery'],['Digital-Print.php','addWork_digital_print'],['Screen-Print.php','addWork_screen_print'],['Handwork.php','addWork_hand_work'],['Peco.php','addWork_peco'],['stitching-manager.php','stitchingData'],['ironing.php','ironingData']];
- for(const [page,key] of pages){
+ for(const [page,key] of (process.argv.includes("--bom-only") ? [] : pages)){
    const stage=P.managers[key];await seed(stage);await navigate(page);await autoConfirm();
    await until(()=>evaluate('document.querySelectorAll(".assign-single-btn").length > 0'),stage+' available');
    await evaluate(`$('.assign-single-btn').first().trigger('click');$('.assignment-row').each(function(){const select=$(this).find('.worker-select');select.val(select.find('option').filter(function(){return this.value&&!this.disabled;}).first().val());$(this).find('.quantity-input').val(500);$(this).find('.delivery-date-input').val('2026-10-01');});$('#saveAssignBtn').trigger('click');`);
@@ -49,33 +49,41 @@ async function autoConfirm(){await evaluate(`window.__alerts=[];Swal.fire=async 
    await navigate(page);await autoConfirm();
    assert.equal(await evaluate(`document.querySelectorAll('.pass-row-action-btn').length`),0,stage+' reload');
    await evaluate(`$('.view-row-action-btn').first().trigger('click');$('.batch-history-btn').first().trigger('click');$('#listAllBtn').trigger('click');`);
-   assert.equal(await evaluate(`document.querySelectorAll('.production-bulk-pass').length > 0`),true,stage+' bulk controls');
+   assert.equal(await evaluate(`document.querySelectorAll('.production-bulk-pass, .production-bulk-damage, .production-select, .progress-btn').length`),0,stage+' completed rows and selection controls hidden');
    const alerts=await evaluate('window.__alerts.filter(a=>a.icon==="error")');assert.deepEqual(alerts,[],stage+' alerts');
    console.log(`PASS ${stage}: real assign/edit/pass/100-delta/reload/print controls`);
    await seed(stage);await navigate(page);await autoConfirm();
-   await evaluate(`$('#bulkAssignBtn').trigger('click');$('.multi-select-checkbox').first().prop('checked',true).trigger('change');$('.bulk-global-split').val(2);$('.bulk-apply-split-btn').first().trigger('click');$('.bulk-assignment-row').each(function(i){const row=$(this),select=row.find('.worker-select');select.val(select.find('option').filter(function(){return this.value&&!this.disabled;}).eq(i).val());row.find('.quantity-input').val(300);row.find('.delivery-date-input').val('2026-10-01');});$('#saveBulkAssignBtn').trigger('click');`);
+   await evaluate(`$('#bulkAssignBtn').trigger('click');$('.multi-select-checkbox').first().prop('checked',true).trigger('change');$('.bulk-global-split').val(2);$('.bulk-apply-split-btn').first().trigger('click');$('.bulk-assignment-row').each(function(i){const row=$(this),select=row.find('.worker-select');select.val(select.find('option').filter(function(){return this.value&&!this.disabled;}).eq(i).val());if(Number(row.find('.quantity-input').val())!==250)throw Error('Bulk split must default to 250');row.find('.quantity-input').val(300);row.find('.delivery-date-input').val('2026-10-01');});$('#saveBulkAssignBtn').trigger('click');`);
    await until(()=>evaluate('window.__alerts.some(a=>a.icon==="error")'),stage+' bulk rejection');
    assert.equal(await evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(key)})||'[]').length`),0);
    await evaluate(`window.__alerts=[];$('.bulk-assignment-row .quantity-input').val(250);$('#saveBulkAssignBtn').trigger('click');`);
    await until(()=>evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(key)})||'[]').length===2`),stage+' valid bulk assign');
-   await until(()=>evaluate('document.querySelectorAll(".production-select").length===2'),stage+' selection controls');
-   await evaluate(`Swal.fire=async options=>{window.__alerts.push(options);return {isConfirmed:true,value:options.input==='textarea'?'1: 50\\n2: 50':options.inputValue};};$('.production-select').prop('checked',true);$('.production-bulk-damage').first().trigger('click');`);
-   await until(()=>evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(key)})).every(w=>w.damageQty===50)`),stage+' bulk damage');
    for(const id of [1,2]){
-     await evaluate(`$('.progress-btn[data-id="${id}"]').trigger('click');$('#progressTypeSelect').val('set_completed');$('#progressQty').val(200);$('#updateProgressBtn').trigger('click');`);
-     await until(()=>evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(key)})).find(w=>w.id===${id}).completedQty===200`),stage+' bulk completion');
+     await evaluate(`$('.progress-btn[data-id="${id}"]').trigger('click');$('#progressTypeSelect').val('set_completed');$('#progressQty').val(250);$('#updateProgressBtn').trigger('click');`);
+     await until(()=>evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(key)})).find(w=>w.id===${id}).completedQty===250`),stage+' bulk completion');
    }
-   await evaluate(`$('.production-select').prop('checked',true);$('.production-bulk-pass').first().trigger('click');`);
-   await until(()=>evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(key)})).every(w=>w.passedQty===200)`),stage+' bulk pass');
-   console.log(`PASS ${stage}: bulk 300+300 rejection, 250+250 assignment, damage and pass controls`);
+   for(const id of [1,2]) { await evaluate(`$('.pass-row-action-btn[data-id="${id}"]').trigger('click');`); await until(()=>evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(key)})).find(w=>w.id===${id}).passedQty===250`),stage+' row pass'); }
+   await until(()=>evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(key)})).every(w=>w.passedQty===250)`),stage+' bulk pass');
+   console.log(`PASS ${stage}: bulk 300+300 rejection, 250+250 assignment, default split quantities and row pass controls`);
  }
  await navigate('bom-master.php');
- assert.equal(await evaluate('document.querySelectorAll("select.work-stage").length'),0);
+ await evaluate(`$('#createBomBtn').trigger('click');$('.piece-radio[value="1"]').prop('checked',true).trigger('change');void 0;`);
+ assert.deepEqual(await evaluate(`Array.from(document.querySelector('.work-stage').options).map(o=>o.value).filter(Boolean)`),['Before Cutting','After Cutting','After Stitching','After Ironing']);
+ await evaluate(`$('.work-type').first().val('Embroidery');$('.work-stage').first().val('Before Cutting').trigger('change');`);
+ assert.equal(await evaluate(`$('#bomFlowChart').text().indexOf('Embroidery') < $('#bomFlowChart').text().indexOf('Cutting')`),true);
+ await evaluate(`localStorage.setItem('bomMasterData',JSON.stringify([{id:1,designNumber:'ACTIVE-DESIGN',status:'active',pieces:[]},{id:2,designNumber:'INACTIVE-DESIGN',status:'inactive',pieces:[]},{id:3,designNumber:'LEGACY-ACTIVE',pieces:[]}]));localStorage.setItem('batchData',JSON.stringify([{id:1,batchId:'BATCH-001',designNumber:'ACTIVE-DESIGN',pieces:[]}]));`);
+ await navigate('batch.php');
+ await evaluate(`$('#createBatchBtn').trigger('click');$('#designNumber').triggerHandler('focus');void 0;`);
+ assert.deepEqual(await evaluate(`$('#designDropdown .design-option[data-design]').map(function(){return $(this).data('design');}).get()`),['ACTIVE-DESIGN','LEGACY-ACTIVE']);
+ await evaluate(`const b=JSON.parse(localStorage.getItem('bomMasterData'));b[0].status='inactive';b[2].status='inactive';localStorage.setItem('bomMasterData',JSON.stringify(b));$('#designNumber').triggerHandler('focus');`);
+ assert.equal(await evaluate(`$('#designDropdown .design-option[data-design]').length`),0);
+ console.log('PASS BOM: four timing options, route preview, active-only batch choices and refreshed inactive state');
+ assert.equal(await evaluate(`document.querySelectorAll('.production-select').length`),0);
  const relevant=errors.filter(e=>/production-|cutting-manager|embroidery|digital-print|screen-print|handwork|peco\.js|stitching-manager|ironing\.js|bom-master/.test(JSON.stringify(e)));
  assert.deepEqual(relevant,[],JSON.stringify(relevant,null,2));
  console.log('PASS: browser integration; unrelated template exceptions: '+(errors.length-relevant.length));
  console.log('Template exception messages: '+JSON.stringify([...new Set(errors.filter(e=>!relevant.includes(e)).map(e=>e.exception?.description?.split('\n')[0]||e.text))]));
-})().catch(error=>{console.error(error.stack);console.error('Browser exceptions:',JSON.stringify(errors,null,2));process.exitCode=1;}).finally(async()=>{
+})().catch(error=>{console.error(error.stack);console.error('Browser exception summaries:',JSON.stringify(errors.map(e=>e.exception?.description?.split('\n')[0]||e.text)));process.exitCode=1;}).finally(async()=>{
  try{if(socket?.readyState===1)await send('Browser.close');}catch{}socket?.close();edge.kill();php.kill();
  console.log('Isolated test profile: '+profile);
 });

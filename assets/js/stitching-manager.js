@@ -441,7 +441,7 @@ $(document).ready(async function () {
         select.append('<option value="">Choose Batch</option>');
         pool.filter(p => getPoolRemaining(p) > 0).forEach(item => {
             const rem = getPoolRemaining(item);
-            select.append(`<option value="${item.id}">${escapeHtml(item.batchId)} - ${escapeHtml(item.brand)} - Piece ${item.pieceNumber} (${escapeHtml(item.pieceItem)}) - Rem ${rem}/${item.assignedQty}</option>`);
+            select.append(`<option value="${item.id}">${escapeHtml(item.batchId)} - ${escapeHtml(item.brand)} - Piece ${item.pieceNumber} (${escapeHtml(item.pieceItem)}) - Rem ${rem}/${getPoolTotal(item)}</option>`);
         });
     }
 
@@ -758,7 +758,7 @@ $(document).ready(async function () {
             batch.items.forEach(item => {
                 const splitCount = Number(bulkPieceSplits[item.id] || 1);
                 if (s >= splitCount) return;
-                const totalQty = Number(item.assignedQty) || 0;
+                const totalQty = getPoolRemaining(item);
                 const autoQtys = splitQuantity(totalQty, splitCount);
                 const workerOpts = WORKERS.map(w => `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`).join("");
                 const firmOpts = FIRMS.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join("");

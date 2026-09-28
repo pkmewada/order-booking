@@ -6,9 +6,9 @@ This document describes the production engine in `assets/js/production-engine.js
 
 `Batch Approval → Cutting → Additional Works → Stitching → Ironing → Packing`
 
-Additional works use this fixed order when selected: **Embroidery → Digital Print → Screen Print → Hand Work → Peco**. Each selected work is a separate route step. Duplicate selections are collapsed. With no additional work, Cutting goes directly to Stitching.
+Within each chosen timing, additional works use this order when selected: **Embroidery → Digital Print → Screen Print → Hand Work → Peco**. Each selected work is a separate route step. Duplicate selections are collapsed. With no additional work, Cutting goes directly to Stitching.
 
-`Production.buildRoute(piece)` is the only route builder. BOM's manual position dropdown is removed. Compatibility metadata may still say `After Cutting`; it never controls routing. BOM and Batch Approval previews use the same builder.
+`Production.buildRoute(piece)` is the only route builder. Each BOM work has four timing choices: Before Cutting, After Cutting, After Stitching, After Ironing. Legacy works without timing default to After Cutting. BOM and Batch Approval previews use the same builder. Approval credits the first selected route stage. Only active BOMs are selectable for batches.
 
 The route is stored in `approvedPool` at approval. Managers read this stored route. A later BOM edit does not reroute existing production.
 
@@ -134,7 +134,7 @@ The existing progress modal supports additive completion/damage, setting complet
 
 At pass time the engine locks, rereads pool and work, validates, calculates the fresh delta, records one transition, increments `passedQty`, and commits. A queued or repeated pass sees zero available. A stale button cannot pass twice.
 
-Selected assignments can be passed with **Pass selected**. **Damage selected** accepts one `assignment ID: additional damage` line per selection. All lines are validated before any save. Zero-passable records are skipped during bulk pass.
+Assignment selection checkboxes and Pass selected / Damage selected controls are removed from all managers. Use individual row actions. Fully passed assignments are hidden from active tables and retained in history. Bulk assignment defaults and splits use the remaining available stage quantity.
 
 ## Packing and repair
 

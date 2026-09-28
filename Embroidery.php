@@ -421,6 +421,6 @@
 
 <script src="assets/js/production-engine.js"></script>
 <script src="assets/js/production-controls.js"></script>
-<script src="assets/js/embroidery.js"></script>
+<script src="assets/js/embroidery.js?v=<?= filemtime(__DIR__ . "/assets/js/embroidery.js") ?>"></script>
 </body>
 </html>

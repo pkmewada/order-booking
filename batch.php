@@ -586,7 +586,7 @@
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
-<script src="assets/js/batch.js"></script>
+<script src="assets/js/batch.js?v=<?= filemtime(__DIR__ . "/assets/js/batch.js") ?>"></script>
 </body>
 
 </html>

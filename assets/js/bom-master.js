@@ -304,6 +304,9 @@ $(document).ready(function () {
                     >
                         ${optionList(WORK_TYPES, workType)}
                     </select>
+                    <select class="work-stage" data-piece="${pieceNumber}" aria-label="Additional work timing">
+                        ${optionList(["Before Cutting", "After Cutting", "After Stitching", "After Ironing"], stage || (workType ? "After Cutting" : ""))}
+                    </select>
 
 
 
@@ -616,7 +619,7 @@ $(document).ready(function () {
                         .find(".work-type")
                         .val();
 
-                    const stage = workType ? "After Cutting" : "";
+                    const stage = $(this).find(".work-stage").val();
 
                     if (workType && stage) {
 
@@ -877,7 +880,7 @@ $(document).ready(function () {
                 .find(".work-type")
                 .val();
 
-            const stage = type ? "After Cutting" : "";
+            const stage = $(this).find(".work-stage").val();
 
             if (
                 (type && !stage) ||
@@ -1115,7 +1118,7 @@ $(document).ready(function () {
 
                 ? piece.additionalWorks.map(work => `
                     <div>
-                        ${escapeHtml(work.workType)}
+                        ${escapeHtml(work.workType)} <small class="text-muted">(${escapeHtml(work.stage || "After Cutting")})</small>
 
                     </div>
                 `).join("")

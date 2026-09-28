@@ -86,9 +86,9 @@ for(const key of Object.keys(P.managers).filter(k=>k!=='packingData')) {
     const v=f.engine.views(key);assert.equal(f.engine.calculateAvailableQty(v.pool[0],v.works,f.stage),0);
  });
 }
-test('route is deterministic and ignores manual positions',()=>{
+test('route respects manual positions and collapses duplicate works',()=>{
  const r=P.buildRoute({additionalWorks:[{workType:'Peco',stage:'Before Cutting'},{workType:'Embroidery',stage:'After Ironing'},{workType:'Peco'}]});
- assert.deepEqual(r.map(s=>s.stage),['Cutting','Embroidery','Peco','Stitching','Ironing','Packing']);
+ assert.deepEqual(r.map(s=>s.stage),['Peco','Cutting','Stitching','Ironing','Embroidery','Packing']);
  assert.deepEqual(P.buildRoute({}).map(s=>s.stage),['Cutting','Stitching','Ironing','Packing']);
 });
 test('500 -> 400 -> 350 -> 300 -> Packing 300',async()=>{
@@ -182,4 +182,16 @@ test('multiple selected approvals are atomic if one piece is invalid',async()=>{
  const e=P.createEngine(storage,lock()),before=[...storage.values];
  await assert.rejects(()=>e.approve('BATCH-001',[{pieceNumber:1,mode:'approve',availability:{A:'yes'}},{pieceNumber:2,mode:'approve',availability:{B:'no'}}]));
  assert.deepEqual([...storage.values],before);
+});
+
+for (const position of ['Before Cutting','After Cutting','After Stitching','After Ironing']) test('approval and full flow: '+position,async()=>{
+ const storage=new Storage({approvedBatchData:[{batchId:'BATCH-001',quantity:500,pieces:[{number:1,item:'Jacket',materials:['Fabric'],additionalWorks:[{workType:'Embroidery',stage:position}]}]}]});
+ const e=P.createEngine(storage,lock());await e.approve('BATCH-001',[{pieceNumber:1,mode:'pass',availability:{Fabric:'yes'}}]);
+ const pool=storage.read('approvedPool')[0];
+ assert.equal(pool.stageBalances[pool.route[0].stage].inputQty,500);
+ for(const step of pool.route.filter(r=>r.stage!=='Packing')) {
+   const key=Object.keys(P.managers).find(k=>P.managers[k]===step.stage);
+   const [w]=await e.assign(key,[request(500)]);await e.edit(key,[{id:w.id,completedQty:500}]);await e.pass(key,[w.id]);
+ }
+ assert.equal(storage.read('packingPool').reduce((n,p)=>n+p.quantity,0),500);
 });

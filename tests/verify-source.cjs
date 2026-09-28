@@ -22,6 +22,6 @@ for(const [script,page] of Object.entries(pairs)){
     assert.ok(!js.includes('srcBefore - qty'));
 }
 const bom=fs.readFileSync(path.join(root,'assets/js/bom-master.js'),'utf8');
-assert.ok(!/<select\s+class="work-stage"/.test(bom));
+assert.ok(/<select\s+class="work-stage"/.test(bom));
 assert.ok(bom.includes('Production.buildRoute('));
 console.log(`PASS: ${scripts} JavaScript files parsed, ${pages} PHP pages linted, eight manager integrations checked.`);

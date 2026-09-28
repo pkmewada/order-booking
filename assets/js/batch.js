@@ -172,27 +172,16 @@ $(document).ready(function () {
        DESIGN NUMBER UNIQUENESS
        ====================================================== */
 
-    function isDesignUsedInBatch(designNumber, ignoreBatchId) {
-        const target = normalize(designNumber);
-        if (!target) return false;
-
-        return batchData.some(function (batch) {
-            if (ignoreBatchId && String(batch.id) === String(ignoreBatchId)) {
-                return false;
-            }
-            return normalize(batch.designNumber) === target;
-        });
-    }
-
     /* ======================================================
-       GET AVAILABLE BOMs (design not used)
+       GET ACTIVE BOMs
        ====================================================== */
 
-    function getAvailableBoms(ignoreBatchId) {
+    function getAvailableBoms() {
+        bomData = readStorage(BOM_STORAGE_KEY);
         return bomData.filter(function (bom) {
             const design = getDesignNumber(bom);
-            if (!design) return false;
-            return !isDesignUsedInBatch(design, ignoreBatchId);
+            if (!design || normalize(bom.status || "active") !== "active") return false;
+            return true;
         });
     }
 
@@ -239,20 +228,7 @@ $(document).ready(function () {
     function buildDesignDropdown(query) {
         const dropdown = $("#designDropdown");
         const q = normalize(query);
-        const editId = $("#editBatchId").val();
-
-        let matches = getAvailableBoms(editId);
-
-        // If editing, keep the current design visible
-        if (editId) {
-            const currentDesign = normalize($("#designNumber").val());
-            if (currentDesign) {
-                const selfBom = bomData.find(bom => normalize(getDesignNumber(bom)) === currentDesign);
-                if (selfBom && !matches.some(b => String(b.id) === String(selfBom.id))) {
-                    matches.push(selfBom);
-                }
-            }
-        }
+        let matches = getAvailableBoms();
 
         if (q) {
             matches = matches.filter(bom => {
@@ -306,13 +282,19 @@ $(document).ready(function () {
         }
     });
 
+    window.addEventListener("storage", function (event) {
+        if (event.key !== BOM_STORAGE_KEY) return;
+        fillDesignData();
+        if ($("#batchModal").hasClass("show")) buildDesignDropdown($("#designNumber").val());
+    });
+
     // --------------------------------------------------
     // FILL DESIGN DATA
     // --------------------------------------------------
 
     function fillDesignData() {
         const designNumber = normalize($("#designNumber").val());
-        selectedBom = bomData.find(bom => normalize(getDesignNumber(bom)) === designNumber);
+        selectedBom = readStorage(BOM_STORAGE_KEY).find(bom => normalize(bom.status || "active") === "active" && normalize(getDesignNumber(bom)) === designNumber);
 
         if (!selectedBom) {
             $("#brandSelect").val("");
@@ -412,17 +394,8 @@ $(document).ready(function () {
         const priority = $("#prioritySelect").val();
         const editId = $("#editBatchId").val();
 
-        if (!selectedBom) {
+        if (!selectedBom || !readStorage(BOM_STORAGE_KEY).some(bom => String(bom.id) === String(selectedBom.id) && normalize(bom.status || "active") === "active")) {
             showFormMessage("warning", "Please select a valid design number from BOM Master.");
-            return;
-        }
-
-        // 🔴 DUPLICATE DESIGN NUMBER CHECK (only for new batch)
-        if (!editId && isDesignUsedInBatch(designNumber)) {
-            showFormMessage(
-                "danger",
-                `Design Number <b>${escapeHtml(designNumber)}</b> is already used in another batch. Please select a different design number.`
-            );
             return;
         }
 

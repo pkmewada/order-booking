@@ -32,3 +32,13 @@ npm run test:browser
 ```
 
 The first two require Node and the configured XAMPP PHP path. The browser test additionally launches headless Edge and a temporary PHP server, uses a separate temporary profile, and needs the existing site's CDN dependencies. It does not use the user's normal Edge profile. Browser-test launch approval may be required in managed environments.
+
+
+## Requested production fixes ? 2026-09-28
+
+- Engine: 75 tests passed, including approval through Packing for each of the four additional-work timing choices.
+- Source checks: 189 JavaScript files parsed and 32 PHP pages linted.
+- Isolated Edge browser: all eight managers passed assignment, partial/full pass, reload, completed-row hiding, bulk overflow rejection and default 250+250 splitting of 500 available pieces. Selection checkboxes and bulk pass/damage controls are absent.
+- BOM browser checks passed: four timing options, Before Cutting route preview, active-only batch choices and live exclusion after a BOM becomes inactive.
+- Existing unrelated ApexCharts and Simplebar template errors still occur; no production-script exceptions were detected.
+- Existing approved production routes remain stored snapshots. Timing changes apply to newly approved production.

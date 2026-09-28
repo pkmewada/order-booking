@@ -72,13 +72,24 @@
         work.status = status(work); return work;
     }
     function buildRoute(piece) {
-        const wanted = (piece.additionalWorks || []).map(w => String(w.workType || w).trim().toLowerCase());
-        const unknown = wanted.filter(w => w && !additional.some(name => name.toLowerCase() === w));
-        if (unknown.length) throw new Error(`Unknown additional work: ${unknown.join(", ")}`);
-        return [{ type: "cutting", stage: "Cutting" },
-            ...additional.filter(name => wanted.includes(name.toLowerCase())).map(name => ({ type: "additional_work", stage: name, works: [name] })),
-            { type: "stitching", stage: "Stitching" }, { type: "ironing", stage: "Ironing" }, { type: "packing", stage: "Packing" }];
+        const positions = ["Before Cutting", "After Cutting", "After Stitching", "After Ironing"];
+        const selected = new Map();
+        for (const work of piece.additionalWorks || []) {
+            const raw = String(work.workType || work).trim();
+            if (!raw) continue;
+            const name = additional.find(n => n.toLowerCase() === raw.toLowerCase());
+            if (!name) throw new Error(`Unknown additional work: ${raw}`);
+            const position = work.stage || "After Cutting";
+            if (!positions.includes(position)) throw new Error(`Unknown additional work timing: ${position}`);
+            if (!selected.has(name)) selected.set(name, position);
+        }
+        const at = position => additional.filter(name => selected.get(name) === position)
+            .map(name => ({ type: "additional_work", stage: name, works: [name] }));
+        return [...at("Before Cutting"), { type: "cutting", stage: "Cutting" }, ...at("After Cutting"),
+            { type: "stitching", stage: "Stitching" }, ...at("After Stitching"),
+            { type: "ironing", stage: "Ironing" }, ...at("After Ironing"), { type: "packing", stage: "Packing" }];
     }
+
     function createEngine(storage, locks) {
         function read(key) {
             const raw = storage.getItem(key);
@@ -351,10 +362,10 @@
                     batchId: batch.batchId, bomId: batch.bomId, brand: batch.brand, designNumber: batch.designNumber,
                     color: batch.color, photo: batch.photo || "", pieceNumber: piece.number, pieceItem: piece.item,
                     quantity: qty, priority: batch.priority, additionalWorks: copy(piece.additionalWorks || []),
-                    route, currentStage: route[0], stageBalances: { Cutting: { inputQty: qty } },
+                    route, currentStage: route[0], stageBalances: { [route[0].stage]: { inputQty: qty } },
                     stageHistory: [], schemaVersion: 2, createdAt: time() };
                 s.approvedPool.push(p);
-                audit(p, { stage: "Cutting", qty, action: "entered" });
+                audit(p, { stage: route[0].stage, qty, action: "entered" });
             }
             // Receipt of materials never re-enters Cutting or changes received production quantity.
             p.materials = materialList(piece); p.itemAvailability = copy(piece.approval.itemAvailability);
