@@ -28,12 +28,6 @@ $(document).ready(function () {
         "Hand Work"
     ];
 
-    const STAGES = [
-        "Before Cutting",
-        "After Cutting",
-        "After Stitching"
-    ];
-
 
 
     const DEFAULT_WORK_ROWS = 3;
@@ -310,7 +304,7 @@ $(document).ready(function () {
                         ${optionList(WORK_TYPES, workType)}
                     </select>
                     <select class="work-stage" data-piece="${pieceNumber}" aria-label="Additional work timing">
-                        ${optionList(["Before Cutting", "After Cutting", "After Stitching", "After Ironing"], stage || (workType ? "After Cutting" : ""))}
+                        ${optionList(["Before Cutting", "After Cutting", "After Stitching"], stage || (workType ? "After Cutting" : ""))}
                     </select>
 
 
