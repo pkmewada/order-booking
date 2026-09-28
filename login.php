@@ -495,7 +495,7 @@
                 <div class="col-xxl-6 col-xl-9 col-lg-6 col-md-6 col-sm-8 col-12">
                     <div class="card custom-card shadow-none my-auto border-0">
                         <div class="card-body p-5">
-                            <p class="h4 mb-2 fw-semibold">Sign In</p>
+                            <p class="h4 mb-2 fw-semibold">Sign In PRIYANSHU PP</p>
                             <p class="mb-4 text-muted fw-normal">Welcome back Jhon !</p>
                             <div class="row gy-3">
                                 <div class="col-xl-12">
