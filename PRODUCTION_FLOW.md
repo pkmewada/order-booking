@@ -177,3 +177,9 @@ Paired-set availability is the minimum unassigned Packing balance across all req
 Packing holds are recorded in packingHolds under the shared transaction lock. Hold moves only the unassigned batch balance out of the received table; Restore brings it back. New receipts do not clear a hold. Packing progress updates remain per-piece totals under one lot edit action. Completion is terminal and does not create another production transfer.
 
 Verification: node --test tests/production-engine.test.cjs tests/packing.test.cjs and node tests/browser-packing.cjs.
+
+## Packing labels and explicit lot pass
+
+Pattern and MRP are stored on BOM definitions and read directly only by Packing. Assignment shows total/available balances; reservation remains the minimum available across required pieces. Packing displays a single row per packingLotId. passPackingLot locks and re-reads all lot pieces, passes only the minimum completed-good delta across the lot and audits terminal completion without crediting another stage. Repeat Pass returns zero. Fully passed lots appear in List; stored records and reservations remain intact. Progress saves remain separate from Pass.
+
+QR Code opens the two-part, sample-style barcode label generator. Brand size options are Little Dolly 18/20/22/24/26, Amari S/M/L and Nivi Blossom 28/30/32/34. Labels download as a self-contained printable HTML sheet with a cut line and duplicated product details. Assignment attempts the download automatically using the selected label size; missing label metadata does not undo a committed production assignment.

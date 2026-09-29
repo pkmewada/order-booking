@@ -461,7 +461,7 @@
                     const received = pool ? stageInput(pool, 'Packing') : 0;
                     const available = pool ? calculateAvailableQty(pool, s.packingData, 'Packing') : 0;
                     return { number: piece.number, item: piece.item || pool?.pieceItem || 'Piece', size: piece.size || pool?.size || '',
-                        poolId: pool?.id, received, available, assigned: received - available };
+                        poolId: pool?.id, total: Number(batch?.quantity) || Math.max(received, ...Object.values(pool?.stageBalances || {}).map(b => Number(b.inputQty) || 0)), received, available, assigned: received - available };
                 });
                 return { ...pools[0], batchId, pieces, available: Math.min(...pieces.map(p => p.available)),
                     held: s.packingHolds.some(h => same(h.batchId, batchId)) };
@@ -477,6 +477,20 @@
                 return assignInState(s, 'packingData', batch.pieces.map(p => ({ ...request, poolId: p.poolId, size: p.size, packingLotId: lotId })));
             });
         }
+        async function passPackingLot(lotId) {
+            return transaction(s => {
+                const rows = s.packingData.filter(w => (w.packingLotId || `legacy-${w.id}`) === lotId);
+                if (!rows.length) throw new Error('Packing lot not found.');
+                rows.forEach(w => { getPool(s, w.poolId); validateWork(w); if(w.stopped) throw new Error('Resume this lot before passing.'); });
+                const qty = Math.min(...rows.map(w => calculateProductionMath(w).passableQty));
+                if (!qty) return {qty: 0};
+                rows.forEach(w => {
+                    w.passedQty += qty; aliases(w);
+                    audit(getPool(s,w.poolId), {stage:'Packing', action:'packed', qty, sourceKey:'packingData', sourceWorkId:w.id});
+                });
+                return {qty};
+            });
+        }
         async function setPackingHold(batchId, held) {
             return transaction(s => {
                 if (!packingBatches(s).some(b => same(b.batchId, batchId))) throw new Error('Batch not found.');
@@ -485,7 +499,7 @@
             });
         }
         return { views, assign, edit, pass, stop, recoverRepair, transaction, readState,
-            packingBatches, assignPacking, setPackingHold,
+            packingBatches, assignPacking, setPackingHold, passPackingLot,
             approve, tickRequirement, receiveRequirement, setBatchStopped,
             calculateAvailableQty, validateAssignment, pushToNextStage, pushToPackingPool,
             initialize: () => locks?.request ? locks.request("garment-production", { mode: "exclusive" }, recover) : Promise.resolve() };

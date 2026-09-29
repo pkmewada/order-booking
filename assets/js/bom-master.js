@@ -914,7 +914,7 @@ $(document).ready(function () {
         if (btn.data("saving")) return;
         btn.data("saving", true);
 
-        if (!validateForm()) {
+        if (!document.getElementById("mrp").reportValidity() || !validateForm()) {
             btn.data("saving", false);
             return;
         }
@@ -924,6 +924,8 @@ $(document).ready(function () {
         const bomDetails = {
 
             brand: $("#brandSelect").val(),
+            pattern: $("#pattern").val().trim(),
+            mrp: $("#mrp").val(),
 
             designNumber: $("#designNumber")
                 .val()
@@ -1039,6 +1041,8 @@ $(document).ready(function () {
             $("#editId").val(bom.id);
 
             $("#brandSelect").val(bom.brand);
+            $("#pattern").val(bom.pattern || "");
+            $("#mrp").val(bom.mrp ?? "");
 
             $("#designNumber").val(
                 bom.designNumber
@@ -1728,6 +1732,8 @@ $(document).ready(function () {
         // --- Fill Create BOM form with source flow ---
         // Brand copied from source
         $("#brandSelect").val(source.brand || "");
+        $("#pattern").val(source.pattern || "");
+        $("#mrp").val(source.mrp ?? "");
 
         // Design Number kept EMPTY for user to type NEW unique value
         $("#designNumber").val("");

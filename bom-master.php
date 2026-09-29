@@ -762,6 +762,7 @@ include __DIR__ . "/includes/header.php";
 
                     </div>
 
+                    <div class="row g-3"><div class="col-md-6"><label class="form-label" for="pattern">Pattern</label><input id="pattern" class="form-control" type="text"></div><div class="col-md-6"><label class="form-label" for="mrp">MRP</label><input id="mrp" class="form-control" type="number" min="0" step="0.01"></div></div>
                     <hr class="my-4">
 
                     <!-- PIECE SELECTION -->

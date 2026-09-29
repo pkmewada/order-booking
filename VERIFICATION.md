@@ -54,3 +54,13 @@ The first two require Node and the configured XAMPP PHP path. The browser test a
 All eight manager View buttons now use the shared assignment-details renderer and scoped stylesheet. The reference layout uses a narrow summary panel, a roughly 70% image panel, a full-width six-cell details grid and a signature line. Outsourced stitching retains Firm Name. Images use contain sizing. Print / Download prints an isolated A4 sheet for browser Save as PDF, excluding modal chrome and underlying tables.
 
 Validation: source syntax/PHP checks passed; tests/browser-assignment-details.cjs exercised View and print in Cutting, Stitching, Embroidery, Digital Print, Screen Print, Hand Work, Peco and Ironing. The generated PDF contains one A4 page; screen and print-layout screenshots were visually reviewed. No production quantities, routing or assignment actions were changed.
+
+## Packing labels and lot pass — 2026-09-29
+
+BOM add/edit/copy supports Pattern and MRP without adding either to BOM tables or other production managers. Packing fetches them directly by BOM design number. Assignment displays total/available piece balances and still reserves paired sets atomically. Each assignment appears as one lot row. Explicit paired lot Pass records terminal Packing completion under the shared lock without another receipt; fully passed lots move to the top List dialog and remain stored.
+
+The Packing QR Code control produces sample-style Code 128 barcode labels, with a main section and a detachable duplicate section. Design number fetches BOM details; brand controls size choices. Assignment downloads a self-contained printable HTML label sheet, with a Print / Save PDF button. The local pinned JsBarcode library does not send label data to an external service. Missing BOM/unsupported size is reported separately after a successful assignment, with retry through QR Code.
+
+Validation: 82 automated engine/packing tests passed; 192 JavaScript files parsed and 33 PHP pages linted. Isolated Edge Packing tests passed one-row lot rendering, 600-label automatic download, explicit lot pass/list/reload, paired balances, hold/restore, brand size options, two barcode sections, BOM Pattern/MRP edit loading and negative MRP rejection. Desktop label preview was visually inspected. Actual printer dimensions and physical scanner decoding were not tested.
+
+The full production browser run passed the assign/edit/partial-pass/reload and bulk cases for all eight managers, then failed its existing BOM timing assertion: HEAD already offers three timing options while the test expects After Ironing as a fourth. This unrelated option was not changed. Existing unrelated theme exceptions remain. Tests used isolated profiles; user browser records were not altered.

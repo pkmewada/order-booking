@@ -172,7 +172,7 @@
                     </ol>
                 </nav>
             </div>
-            <div class="d-flex gap-2"><button class="btn btn-dark" id="holdListBtn">Hold List</button>
+            <div class="d-flex gap-2"><button class="btn btn-dark" id="labelBtn">QR Code</button><button class="btn btn-dark" id="listAllBtn">List</button><button class="btn btn-dark" id="holdListBtn">Hold List</button>
                 <button class="btn" id="refreshPackingBtn">
                     <i class="bx bx-refresh align-middle"></i>
                 </button>
@@ -220,7 +220,7 @@
                             <table class="table table-bordered text-nowrap w-100">
                                 <thead>
                                     <tr>
-                                        <th>#</th><th>Batch ID</th><th>Packing Lot</th><th>Brand</th><th>Piece Type</th><th>Worker</th>
+                                        <th>#</th><th>Packing Lot</th><th>Brand / Design</th><th>Pattern / MRP</th><th>Pieces</th><th>Worker</th>
                                         <th>Quantity</th><th>Progress</th><th>Damage</th><th>Remaining</th>
                                         <th>Priority</th><th>Delivery Date</th><th>Status</th><th>Actions</th>
                                     </tr>
@@ -236,9 +236,36 @@
     </div>
 </div>
 
-<div class="modal fade" id="assignModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Assign Packing Worker</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><label class="form-label" for="batchSelect">Select Batch (Received for Packing)</label><select class="form-select mb-3" id="batchSelect"></select><div id="assignRowsContainer"></div></div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" id="saveAssignBtn"><i class="bx bx-save"></i> Assign</button></div></div></div></div>
+<div class="modal fade" id="assignModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl" style="width:96vw;max-width:1500px"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Assign Packing Worker</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><label class="form-label" for="batchSelect">Select Batch (Received for Packing)</label><select class="form-select mb-3" id="batchSelect"></select><div id="assignRowsContainer"></div></div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" id="saveAssignBtn"><i class="bx bx-save"></i> Assign</button></div></div></div></div>
 <div class="modal fade" id="holdModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered" style="width:99vw;max-width:99vw"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Packing Hold List</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><div class="table-responsive"><table class="table table-bordered text-nowrap"><thead><tr><th>Batch ID</th><th>Photo</th><th>Brand</th><th>Design</th><th>Color</th><th>Piece</th><th>Item / Size</th><th>Quantity</th><th>Priority</th><th>Status</th><th>Action</th></tr></thead><tbody id="holdList"></tbody></table></div></div></div></div></div>
-<div class="modal fade" id="progressModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Packing Lot Progress</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body" id="progressBody"></div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" id="updateProgressBtn">Save Progress</button></div></div></div></div>
+<div class="modal fade" id="progressModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-xl" style="width:96vw;max-width:1500px"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Packing Lot Progress</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body" id="progressBody"></div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-success" id="passProgressBtn">Pass</button><button class="btn btn-primary" id="updateProgressBtn">Save Progress</button></div></div></div></div>
+<div class="modal fade" id="listModal" tabindex="-1"><div class="modal-dialog modal-xl"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Passed Packing Lots</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body table-responsive"><table class="table table-bordered"><thead><tr><th>#</th><th>Lot</th><th>Brand / Design</th><th>Pattern / MRP</th><th>Pieces</th><th>Worker</th><th>Quantity</th><th>Progress</th><th>Damage</th><th>Remaining</th><th>Priority</th><th>Delivery</th><th>Status</th><th>Action</th></tr></thead><tbody id="passedList"></tbody></table></div></div></div></div>
+<div class="modal fade" id="labelModal" tabindex="-1"><div class="modal-dialog modal-xl"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">QR Code / Product Label</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="row g-3"><div class="col-md-4"><label for="labelDesign" class="form-label">Design Number</label><input id="labelDesign" list="labelDesigns" class="form-control"><datalist id="labelDesigns"></datalist></div><div class="col-md-4"><label for="labelSize" class="form-label">Size</label><select id="labelSize" class="form-select"></select></div><div class="col-md-4"><label for="labelQuantity" class="form-label">Quantity</label><select id="labelQuantity" class="form-select"></select></div></div><div id="labelDetails" class="my-3"></div><div id="labelPreview"></div></div><div class="modal-footer"><button id="downloadLabelBtn" class="btn btn-primary">Download Labels</button></div></div></div></div>
+<!-- VIEW DETAIL MODAL -->
+<div class="modal fade" id="viewDetailModal" tabindex="-1" aria-labelledby="viewDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewDetailModalLabel">
+                    <i class="bx bx-detail me-1"></i> Assignment Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="viewDetailBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-dark" id="printDetailBtn">
+                    <i class="bx bx-printer me-1"></i> Print / Download
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 <script src="assets/js/production-engine.js?v=<?= filemtime(__DIR__.'/assets/js/production-engine.js') ?>"></script>
+<script src="assets/libs/jsbarcode/JsBarcode.all.min.js"></script><script src="assets/js/packing-labels.js?v=<?= filemtime(__DIR__ . '/assets/js/packing-labels.js') ?>"></script>
+<link rel="stylesheet" href="assets/css/assignment-details.css?v=<?= filemtime(__DIR__ . '/assets/css/assignment-details.css') ?>">
+<script src="assets/js/assignment-details.js?v=<?= filemtime(__DIR__ . '/assets/js/assignment-details.js') ?>"></script>
 <script src="assets/js/packing.js?v=<?= filemtime(__DIR__.'/assets/js/packing.js') ?>"></script>
