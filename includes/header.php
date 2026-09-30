@@ -1135,7 +1135,9 @@
                                     </a>
                                 </li>
 
-                                <li class="slide">
+                                <li class="slide"><a href="bundling" class="side-menu__item"><i class="bx bx-package side-menu__icon"></i><span class="side-menu__label">Bundling</span></a></li>
+<li class="slide"><a href="inventory" class="side-menu__item"><i class="bx bx-package side-menu__icon"></i><span class="side-menu__label">Inventory</span></a></li>
+<li class="slide">
                                     <a href="settings" class="side-menu__item">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
                                             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"

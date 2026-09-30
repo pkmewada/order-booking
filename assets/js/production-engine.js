@@ -13,7 +13,8 @@
     };
     const additional = ["Embroidery", "Digital Print", "Screen Print", "Hand Work", "Peco"];
     const historyKeys = Object.fromEntries(Object.keys(managers).map(k => [k, k === "cuttingData" ? "cuttingHistory" : `${k}_history`]));
-    const keys = ["approvedPool", ...Object.keys(managers), ...Object.values(historyKeys), "repairData", "packingPool", "approvedBatchData", "batchData", "requirementData", "packingHolds"];
+    const keys = ["approvedPool", ...Object.keys(managers), ...Object.values(historyKeys), "repairData", "packingPool", "approvedBatchData", "batchData", "requirementData", "packingHolds", "bundlingData", "inventoryData"];
+    const brandSizes = brand => ({'LITTLE DOLLY':['18','20','22','24','26'],'AMARI':['S','M','L'],'AMARU':['S','M','L'],'NIVI BLOSSOM':['28','30','32','34']}[String(brand || '').trim().toUpperCase()] || []);
     const journalKey = "productionTransaction";
     const copy = value => JSON.parse(JSON.stringify(value));
     const same = (a, b) => String(a) === String(b);
@@ -270,6 +271,8 @@
                 const work = s[key].find(w => same(w.id, request.id));
                 if (!work) throw new Error("Assignment no longer exists.");
                 const p = getPool(s, work.poolId), old = copy(work);
+                if (key === 'packingData' && (work.packingClosed || (work.passedQty > 0 && work.passedQty === work.inputQty-work.damageQty))) throw new Error('Passed packing quantities are locked.');
+                if (key === 'packingData' && request.assignedQty !== undefined && request.assignedQty !== work.assignedQty) throw new Error('Packing lot quantity is fixed; update completion using Edit.');
                 if (request.assignedQty !== undefined) {
                     validateAssignment(p, s[key], work.stage, request.assignedQty, work.id);
                     work.inputQty = work.assignedQty = number(request.assignedQty, "Assignment quantity");
@@ -282,7 +285,7 @@
                 // Decreasing damage requires an explicit recovery, never an ordinary edit.
                 if (work.damageQty < old.damageQty) throw new Error("Use explicit repair recovery to reduce recorded damage.");
                 aliases(work); syncRepair(s, p, work, key);
-                audit(p, { stage: work.stage, qty: work.damageQty - old.damageQty,
+                audit(p, { stage: work.stage, qty: key === 'packingData' && work.damageQty === old.damageQty ? work.completedQty - old.completedQty : work.damageQty - old.damageQty,
                     action: work.damageQty !== old.damageQty ? "damage" : "edited", sourceWorkId: work.id,
                     before: old, after: copy(work) });
                 return work;
@@ -320,6 +323,7 @@
             return { qty, transitionId, work };
         }
         async function pass(key, ids) {
+            if (key === 'packingData') throw new Error('Pass the complete packing lot using passPackingLot.');
             return transaction(s => [...new Set(ids.map(String))].map(id => pushToNextStage(s, key, id)));
         }
         async function stop(key, id) {
@@ -337,6 +341,7 @@
                 number(qty, "Recovered quantity");
                 const work = s[key].find(w => same(w.id, id));
                 if (!work) throw new Error("Assignment no longer exists.");
+                if (key === 'packingData' && (work.packingClosed || s.bundlingData.some(b => b.packingLotId === work.packingLotId))) throw new Error('Passed packing sets are locked; their damage cannot change after transfer.');
                 const p = getPool(s, work.poolId);
                 syncRepair(s, p, work, key);
                 const repair = s.repairData.find(r => r.sourceKey === key && same(r.sourceWorkId, id));
@@ -467,14 +472,45 @@
                     held: s.packingHolds.some(h => same(h.batchId, batchId)) };
             });
         }
-        async function assignPacking(request) {
+        function assignPackingInState(s, request) {
+            const batch = packingBatches(s).find(b => same(b.batchId, request.batchId));
+            if (!batch || batch.held) throw new Error('Batch is unavailable or on hold.');
+            const qty = number(request.quantity, 'Packing sets');
+            if (!qty || qty > batch.available) throw new Error('Only ' + batch.available + ' packing sets are available.');
+            const lotId = batch.batchId + '-PK' + (Math.max(0, ...s.packingData.map(w => Number(w.id) || 0)) + 1);
+            return assignInState(s, 'packingData', batch.pieces.map(p => ({ ...request, poolId:p.poolId, size:p.size, packingLotId:lotId })));
+        }
+        async function assignPacking(request) { return transaction(s => assignPackingInState(s,request)); }
+        async function assignPackingBulk(requests) {
+            if (!Array.isArray(requests) || !requests.length) throw new Error('Add at least one assignment.');
+            return transaction(s => requests.map(request => assignPackingInState(s,request)));
+        }
+        function packingLotMath(rows) {
+            const inputQty = Math.min(...rows.map(w => w.inputQty));
+            const damageQty = Math.max(...rows.map(w => w.damageQty));
+            const completedQty = Math.min(...rows.map(w => w.completedQty));
+            const passedQty = Math.min(...rows.map(w => w.passedQty));
+            const effectiveQty = inputQty - damageQty;
+            return {inputQty, assignedQty:inputQty, damageQty, completedQty, passedQty, effectiveQty,
+                uncompletedQty:Math.max(0,effectiveQty-completedQty), remainingQty:Math.max(0,effectiveQty-passedQty)};
+        }
+        async function editPackingLot(lotId, type, quantity) {
             return transaction(s => {
-                const batch = packingBatches(s).find(b => same(b.batchId, request.batchId));
-                if (!batch || batch.held) throw new Error('Batch is unavailable or on hold.');
-                const qty = number(request.quantity, 'Paired sets');
-                if (!qty || qty > batch.available) throw new Error('Only ' + batch.available + ' paired sets are available.');
-                const lotId = batch.batchId + '-PK' + (Math.max(0, ...s.packingData.map(w => Number(w.id) || 0)) + 1);
-                return assignInState(s, 'packingData', batch.pieces.map(p => ({ ...request, poolId: p.poolId, size: p.size, packingLotId: lotId })));
+                const rows=s.packingData.filter(w=>(w.packingLotId || `legacy-${w.id}`)===lotId);
+                if (!rows.length) throw new Error('Packing lot not found.');
+                const m=packingLotMath(rows), qty=number(quantity,'Set quantity');
+                if (!['completed','damage'].includes(type) || !qty) throw new Error('Choose an update type and positive set quantity.');
+                if (rows.some(w=>w.packingClosed) || s.bundlingData.some(b=>b.packingLotId===lotId) || (m.effectiveQty>0 && m.passedQty===m.effectiveQty)) throw new Error('Passed packing lots are locked.');
+                if (qty>m.uncompletedQty) throw new Error('Quantity exceeds remaining sets: '+m.uncompletedQty);
+                const damage=m.damageQty+(type==='damage'?qty:0), completed=m.completedQty+(type==='completed'?qty:0);
+                rows.forEach(w=>{
+                    const p=getPool(s,w.poolId), old=copy(w);
+                    if(w.stopped || w.inputQty!==m.inputQty) throw new Error('Packing lot is stopped or has unequal assigned quantities.');
+                    w.damageQty=damage; w.completedQty=Math.max(w.completedQty,completed);
+                    validateWork(w); aliases(w); syncRepair(s,p,w,'packingData');
+                    audit(p,{stage:'Packing',action:type==='damage'?'damaged sets':'completed sets',qty,sourceKey:'packingData',sourceWorkId:w.id,before:old,after:copy(w)});
+                });
+                return packingLotMath(rows);
             });
         }
         async function passPackingLot(lotId) {
@@ -482,11 +518,13 @@
                 const rows = s.packingData.filter(w => (w.packingLotId || `legacy-${w.id}`) === lotId);
                 if (!rows.length) throw new Error('Packing lot not found.');
                 rows.forEach(w => { getPool(s, w.poolId); validateWork(w); if(w.stopped) throw new Error('Resume this lot before passing.'); });
-                const qty = Math.min(...rows.map(w => calculateProductionMath(w).passableQty));
-                if (!qty) return {qty: 0};
+                if (rows.every(w => w.packingClosed || (w.passedQty > 0 && w.passedQty === w.inputQty-w.damageQty))) return {qty: 0};
+                const m=packingLotMath(rows), qty=m.effectiveQty;
+                if (rows.some(w => w.inputQty !== m.inputQty || w.damageQty !== m.damageQty || w.completedQty !== qty)) throw new Error('Complete all remaining good sets before passing the lot.');
                 rows.forEach(w => {
-                    w.passedQty += qty; aliases(w);
-                    audit(getPool(s,w.poolId), {stage:'Packing', action:'packed', qty, sourceKey:'packingData', sourceWorkId:w.id});
+                    const remaining = qty - w.passedQty;
+                    w.passedQty = qty; w.passedAt = time(); w.packingClosed = true; aliases(w);
+                    audit(getPool(s,w.poolId), {stage:'Packing', action:'packed', qty:remaining, sourceKey:'packingData', sourceWorkId:w.id});
                 });
                 return {qty};
             });
@@ -498,8 +536,65 @@
                 if (held) s.packingHolds.push({ batchId, at: time() });
             });
         }
+        function bundlingReady(s = readState()) {
+            const groups = new Map();
+            s.packingData.forEach(w => { const id=w.packingLotId || `legacy-${w.id}`; if(!groups.has(id))groups.set(id,[]); groups.get(id).push(w); });
+            return [...groups].filter(([,rows])=>rows.every(w=>w.passedQty>0 && w.passedQty===w.inputQty-w.damageQty && w.passedQty===rows[0].passedQty && !w.stopped))
+                .map(([id,rows])=>{
+                    const total=rows[0].passedQty, sizes=brandSizes(rows[0].brand), assigned=s.bundlingData.filter(b=>b.packingLotId===id);
+                    const availableSizes=sizes.map((size,i)=>({size,quantity:Math.max(0,Math.floor(total/sizes.length)+(i<total%sizes.length?1:0)-assigned.reduce((n,r)=>n+(r.sizes||[]).filter(v=>v.size===size).reduce((t,v)=>t+Number(v.quantity),0),0))}));
+                    const quantity=total-assigned.reduce((n,r)=>n+Number(r.quantity),0);
+                    const availableSets=availableSizes.length?Math.min(...availableSizes.map(r=>r.quantity)):0;
+                    return {...rows[0],packingLotId:id,quantity,totalQuantity:total,assignedQuantity:total-quantity,availableSizes,availableSets,
+                        remainderQuantity:quantity-availableSets*sizes.length,pieces:rows.map(w=>w.pieceType),sourceWorkIds:rows.map(w=>w.id)};
+                }).filter(l=>l.quantity>0);
+        }
+        function assignBundlingInState(s,request) {
+            const lot=bundlingReady(s).find(l=>l.packingLotId===request.packingLotId);
+            if(!lot)throw new Error('This lot has no available quantity.');
+            lot.sourceWorkIds.forEach(id=>getPool(s,s.packingData.find(w=>w.id===id).poolId));
+            if(!String(request.worker||'').trim() || !/^\d{4}-\d{2}-\d{2}$/.test(request.deliveryDate||''))throw new Error('Choose a worker and delivery date.');
+            if(!lot.availableSizes.length)throw new Error('No sizes are configured for this brand.');
+            const sets=number(request.setQuantity ?? lot.availableSets,'Bundling sets');
+            if(sets>lot.availableSets)throw new Error('Only '+lot.availableSets+' bundling sets are available.');
+            const includeRemainder=request.includeRemainder===true || request.setQuantity===undefined;
+            const sizes=lot.availableSizes.map(r=>({size:r.size,quantity:sets+(includeRemainder?r.quantity-lot.availableSets:0)}));
+            const qty=sizes.reduce((n,r)=>n+r.quantity,0);
+            if(!qty || qty>lot.quantity)throw new Error('Enter a positive set quantity or include the remaining units.');
+            const bom=read('bomMasterData').find(b=>String(b.designNumber).trim().toLowerCase()===String(lot.designNumber).trim().toLowerCase());
+            let suffix=1, id;
+            do {id=lot.packingLotId+'-BD'+suffix++;} while(s.bundlingData.some(r=>r.id===id));
+            const row={id,packingLotId:lot.packingLotId,batchId:lot.batchId,brand:lot.brand,designNumber:lot.designNumber,
+                color:lot.color,photo:lot.photo||bom?.photo||'',pattern:bom?.pattern||'',mrp:bom?.mrp??'',pieces:lot.pieces,
+                quantity:qty,setQuantity:sets,remainderQuantity:qty-sets*sizes.length,sizes,
+                worker:String(request.worker).trim(),deliveryDate:request.deliveryDate,status:'pending',assignedAt:time()};
+            s.bundlingData.push(row); return row;
+        }
+        async function assignBundling(request) {return transaction(s=>assignBundlingInState(s,request));}
+        async function assignBundlingBulk(requests) {
+            if(!Array.isArray(requests)||!requests.length)throw new Error('Add at least one assignment.');
+            return transaction(s=>requests.map(request=>assignBundlingInState(s,request)));
+        }
+        async function passBundling(id) {
+            return transaction(s => {
+                const row = s.bundlingData.find(b => b.id === id);
+                if (!row) throw new Error('Bundling assignment not found.');
+                if (row.status === 'passed') return row;
+                if (row.sizes.reduce((n,r) => n + number(r.quantity,'Size quantity'),0) !== row.quantity) throw new Error('Size quantities must equal the full lot quantity.');
+                const sources = s.packingData.filter(w => (w.packingLotId || `legacy-${w.id}`) === row.packingLotId);
+                if (!sources.length || sources.some(w => w.stopped || w.passedQty !== w.inputQty-w.damageQty || w.passedQty < row.quantity)) throw new Error('The source packing lot is not fully passed.');
+                const reserved=s.bundlingData.filter(b=>b.packingLotId===row.packingLotId).reduce((n,b)=>n+number(b.quantity,'Assigned quantity'),0);
+                if(reserved>Math.min(...sources.map(w=>w.passedQty)))throw new Error('Bundling reservations exceed the received quantity.');
+                sources.forEach(w => getPool(s,w.poolId));
+                row.status = 'passed'; row.passedAt = time();
+                if (!s.inventoryData.some(r => r.bundlingId === id)) s.inventoryData.push({...copy(row), id:id + '-INV', bundlingId:id, receivedAt:row.passedAt,
+                    packingHistory:copy(sources), productionHistory:copy(s.approvedPool.filter(p => same(p.batchId,row.batchId))),
+                    batchDocument:copy([...s.approvedBatchData,...s.batchData].find(b => same(b.batchId,row.batchId)) || {})});
+                return row;
+            });
+        }
         return { views, assign, edit, pass, stop, recoverRepair, transaction, readState,
-            packingBatches, assignPacking, setPackingHold, passPackingLot,
+            packingBatches, assignPacking, assignPackingBulk, assignBundlingBulk, setPackingHold, passPackingLot, packingLotMath, editPackingLot, bundlingReady, assignBundling, passBundling, brandSizes,
             approve, tickRequirement, receiveRequirement, setBatchStopped,
             calculateAvailableQty, validateAssignment, pushToNextStage, pushToPackingPool,
             initialize: () => locks?.request ? locks.request("garment-production", { mode: "exclusive" }, recover) : Promise.resolve() };
