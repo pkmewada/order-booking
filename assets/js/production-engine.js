@@ -575,11 +575,24 @@
             if(!Array.isArray(requests)||!requests.length)throw new Error('Add at least one assignment.');
             return transaction(s=>requests.map(request=>assignBundlingInState(s,request)));
         }
+        async function editBundling(id, completedQty) {
+            return transaction(s => {
+                const row = s.bundlingData.find(b => b.id === id);
+                if (!row) throw new Error('Bundling assignment not found.');
+                if (row.status === 'passed') throw new Error('Passed bundling assignments are locked.');
+                const qty = number(completedQty, 'Completed quantity');
+                if (qty > row.quantity || qty < (row.completedQty || 0)) throw new Error('Completed quantity must be between previous progress and assigned quantity.');
+                (row.progressHistory ||= []).push({at:time(), before:row.completedQty || 0, completedQty:qty});
+                row.completedQty = qty;
+                return row;
+            });
+        }
         async function passBundling(id) {
             return transaction(s => {
                 const row = s.bundlingData.find(b => b.id === id);
                 if (!row) throw new Error('Bundling assignment not found.');
                 if (row.status === 'passed') return row;
+                if (number(row.completedQty || 0, 'Completed quantity') !== row.quantity) throw new Error('Complete the full bundling quantity before passing.');
                 if (row.sizes.reduce((n,r) => n + number(r.quantity,'Size quantity'),0) !== row.quantity) throw new Error('Size quantities must equal the full lot quantity.');
                 const sources = s.packingData.filter(w => (w.packingLotId || `legacy-${w.id}`) === row.packingLotId);
                 if (!sources.length || sources.some(w => w.stopped || w.passedQty !== w.inputQty-w.damageQty || w.passedQty < row.quantity)) throw new Error('The source packing lot is not fully passed.');
@@ -594,7 +607,7 @@
             });
         }
         return { views, assign, edit, pass, stop, recoverRepair, transaction, readState,
-            packingBatches, assignPacking, assignPackingBulk, assignBundlingBulk, setPackingHold, passPackingLot, packingLotMath, editPackingLot, bundlingReady, assignBundling, passBundling, brandSizes,
+            packingBatches, assignPacking, assignPackingBulk, assignBundlingBulk, setPackingHold, passPackingLot, packingLotMath, editPackingLot, bundlingReady, assignBundling, editBundling, passBundling, brandSizes,
             approve, tickRequirement, receiveRequirement, setBatchStopped,
             calculateAvailableQty, validateAssignment, pushToNextStage, pushToPackingPool,
             initialize: () => locks?.request ? locks.request("garment-production", { mode: "exclusive" }, recover) : Promise.resolve() };

@@ -44,6 +44,11 @@ $(document).ready(async function () {
         $('#bundlingReady').html(P.bundlingReady(state).map(l=>{const bom=bomFor(l.designNumber);return `<tr><td>${esc(l.batchId)}</td><td>${esc(l.packingLotId)}</td><td>${esc(l.brand)}</td><td>${esc(l.designNumber)} / ${esc(bom.pattern||'-')}</td><td>${money(bom.mrp??'')}</td><td>${l.pieces.map(esc).join('<br>')}</td><td>${setSummary(l)}<div class="small text-muted">Received: ${l.totalQuantity} / Assigned: ${l.assignedQuantity}</div></td><td><button class="btn btn-sm btn-dark assign-bundling" data-lot="${esc(l.packingLotId)}">Assign</button></td></tr>`;}).join('')||'<tr><td colspan="8" class="text-center text-muted py-4">No fully passed packing lots awaiting bundling.</td></tr>');
         $('#bundlingAssigned').html(state.bundlingData.map((r,i)=>`<tr><td>${i+1}</td><td><strong>${esc(r.batchId)}</strong></td><td class="text-primary fw-semibold">${esc(r.id)}</td><td>${esc(r.brand)}</td><td>${esc(r.designNumber)} / ${esc(r.pattern||'-')}</td><td>${money(r.mrp)}</td><td>${r.pieces.map(esc).join('<br>')}</td><td>${esc(r.worker)}</td><td>${setSummary(r)}</td><td>${deliveryBadge(r.deliveryDate,r.status==='passed')}</td><td><span class="status-badge ${r.status==='passed'?'passed':'pending'}">${r.status==='passed'?'Passed':'Pending'}</span></td><td>${r.status==='passed'?'<span class="text-success">Sent to Inventory</span>':`<button class="btn btn-sm btn-success pass-bundling" data-id="${esc(r.id)}" title="Pass to Inventory" aria-label="Pass to Inventory"><i class="bx bx-check-circle"></i></button>`}</td></tr>`).join('')||'<tr><td colspan="12" class="text-center text-muted py-4">No bundling assignments yet.</td></tr>');
     }
+    if(page==='bundling') {
+        const originalRender = render;
+        render = function(){originalRender();BundlingProgress.render(state);};
+        BundlingProgress.bind(P,save);
+    }
     $(document).on('click','.assign-bundling',function(){SetAssignments.open('bundling',String($(this).data('lot')),render);});
     $('#bulkAssignBundlingBtn').on('click',()=>SetAssignments.open('bundling',null,render));
     $(document).on('click','.pass-bundling',function(){const id=String($(this).data('id'));save(()=>P.passBundling(id));});
