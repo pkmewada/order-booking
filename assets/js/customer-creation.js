@@ -1,6 +1,7 @@
 $(document).ready(function() {
     let customers = [];
     let searchTerm = '';
+    const stateCity = StateCity.init(document.getElementById('customerState'), document.getElementById('customerCity'));
 
     loadCustomers();
 
@@ -189,6 +190,7 @@ $(document).ready(function() {
         $('#customerModalLabel').text('Add Customer');
         $('#editId').val('');
         $('#customerForm')[0].reset();
+        stateCity.reset();
         populateAllSelects();
         $('#customerModal').modal('show');
     });
@@ -204,11 +206,10 @@ $(document).ready(function() {
         $('#customerShopName').val(cust.shopName);
         $('#customerContact').val(cust.contact);
         $('#customerEmail').val(cust.email);
-        $('#customerCity').val(cust.city);
-        $('#customerState').val(cust.state);
-        $('#customerAgent').val(cust.agentId);
-        $('#customerTransporter').val(cust.transporterId);
-        $('#customerDistributor').val(cust.distributorId);
+        stateCity.setValue(cust.state, cust.city);
+        $('#customerAgent').val(cust.agentId || '');
+        $('#customerTransporter').val(cust.transporterId || '');
+        $('#customerDistributor').val(cust.distributorId || '');
         $('#customerModal').modal('show');
     }
 
@@ -218,11 +219,11 @@ $(document).ready(function() {
         const shopName = $('#customerShopName').val().trim();
         const contact = $('#customerContact').val().trim();
         const email = $('#customerEmail').val().trim();
-        const city = $('#customerCity').val().trim();
-        const state = $('#customerState').val().trim();
-        const agentId = $('#customerAgent').val();
-        const transporterId = $('#customerTransporter').val();
-        const distributorId = $('#customerDistributor').val();
+        const city = ($('#customerCity').val() || '').trim();
+        const state = ($('#customerState').val() || '').trim();
+        const agentId = $('#customerAgent').val() || '';
+        const transporterId = $('#customerTransporter').val() || '';
+        const distributorId = $('#customerDistributor').val() || '';
 
         if (!name) {
             Swal.fire('Warning!', 'Please enter name', 'warning');
@@ -239,36 +240,11 @@ $(document).ready(function() {
             $('#customerContact').focus();
             return;
         }
-        if (!email) {
-            Swal.fire('Warning!', 'Please enter email', 'warning');
-            $('#customerEmail').focus();
-            return;
-        }
-        if (!city) {
-            Swal.fire('Warning!', 'Please enter city', 'warning');
-            $('#customerCity').focus();
-            return;
-        }
-        if (!state) {
-            Swal.fire('Warning!', 'Please enter state', 'warning');
-            $('#customerState').focus();
-            return;
-        }
-        if (!agentId) {
-            Swal.fire('Warning!', 'Please select an agent', 'warning');
-            $('#customerAgent').focus();
-            return;
-        }
-        if (!transporterId) {
-            Swal.fire('Warning!', 'Please select a transporter', 'warning');
-            $('#customerTransporter').focus();
-            return;
-        }
-        if (!distributorId) {
-            Swal.fire('Warning!', 'Please select a distributor', 'warning');
-            $('#customerDistributor').focus();
-            return;
-        }
+
+
+
+
+
 
         if (editId) {
             const index = customers.findIndex(c => c.id === editId);
@@ -294,6 +270,7 @@ $(document).ready(function() {
 
     $('#customerModal').on('hidden.bs.modal', function() {
         $('#customerForm')[0].reset();
+        stateCity.reset();
         $('#editId').val('');
     });
 });

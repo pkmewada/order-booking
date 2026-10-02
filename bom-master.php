@@ -647,6 +647,7 @@ include __DIR__ . "/includes/header.php";
                                 <th>Color</th>
                                 <th>Photo</th>
                                 <th>Piece</th>
+                                <th>Status</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
@@ -952,7 +953,8 @@ include __DIR__ . "/includes/header.php";
 <?php include __DIR__ . "/includes/footer.php"; ?>
 
 <script src="assets/js/production-engine.js"></script>
-<script src="assets/js/bom-master.js"></script>
+<script src="assets/js/product-codes.js?v=<?= filemtime(__DIR__ . '/assets/js/product-codes.js') ?>"></script>
+<script src="assets/js/bom-master.js?v=<?= filemtime(__DIR__ . '/assets/js/bom-master.js') ?>"></script>
 
 </body>
 

@@ -24,12 +24,12 @@
             <div class="col-xl-12">
                 <div class="card custom-card">
                     <div class="card-header">
-                        <div class="card-title">Scan Customer</div>
+                        <div class="card-title">Select Customer</div>
                     </div>
                     <div class="card-body">
-                        <label class="form-label">Customer QR Code</label>
+                        <label class="form-label">Customer Name / QR Code</label>
                         <div class="input-group">
-                            <input type="text" class="form-control" id="customerScanInput" placeholder="Scan or enter customer QR code">
+                            <input type="text" class="form-control" id="customerScanInput" placeholder="Search customer name or shop name" autocomplete="off" aria-controls="customerSearchResults" aria-expanded="false">
                             <button class="btn btn-outline-primary" type="button" id="customerFindBtn">
                                 <i class="bx bx-search me-1"></i> Find
                             </button>
@@ -37,7 +37,8 @@
                                 <i class="bx bx-camera me-1"></i> Scan
                             </button>
                         </div>
-                        <div class="form-text">Scan the customer's QR code (from Customer Creation) or type/paste the code and click Find.</div>
+                        <div id="customerSearchResults" class="list-group mt-2 d-none" style="max-height:260px;overflow-y:auto" aria-label="Matching customers"></div>
+                        <div class="form-text">Search by customer name or shop name and select a customer. QR scanning is also available.</div>
                     </div>
                 </div>
             </div>
@@ -110,7 +111,7 @@
                     <div class="card-body">
                         <label class="form-label">Scan Products</label>
                         <div class="input-group">
-                            <input type="text" class="form-control" id="productScanInput" placeholder="Scan or enter product barcode">
+                            <input type="text" class="form-control" id="productScanInput" placeholder="Search design number or scan product barcode" autocomplete="off" aria-controls="productSearchResults" aria-expanded="false">
                             <button class="btn btn-outline-primary" type="button" id="productFindBtn">
                                 <i class="bx bx-search me-1"></i> Find
                             </button>
@@ -118,7 +119,8 @@
                                 <i class="bx bx-camera me-1"></i> Scan
                             </button>
                         </div>
-                        <div class="form-text mb-3">Scan a product QR code, or type/paste the barcode manually and click Find.</div>
+                        <div id="productSearchResults" class="list-group mt-2 d-none" style="max-height:260px;overflow-y:auto" aria-label="Matching designs"></div>
+                        <div class="form-text mb-3">Search by design number and select a product, or scan its QR code / enter its barcode.</div>
 
                         <div class="card border mb-3 d-none" id="productPreviewCard">
                             <div class="card-body py-2 px-3">
@@ -201,4 +203,4 @@
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
-<script src="assets/js/order-punch.js"></script>
+<script src="assets/js/order-punch.js?v=<?= filemtime(__DIR__ . '/assets/js/order-punch.js') ?>"></script>

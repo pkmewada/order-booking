@@ -123,16 +123,6 @@ $(document).ready(function() {
             $('#transporterName').focus();
             return;
         }
-        if (!contact) {
-            Swal.fire('Warning!', 'Please enter contact number', 'warning');
-            $('#transporterContact').focus();
-            return;
-        }
-        if (!email) {
-            Swal.fire('Warning!', 'Please enter email', 'warning');
-            $('#transporterEmail').focus();
-            return;
-        }
         if (!city) {
             Swal.fire('Warning!', 'Please enter city', 'warning');
             $('#transporterCity').focus();

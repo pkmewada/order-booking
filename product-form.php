@@ -30,37 +30,28 @@
                     </div>
                     <div class="card-body">
                         <form id="productForm">
-                            <input type="hidden" id="productId" value="<?php echo isset($_GET['id']) ? $_GET['id'] : ''; ?>">
+                            <input type="hidden" id="productId" value="<?php echo isset($_GET['id']) ? htmlspecialchars((string) $_GET['id'], ENT_QUOTES, 'UTF-8') : ''; ?>">
                             
                             <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Item Description <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" id="description" placeholder="Enter item description" required>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label" for="productDesign">Design Number <span class="text-danger">*</span></label>
+                                    <input type="text" id="productDesign" class="form-control" placeholder="Enter design number" required>
                                 </div>
-                                
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Barcode No <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" id="barcode" placeholder="Enter barcode number" required>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label" for="color">Colour <span class="text-danger">*</span></label>
+                                    <input type="text" id="color" class="form-control" placeholder="Enter colour" required>
                                 </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Brand <span class="text-danger">*</span></label>
-                                    <select class="form-select" id="brand" required>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label" for="brand">Brand <span class="text-danger">*</span></label>
+                                    <select id="brand" class="form-select" required>
                                         <option value="">Select Brand</option>
-                                        <option value="NIVI BLOSSOM" selected>NIVI BLOSSOM (28-34)</option>
-                                        <option value="AMARI">AMARI (S-L)</option>
-                                        <option value="LITTLE DOLLY">LITTLE DOLLY (18-26)</option>
+                                        <option value="LITTLE DOLLY">LITTLE DOLLY</option>
+                                        <option value="AMARI">AMARI</option>
+                                        <option value="NIVI BLOSSOM">NIVI BLOSSOM</option>
                                     </select>
-                                </div>
-                                
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Size</label>
-                                    <input type="text" class="form-control" id="sizeDisplay" readonly disabled style="background-color: #f8f9fa;">
+                                    <div id="brandSizeHint" class="small text-muted mt-1"></div>
                                 </div>
                             </div>
-
                             <div class="row">
                                 <div class="col-md-12">
                                     <button type="submit" class="btn btn-primary">
@@ -81,4 +72,4 @@
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
-<script src="assets/js/product-form.js"></script>
+<script src="assets/js/product-codes.js?v=<?= filemtime(__DIR__ . '/assets/js/product-codes.js') ?>"></script><script src="assets/js/product-form.js?v=<?= filemtime(__DIR__ . '/assets/js/product-form.js') ?>"></script>

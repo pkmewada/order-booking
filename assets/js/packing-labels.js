@@ -10,7 +10,8 @@
     function label(b,size) {
         if(typeof JsBarcode!=='function') throw Error('Barcode library did not load. Refresh Packing and retry.');
         if(!sizes(b.brand).includes(size)) throw Error('Choose a valid size for this brand.');
-        const code = String(b.id ?? b.bomId ?? b.designNumber) + '-' + size;
+        const code = ProductCodes.generate(b.brand, b.designNumber, b.color, size);
+        if (!code) throw Error('Brand, design number, color and size are required.');
         const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
         JsBarcode(svg,code,{format:'CODE128',width:2,height:45,fontSize:12,margin:10});
         const barcode=new XMLSerializer().serializeToString(svg).replace('<svg ','<svg class="label-barcode" ');

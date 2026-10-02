@@ -1062,6 +1062,7 @@
 <script src="assets/js/production-engine.js?v=<?= filemtime(__DIR__ . '/assets/js/production-engine.js') ?>"></script>
 <script src="assets/js/set-assignments.js?v=<?= filemtime(__DIR__ . '/assets/js/set-assignments.js') ?>"></script>
 <script src="assets/libs/jsbarcode/JsBarcode.all.min.js"></script>
+<script src="assets/js/product-codes.js?v=<?= filemtime(__DIR__ . '/assets/js/product-codes.js') ?>"></script>
 <script src="assets/js/packing-labels.js?v=<?= filemtime(__DIR__ . '/assets/js/packing-labels.js') ?>"></script>
 <link rel="stylesheet" href="assets/css/assignment-details.css?v=<?= filemtime(__DIR__ . '/assets/css/assignment-details.css') ?>">
 <script src="assets/js/assignment-details.js?v=<?= filemtime(__DIR__ . '/assets/js/assignment-details.js') ?>"></script>

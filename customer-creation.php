@@ -135,33 +135,37 @@
                         </div>
 
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">City</label>
-                            <input type="text" class="form-control" id="customerCity" name="city" required placeholder="Enter city">
+                            <label class="form-label">State</label>
+                            <select class="form-control" id="customerState" name="state">
+                                <option value="">Select State</option>
+                            </select>
                         </div>
 
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">State</label>
-                            <input type="text" class="form-control" id="customerState" name="state" required placeholder="Enter state">
+                            <label class="form-label">City</label>
+                            <select class="form-control" id="customerCity" name="city">
+                                <option value="">Select City</option>
+                            </select>
                         </div>
 
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Agent</label>
-                            <select class="form-select" id="customerAgent" name="agentId" required>
+                            <select class="form-select" id="customerAgent" name="agentId">
                                 <option value="">Select Agent</option>
                             </select>
                         </div>
 
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Transporter</label>
-                            <select class="form-select" id="customerTransporter" name="transporterId" required>
+                            <select class="form-select" id="customerTransporter" name="transporterId">
                                 <option value="">Select Transporter</option>
                             </select>
                         </div>
 
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Distributor</label>
-                            <select class="form-select" id="customerDistributor" name="distributorId" required>
-                                <option value="">Select Distributor</option>
+                            <select class="form-select" id="customerDistributor" name="distributorId">
+                                <option value="" selected>No Distributor</option>
                             </select>
                         </div>
                     </div>
@@ -179,4 +183,5 @@
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
-<script src="assets/js/customer-creation.js"></script>
+<script src="assets/js/state-city.js"></script>
+<script src="assets/js/customer-creation.js?v=<?= filemtime(__DIR__ . '/assets/js/customer-creation.js') ?>"></script>

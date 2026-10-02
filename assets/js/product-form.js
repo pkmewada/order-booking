@@ -1,103 +1,62 @@
-$(document).ready(function() {
-    // Brand-Size mappings
-    const BRAND_SIZES = {
-        'NIVI BLOSSOM': '28-34',
-        'AMARI': 'S-L',
-        'LITTLE DOLLY': '18-26'
+$(function () {
+    const read = key => {
+        try { const rows = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(rows) ? rows : []; }
+        catch (_) { return []; }
     };
-
-    // Function to update size display based on brand
-    function updateSizeDisplay(brand) {
-        if (brand && BRAND_SIZES[brand]) {
-            $('#sizeDisplay').val(BRAND_SIZES[brand]);
-        } else {
-            $('#sizeDisplay').val('');
-        }
+    const norm = value => String(value || '').trim().toLowerCase();
+    const id = $('#productId').val();
+    const original = read('products').find(p => String(p.id) === id);
+    function updateSize() {
+        const size = ProductCodes.sizes[$('#brand').val()] || '';
+        $('#brandSizeHint').text(size ? 'Size: ' + size : 'Size will be selected automatically from the brand.');
     }
-
-    // Update size display when brand changes
-    $('#brand').change(function() {
-        const brand = $(this).val();
-        updateSizeDisplay(brand);
-    });
-
-    // Load product data if editing
-    const productId = $('#productId').val();
-    if (productId) {
-        const products = JSON.parse(localStorage.getItem('products') || '[]');
-        const product = products.find(p => p.id === productId);
-        if (product) {
-            $('#description').val(product.description);
-            $('#barcode').val(product.barcode);
-            $('#brand').val(product.brand);
-            updateSizeDisplay(product.brand);
-        }
-    } else {
-        // For new product - set default brand and size
-        const defaultBrand = 'NIVI BLOSSOM';
-        $('#brand').val(defaultBrand);
-        updateSizeDisplay(defaultBrand);
+    if (original) {
+        $('#productDesign').val(original.designNumber || original.description || '');
+        $('#color').val(original.color || '');
+        $('#brand').val(String(original.brand || '').trim().toUpperCase());
     }
-
-    // Form submission
-    $('#productForm').submit(function(e) {
+    $('#brand').on('change', updateSize);
+    updateSize();
+    $('#productForm').on('submit', function (e) {
         e.preventDefault();
-        
-        const description = $('#description').val().trim();
-        const barcode = $('#barcode').val().trim();
+        const designNumber = $('#productDesign').val().trim();
+        const color = $('#color').val().trim();
         const brand = $('#brand').val();
-        const size = $('#sizeDisplay').val();
-
-        if (!description || !barcode || !brand || !size) {
-            Swal.fire('Warning!', 'Please fill in all required fields.', 'warning');
-            return;
+        const size = ProductCodes.sizes[brand] || '';
+        const barcode = ProductCodes.generate(brand, designNumber, color, size);
+        if (!designNumber || !color || !brand || !size || !barcode) {
+            Swal.fire('Warning!', 'Enter design number, colour and brand.', 'warning'); return;
         }
-
-        // Get products from localStorage
-        let products = JSON.parse(localStorage.getItem('products') || '[]');
-        
-        const productId = $('#productId').val();
-        if (productId) {
-            // Edit existing product
-            const index = products.findIndex(p => p.id === productId);
-            if (index !== -1) {
-                products[index] = {
-                    ...products[index],
-                    description,
-                    barcode,
-                    brand,
-                    size
-                };
-            }
-        } else {
-            // Add new product
-            // Check duplicate barcode
-            if (products.some(p => p.barcode.toLowerCase() === barcode.toLowerCase())) {
-                Swal.fire('Warning!', 'Barcode already exists. Please use a unique barcode.', 'warning');
-                return;
-            }
-            
-            products.push({
-                id: 'PRD' + Date.now() + Math.floor(Math.random() * 1000),
-                description,
-                barcode,
-                brand,
-                size,
-                photo: null
-            });
+        const products = read('products');
+        if (products.some(p => String(p.id) !== id && norm(p.barcode) === norm(barcode))) {
+            Swal.fire('Warning!', 'This product already exists.', 'warning'); return;
         }
-
-        // Save to localStorage
-        localStorage.setItem('products', JSON.stringify(products));
-        
-        Swal.fire({
-            icon: 'success',
-            title: 'Success!',
-            text: productId ? 'Product updated successfully.' : 'Product added successfully.',
-            timer: 2000,
-            showConfirmButton: true
-        }).then(() => {
-            window.location.href = 'product-creation';
-        });
+        const design = norm(designNumber);
+        if (products.some(p => String(p.id) !== id && norm(p.designNumber || p.description) === design)) {
+            Swal.fire('Warning!', 'Design number already exists in Product Creation. Use a unique design number.', 'warning'); return;
+        }
+        const unchangedDesign = original && norm(original.designNumber || original.description) === design;
+        if (!unchangedDesign && read('bomMasterData').some(b => norm(b.designNumber) === design)) {
+            Swal.fire('Warning!', 'Design number already exists in BOM Master. Use a different design number.', 'warning'); return;
+        }
+        const details = original || {};
+        const product = {
+            ...details,
+            id: id || 'PRD' + Date.now() + '-' + Math.floor(Math.random() * 10000),
+            bomId: original && norm(original.designNumber || original.description) === design ? original.bomId ?? null : null,
+            sourceDesignNumber: original && norm(original.designNumber || original.description) === design ? original.sourceDesignNumber || '' : '',
+            designNumber, description: designNumber, color, brand, size, barcode,
+            pieces: details.pieces || [],
+            pieceCount: details.pieceCount || details.pieces?.length || 1,
+            photo: details.photo || null
+        };
+        if (id) {
+            const index = products.findIndex(p => String(p.id) === id);
+            if (index < 0) { Swal.fire('Error!', 'Product no longer exists.', 'error'); return; }
+            products[index] = product;
+        } else { products.push(product); }
+        try { localStorage.setItem('products', JSON.stringify(products)); }
+        catch (_) { Swal.fire('Error!', 'Browser storage is full. Product could not be saved.', 'error'); return; }
+        Swal.fire('Success!', 'Product saved successfully.', 'success').then(() => { window.location.href = 'product-creation'; });
     });
 });

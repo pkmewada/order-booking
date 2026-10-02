@@ -1,274 +1,98 @@
-$(document).ready(function() {
-    let products = [];
-    let searchTerm = '';
-    let currentProductId = null;
-
-    const TEMPLATE_HEADERS = ['Item Description', 'Barcode No', 'Size', 'Brand'];
-
-    // Brand-Size mappings
-    const BRAND_SIZES = {
-        'NIVI BLOSSOM': '28-34',
-        'AMARI': 'S-L',
-        'LITTLE DOLLY': '18-26'
-    };
-
-    loadProducts();
-
-    function loadProducts() {
-        const stored = localStorage.getItem('products');
-        products = stored ? JSON.parse(stored) : [];
-        renderTable();
-    }
-
-    function saveToLocalStorage() {
-        localStorage.setItem('products', JSON.stringify(products));
-    }
-
-    function renderTable() {
-        const tbody = $('#productTableBody');
-        tbody.empty();
-
-        let filtered = products;
-        if (searchTerm.trim() !== '') {
-            const term = searchTerm.toLowerCase().trim();
-            filtered = filtered.filter(p =>
-                p.description.toLowerCase().includes(term) ||
-                p.barcode.toLowerCase().includes(term)
-            );
-        }
-
-        if (filtered.length === 0) {
-            tbody.append(`
-                <tr>
-                    <td colspan="7" class="text-center text-muted py-4">
-                        <i class="bx bx-package fs-2 d-block mb-2"></i>
-                        No products found
-                    </td>
-                </tr>
-            `);
-            return;
-        }
-
-        filtered.forEach((prod, index) => {
-            const photoHtml = prod.photo ? 
-                `<img src="${prod.photo}" alt="Product" class="product-photo" style="width:32px; height:32px; object-fit:cover; border-radius:4px; cursor:pointer;" data-id="${prod.id}">` :
-                `<button class="btn btn-sm btn-outline-secondary upload-photo-btn" data-id="${prod.id}" title="Upload Photo">
-                    <i class="bx bx-camera"></i>
-                </button>`;
-
-            // Get size range for display
-            const sizeDisplay = BRAND_SIZES[prod.brand] || prod.size;
-
-            tbody.append(`
-                <tr>
-                    <td>${index + 1}</td>
-                    <td class="text-center">${photoHtml}</td>
-                    <td>${prod.description}</td>
-                    <td>${prod.barcode}</td>
-                    <td>${sizeDisplay}</td>
-                    <td>${prod.brand}</td>
-                    <td class="text-center">
-                        <div class="btn-group" role="group">
-                            <a href="product-form?id=${prod.id}" class="btn btn-sm btn-primary" title="Edit">
-                                <i class="bx bx-edit"></i>
-                            </a>
-                            <button class="btn btn-sm btn-danger delete-btn" data-id="${prod.id}" title="Delete">
-                                <i class="bx bx-trash"></i>
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `);
-        });
-
-        // Event handlers for photo upload
-        $('.upload-photo-btn').click(function() {
-            const id = $(this).data('id');
-            openPhotoModal(id);
-        });
-
-        $('.product-photo').click(function() {
-            const id = $(this).data('id');
-            openPhotoModal(id);
-        });
-
-        $('.delete-btn').click(function() {
-            showDeleteConfirmation($(this).data('id'));
+$(function () {
+    const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const read = key => { try { const a = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(a) ? a : []; } catch (_) { return []; } };
+    let products = read('products'), boms = [];
+    const selected = new Set();
+    const size = b => b.size || ProductCodes.sizes[String(b.brand || '').toUpperCase()] || '';
+    const code = b => ProductCodes.generate(b.brand, b.designNumber || b.description, b.color, size(b));
+    const photo = b => b.photo ? '<img src="' + esc(b.photo) + '" alt="Product" style="width:60px;height:60px;object-fit:cover;border-radius:7px">' : '<span class="text-muted">No Photo</span>';
+    function cells(b, showBarcode = true) { return '<td>' + esc(b.brand) + '</td><td>' + esc(b.designNumber || b.description) + '</td><td>' + esc(b.color) + '</td><td>' + photo(b) + '</td><td>' + esc(b.pieceCount || b.pieces?.length || 1) + ' Pic</td><td>' + esc(size(b)) + '</td>' + (showBarcode ? '<td>' + esc(b.barcode || code(b)) + '<div class="product-qr mt-2" data-code="' + esc(b.barcode || code(b)) + '"></div></td>' : ''); }
+    function renderQr(root) {
+        if (typeof QRCode !== 'function') return;
+        $(root).find('.product-qr').each(function () {
+            const value = this.dataset.code;
+            if (value) new QRCode(this, {text:value,width:72,height:72});
         });
     }
-
-    function openPhotoModal(productId) {
-        currentProductId = productId;
-        const product = products.find(p => p.id === productId);
-        if (product && product.photo) {
-            $('#photoPreview').attr('src', product.photo).show();
-        } else {
-            $('#photoPreview').hide();
-        }
-        $('#photoFileInput').val('');
-        $('#photoModal').modal('show');
+    function render() {
+        const q = String($('#searchInput').val() || '').trim().toLowerCase();
+        const rows = products.filter(b => [b.brand,b.designNumber,b.description,b.color,b.barcode].join(' ').toLowerCase().includes(q));
+        $('#productTableBody').html(rows.map(b => '<tr>' + cells(b, false) + '<td><div class="d-flex gap-1"><a class="btn btn-sm btn-success" href="product-form?id=' + encodeURIComponent(b.id) + '" title="Edit"><i class="bx bx-edit"></i></a><button type="button" class="btn btn-sm btn-info barcode-product" data-id="' + esc(b.id) + '" title="Barcode" aria-label="Show barcode"><i class="bx bx-barcode"></i></button><button type="button" class="btn btn-sm btn-danger delete-product" data-id="' + esc(b.id) + '" title="Delete" aria-label="Delete product"><i class="bx bx-trash"></i></button></div></td></tr>').join('') || '<tr><td colspan="7" class="text-center text-muted py-4">No products found</td></tr>');
+        renderQr('#productTableBody');
     }
-
-    function showDeleteConfirmation(id) {
-        Swal.fire({
-            title: 'Are you sure?',
-            text: "You won't be able to revert this!",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Yes, delete it!',
-            cancelButtonText: 'Cancel'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                products = products.filter(p => p.id !== id);
-                saveToLocalStorage();
-                renderTable();
-                Swal.fire('Deleted!', 'Product has been deleted successfully.', 'success');
+    function alreadyImported(b) {
+        const current = read('products');
+        const design = String(b.designNumber || '').trim().toLowerCase();
+        return read('productBomImportHistory').includes(String(b.id)) || current.some(p =>
+            String(p.bomId ?? '') === String(b.id) ||
+            String(p.sourceDesignNumber || p.designNumber || p.description || '').trim().toLowerCase() === design
+        );
+    }
+    function visible() { const q = String($('#bomSearch').val() || '').trim().toLowerCase(); return boms.filter(b => !alreadyImported(b) && [b.designNumber,b.brand,b.color].join(' ').toLowerCase().includes(q)); }
+    function renderBoms() {
+        const rows = visible(), count = rows.filter(b => selected.has(b)).length;
+        $('#bomImportBody').html(rows.map(b => '<tr><td><input type="checkbox" class="bom-select" data-index="' + boms.indexOf(b) + '" aria-label="Select design" ' + (selected.has(b) ? 'checked' : '') + '></td>' + cells({...b,barcode:code(b)}) + '</tr>').join('') || '<tr><td colspan="8" class="text-center">No BOM records found</td></tr>');
+        renderQr('#bomImportBody');
+        $('#bomSelectAll').prop('checked', rows.length > 0 && count === rows.length).prop('indeterminate', count > 0 && count < rows.length);
+        $('#bomSelectionCount').text(selected.size + ' selected. Barcodes are generated automatically.');
+    }
+    function persist(updates) {
+        const before = Object.fromEntries(Object.keys(updates).map(key => [key, localStorage.getItem(key)]));
+        try { Object.entries(updates).forEach(([key, value]) => localStorage.setItem(key, JSON.stringify(value))); }
+        catch (error) { Object.entries(before).forEach(([key, value]) => value === null ? localStorage.removeItem(key) : localStorage.setItem(key, value)); throw error; }
+    }
+    $('#productTableBody').on('click', '.barcode-product', function () {
+        const p = read('products').find(p => String(p.id) === this.dataset.id);
+        if (!p) return;
+        const value = p.barcode || code(p);
+        $('#productBarcodeText').text(value); $('#productBarcodePreview').empty(); $('#productBarcodeQr').empty();
+        if (!value) { Swal.fire('Warning!', 'Product barcode is not available.', 'warning'); return; }
+        if (typeof JsBarcode === 'function') { try { JsBarcode('#productBarcodePreview', value, {format:'CODE128',height:55,fontSize:12}); } catch (_) {} }
+        if (typeof QRCode === 'function') new QRCode(document.getElementById('productBarcodeQr'), {text:value,width:180,height:180});
+        $('#productBarcodeModal').modal('show');
+    });
+    $('#productTableBody').on('click', '.delete-product', function () {
+        const id = this.dataset.id;
+        Swal.fire({title:'Delete product?',text:'This product will also disappear from BOM Master.',icon:'warning',showCancelButton:true,confirmButtonText:'Delete',confirmButtonColor:'#d33'}).then(result => {
+            if (!result.isConfirmed) return;
+            const current = read('products'), p = current.find(p => String(p.id) === id);
+            if (!p) return;
+            const linked = p.bomId !== null && p.bomId !== undefined;
+            const source = linked ? String(p.bomId) : null;
+            const updates = {products:current.filter(p => String(p.id) !== id)};
+            if (linked) {
+                updates.productBomImportHistory = [...new Set([...read('productBomImportHistory'), source])];
+                updates.productDeletedBomIds = [...new Set([...read('productDeletedBomIds'), source])];
             }
+            try { persist(updates); } catch (_) { Swal.fire('Error!', 'Product could not be deleted.', 'error'); return; }
+            products = updates.products; render(); renderBoms(); Swal.fire('Deleted!', 'Product deleted successfully.', 'success');
         });
-    }
-
-    $('#searchInput').on('keyup', function() {
-        searchTerm = $(this).val();
-        renderTable();
     });
-
-    // ---------- Photo Upload ----------
-    $('#photoFileInput').on('change', function() {
-        const file = this.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                $('#photoPreview').attr('src', e.target.result).show();
-            };
-            reader.readAsDataURL(file);
+    $('#searchInput').on('input', render);
+    $('#importBomBtn').on('click', () => { boms = read('bomMasterData'); selected.clear(); $('#bomSearch').val(''); renderBoms(); $('#bomImportModal').modal('show'); });
+    $('#bomSearch').on('input', renderBoms);
+    $('#bomImportBody').on('change', '.bom-select', function () { const b = boms[Number(this.dataset.index)]; this.checked ? selected.add(b) : selected.delete(b); renderBoms(); });
+    $('#bomSelectAll').on('change', function () { visible().forEach(b => this.checked ? selected.add(b) : selected.delete(b)); renderBoms(); });
+    $('#saveBomImport').on('click', () => {
+        if (!selected.size) { Swal.fire('Warning!', 'Select at least one BOM record.', 'warning'); return; }
+        products = read('products');
+        const used = new Set(products.map(b => String(b.barcode || '').toLowerCase()));
+        const usedDesigns = new Set(products.map(b => String(b.designNumber || b.description || '').trim().toLowerCase()));
+        const additions = []; let skipped = 0;
+        for (const b of selected) {
+            if (alreadyImported(b)) { skipped++; continue; }
+            const barcode = code(b);
+            if (!barcode) { Swal.fire('Warning!', 'Selected BOM records need brand, design number, color and size.', 'warning'); return; }
+            const design = String(b.designNumber || '').trim().toLowerCase();
+            if (usedDesigns.has(design) || used.has(barcode.toLowerCase())) { skipped++; continue; }
+            used.add(barcode.toLowerCase());
+            usedDesigns.add(design);
+            additions.push({...JSON.parse(JSON.stringify(b)), id:'PRD' + Date.now() + '-' + additions.length, bomId:b.id, sourceDesignNumber:b.designNumber, description:b.designNumber, size:size(b), barcode});
         }
+        const next = products.concat(additions);
+        try { persist({ products: next, productBomImportHistory: [...new Set([...read('productBomImportHistory'), ...additions.map(p => String(p.bomId))])] }); } catch (_) { Swal.fire('Error!', 'Browser storage is full. Products could not be saved.', 'error'); return; }
+        products = next; render(); $('#bomImportModal').modal('hide'); Swal.fire('Import Complete', additions.length + ' imported, ' + skipped + ' already exist.', additions.length ? 'success' : 'info');
     });
-
-    $('#uploadPhotoBtn').click(function() {
-        const file = $('#photoFileInput')[0].files[0];
-        if (!file) {
-            Swal.fire('Warning!', 'Please choose a photo to upload.', 'warning');
-            return;
-        }
-
-        // Check file size (2MB max)
-        if (file.size > 2 * 1024 * 1024) {
-            Swal.fire('Error!', 'File size exceeds 2MB limit.', 'error');
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const photoData = e.target.result;
-            const product = products.find(p => p.id === currentProductId);
-            if (product) {
-                product.photo = photoData;
-                saveToLocalStorage();
-                renderTable();
-                $('#photoModal').modal('hide');
-                Swal.fire('Success!', 'Photo uploaded successfully.', 'success');
-            }
-        };
-        reader.onerror = function() {
-            Swal.fire('Error!', 'Failed to read the photo file.', 'error');
-        };
-        reader.readAsDataURL(file);
-    });
-
-    // ---------- Import ----------
-
-    $('#importProductBtn').click(function() {
-        $('#importFileInput').val('');
-        $('#importFileHint').text('');
-        $('#importModal').modal('show');
-    });
-
-    $('#downloadTemplateBtn').click(function() {
-        const sampleRows = [
-            TEMPLATE_HEADERS,
-            ['NB6011-RANI', 'LD51347', '28-34', 'NIVI BLOSSOM'],
-            ['40225-PINK', 'LD51925', '18-26', 'LITTLE DOLLY']
-        ];
-        const worksheet = XLSX.utils.aoa_to_sheet(sampleRows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Products');
-        XLSX.writeFile(workbook, 'product-import-template.xlsx');
-    });
-
-    $('#uploadImportBtn').click(function() {
-        const file = $('#importFileInput')[0].files[0];
-        if (!file) {
-            Swal.fire('Warning!', 'Please choose a file to upload.', 'warning');
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            let rows;
-            try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                rows = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false });
-            } catch (err) {
-                Swal.fire('Error!', 'Could not read this file. Please upload a valid Excel/CSV file.', 'error');
-                return;
-            }
-
-            importRows(rows);
-        };
-        reader.onerror = function() {
-            Swal.fire('Error!', 'Failed to read the file.', 'error');
-        };
-        reader.readAsArrayBuffer(file);
-    });
-
-    function importRows(rows) {
-        if (!rows || rows.length < 2) {
-            Swal.fire('Warning!', 'The file has no data rows.', 'warning');
-            return;
-        }
-
-        // Skip header row
-        const dataRows = rows.slice(1);
-        const existingBarcodes = new Set(products.map(p => p.barcode.toLowerCase()));
-
-        let imported = 0;
-        let skipped = 0;
-
-        dataRows.forEach(row => {
-            const description = (row[0] || '').toString().trim();
-            const barcode = (row[1] || '').toString().trim();
-            const size = (row[2] || '').toString().trim();
-            const brand = (row[3] || '').toString().trim();
-
-            if (!description || !barcode || !size || !brand) {
-                skipped++;
-                return;
-            }
-            if (existingBarcodes.has(barcode.toLowerCase())) {
-                skipped++;
-                return;
-            }
-
-            products.push({
-                id: 'PRD' + Date.now() + Math.floor(Math.random() * 1000),
-                description, 
-                barcode, 
-                size, 
-                brand,
-                photo: null
-            });
-            existingBarcodes.add(barcode.toLowerCase());
-            imported++;
-        });
-
-        saveToLocalStorage();
-        renderTable();
-        $('#importModal').modal('hide');
-
-        Swal.fire('Import Complete', `${imported} product(s) imported, ${skipped} skipped (missing fields or duplicate barcode).`, imported > 0 ? 'success' : 'warning');
-    }
+    window.addEventListener('storage', e => { if (['products', 'bomMasterData', 'productBomImportHistory', 'productDeletedBomIds'].includes(e.key)) { products = read('products'); boms = read('bomMasterData'); render(); renderBoms(); } });
+    render();
 });

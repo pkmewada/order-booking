@@ -52,6 +52,7 @@ $(document).ready(function() {
 
         $('#organizeRow, #productRow, #submitRow').removeClass('d-none');
         $('#customerScanInput').val(buildCustomerLabel(customer));
+        hideCustomerResults();
     }
 
     function buildCustomerLabel(customer) {
@@ -59,15 +60,59 @@ $(document).ready(function() {
     }
 
     function lookupCustomer(code) {
-        const customer = findCustomerByCode(code);
+        let customer = findCustomerByCode(code);
         if (!customer) {
-            Swal.fire('Not Found!', 'No customer matches this QR code. Please create the customer first in Customer Creation.', 'warning');
+            const query = String(code || '').trim().toLowerCase();
+            const matches = getList('customers').filter(c => String(c.name || '').toLowerCase() === query || buildCustomerLabel(c).toLowerCase() === query);
+            if (matches.length === 1) customer = matches[0];
+            else if (showCustomerResults(code)) return;
+        }
+        if (!customer) {
+            Swal.fire('Not Found!', 'No customer matches this name or QR code. Please create the customer first in Customer Creation.', 'warning');
             return;
         }
         applyCustomer(customer);
         Swal.fire({ icon: 'success', title: 'Customer Found!', text: `${customer.name} - ${customer.shopName}`, timer: 1500, showConfirmButton: false });
     }
 
+    function hideCustomerResults() {
+        $('#customerSearchResults').empty().addClass('d-none');
+        $('#customerScanInput').attr('aria-expanded', 'false');
+    }
+    function showCustomerResults(value) {
+        const query = String(value || '').trim().toLowerCase();
+        hideCustomerResults();
+        if (!query) return false;
+        const matches = getList('customers').filter(c => [c.name, c.shopName].some(v => String(v || '').toLowerCase().includes(query)));
+        const list = $('#customerSearchResults');
+        matches.forEach(c => {
+            const button = $('<button>', {type:'button',class:'list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-3'}).attr('data-id', c.id);
+            $('<span>', {class:'fw-medium'}).text(c.name || '').appendTo(button);
+            $('<span>', {class:'text-muted small text-end'}).text(c.shopName || '').appendTo(button);
+            button.appendTo(list);
+        });
+        if (!matches.length) $('<div>', {class:'list-group-item text-muted'}).text('No customers found.').appendTo(list);
+        list.removeClass('d-none'); $('#customerScanInput').attr('aria-expanded', 'true');
+        return matches.length > 0;
+    }
+    $('#customerScanInput').on('input', function () {
+        if (currentCustomer && this.value !== buildCustomerLabel(currentCustomer)) currentCustomer = null;
+        showCustomerResults(this.value);
+    }).on('keydown', function (e) {
+        if (e.key === 'Escape') hideCustomerResults();
+        if (e.key === 'ArrowDown') { e.preventDefault(); $('#customerSearchResults button:first').trigger('focus'); }
+    });
+    $('#customerSearchResults').on('click', 'button', function () {
+        const customer = getList('customers').find(c => String(c.id) === this.dataset.id);
+        if (customer) applyCustomer(customer);
+    }).on('keydown', 'button', function (e) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); $(this).next('button').trigger('focus'); }
+        if (e.key === 'ArrowUp') { e.preventDefault(); const previous = $(this).prev('button'); if (previous.length) previous.trigger('focus'); else $('#customerScanInput').trigger('focus'); }
+        if (e.key === 'Escape') { hideCustomerResults(); $('#customerScanInput').trigger('focus'); }
+    });
+    $(document).on('click', function (e) {
+        if (!$(e.target).closest('#customerSearchResults, #customerScanInput, #customerFindBtn').length) hideCustomerResults();
+    });
     $('#customerFindBtn').click(function() {
         lookupCustomer($('#customerScanInput').val());
     });
@@ -84,6 +129,50 @@ $(document).ready(function() {
     });
 
     // ---------- Step 2: Product scan ----------
+
+    function productDesign(product) {
+        return String(product.designNumber || product.description || '');
+    }
+
+    function hideProductResults() {
+        $('#productSearchResults').empty().addClass('d-none');
+        $('#productScanInput').attr('aria-expanded', 'false');
+    }
+
+    function showProductResults(value) {
+        const query = String(value || '').trim().toLowerCase();
+        hideProductResults();
+        const matches = loadProducts().filter(p => productDesign(p).toLowerCase().includes(query));
+        const list = $('#productSearchResults');
+        matches.forEach(product => {
+            const button = $('<button>', {type: 'button', class: 'list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-3'});
+            button.data('product', product);
+            $('<span>', {class: 'fw-medium'}).text(productDesign(product)).appendTo(button);
+            $('<span>', {class: 'text-muted small text-end'}).text([product.brand, product.color, product.size].filter(Boolean).join(' | ')).appendTo(button);
+            button.appendTo(list);
+        });
+        if (!matches.length) $('<div>', {class: 'list-group-item text-muted'}).text('No designs found. Please add products in Product Creation.').appendTo(list);
+        list.removeClass('d-none');
+        $('#productScanInput').attr('aria-expanded', 'true');
+        return matches.length > 0;
+    }
+
+    $('#productScanInput').on('input focus', function () {
+        showProductResults(this.value);
+    }).on('keydown', function (e) {
+        if (e.key === 'Escape') hideProductResults();
+        if (e.key === 'ArrowDown') { e.preventDefault(); $('#productSearchResults button:first').trigger('focus'); }
+    });
+    $('#productSearchResults').on('click', 'button', function () {
+        addProduct($(this).data('product'));
+    }).on('keydown', 'button', function (e) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); $(this).next('button').trigger('focus'); }
+        if (e.key === 'ArrowUp') { e.preventDefault(); const previous = $(this).prev('button'); if (previous.length) previous.trigger('focus'); else $('#productScanInput').trigger('focus'); }
+        if (e.key === 'Escape') { $('#productScanInput').trigger('focus'); hideProductResults(); }
+    });
+    $(document).on('click', function (e) {
+        if (!$(e.target).closest('#productSearchResults, #productScanInput, #productFindBtn').length) hideProductResults();
+    });
 
     function upsertOrderItem(product) {
         const existing = orderItems.find(i => i.barcode === product.barcode);
@@ -103,13 +192,23 @@ $(document).ready(function() {
     }
 
     function lookupProduct(code) {
-        const product = findProductByCode(code);
+        let product = findProductByCode(code);
         if (!product) {
-            Swal.fire('Not Found!', 'No product matches this barcode. Please add it in Product Creation first.', 'warning');
+            const query = String(code || '').trim().toLowerCase();
+            const matches = loadProducts().filter(p => productDesign(p).trim().toLowerCase() === query);
+            if (matches.length === 1) product = matches[0];
+            else if (showProductResults(code)) return;
+        }
+        if (!product) {
+            Swal.fire('Not Found!', 'No product matches this design number or barcode. Please add it in Product Creation first.', 'warning');
             return;
         }
 
-        $('#previewItemCode').text(product.description);
+        addProduct(product);
+    }
+
+    function addProduct(product) {
+        $('#previewItemCode').text(productDesign(product));
         $('#previewBarcode').text(product.barcode);
         $('#previewSize').text(product.size);
         $('#previewBrand').text(product.brand);
@@ -117,6 +216,7 @@ $(document).ready(function() {
 
         upsertOrderItem(product);
         $('#productScanInput').val('').focus();
+        hideProductResults();
     }
 
     $('#productFindBtn').click(function() {
@@ -254,7 +354,9 @@ $(document).ready(function() {
         currentCustomer = null;
         orderItems = [];
         $('#customerScanInput').val('');
+        hideCustomerResults();
         $('#productScanInput').val('');
+        hideProductResults();
         $('#orgDeliveryDate').val('');
         $('#orgExistingCustomer').val('No');
         $('#productPreviewCard').addClass('d-none');

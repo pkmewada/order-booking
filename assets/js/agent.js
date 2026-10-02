@@ -128,11 +128,6 @@ $(document).ready(function() {
             $('#agentContact').focus();
             return;
         }
-        if (!email) {
-            Swal.fire('Warning!', 'Please enter email', 'warning');
-            $('#agentEmail').focus();
-            return;
-        }
         if (!city) {
             Swal.fire('Warning!', 'Please enter city', 'warning');
             $('#agentCity').focus();
