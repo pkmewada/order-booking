@@ -88,4 +88,6 @@
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
+<script src="assets/libs/html2pdf/html2pdf.bundle.min.js"></script>
+<script src="assets/js/order-pdf.js"></script>
 <script src="assets/js/order-list.js"></script>

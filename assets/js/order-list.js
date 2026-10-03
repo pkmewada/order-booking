@@ -78,6 +78,9 @@ $(document).ready(function() {
                         </td>
                         <td class="text-center">
                             <div class="btn-group" role="group">
+                                <button class="btn btn-sm btn-success pdf-btn" title="Download order PDF" aria-label="Download order PDF">
+                                    <i class="bx bxs-file-pdf"></i>
+                                </button>
                                 <a href="order-punch?id=${order.id}" class="btn btn-sm btn-primary" title="Edit">
                                     <i class="bx bx-edit"></i>
                                 </a>
@@ -88,6 +91,18 @@ $(document).ready(function() {
                         </td>
                     </tr>
                 `);
+                tbody.find('tr:last .pdf-btn').on('click', async function() {
+                    const button = this;
+                    button.disabled = true;
+                    try {
+                        await OrderPdf.download(order);
+                    } catch (error) {
+                        console.error('Order PDF export failed:', error);
+                        Swal.fire('PDF failed', 'Could not generate the order PDF. Please try again.', 'error');
+                    } finally {
+                        button.disabled = false;
+                    }
+                });
             });
         }
 
