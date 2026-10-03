@@ -1210,18 +1210,6 @@
                                 </li>
 
                                 <li class="slide">
-                                    <a href="order-punch" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <path d="M12 20h9"></path>
-                                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
-                                        </svg>
-                                        <span class="side-menu__label">Order Punch</span>
-                                    </a>
-                                </li>
-
-                                <li class="slide">
                                     <a href="order-list" class="side-menu__item">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
                                             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -1234,6 +1222,24 @@
                                         <span class="side-menu__label">Order List</span>
                                     </a>
                                 </li>
+
+                                <li class="slide">
+                                    <a href="dispatch" class="side-menu__item">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20"
+                                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                            stroke-linecap="round" stroke-linejoin="round">
+
+                                            <rect x="1" y="3" width="15" height="13"></rect>
+                                            <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                                            <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                                            <circle cx="18.5" cy="18.5" r="2.5"></circle>
+
+                                        </svg>
+                                        <span class="side-menu__label">Dispatch</span>
+                                    </a>
+                                </li>
+<li class="slide"><a href="delivery" class="side-menu__item"><i class="bx bx-package side-menu__icon"></i><span class="side-menu__label">Delivery</span></a></li>
+
                             </ul>
                         </li>
                     </ul>

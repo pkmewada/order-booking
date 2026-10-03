@@ -138,7 +138,7 @@
                                 <thead>
                                     <tr>
                                         <th>Item</th>
-                                        <th style="width:160px;">Qty</th>
+                                        <th style="width:160px;">Qty (Sets)</th><th>Pieces / Set</th><th>Total Pieces</th>
                                         <th>Size</th>
                                         <th>Barcode</th>
                                         <th>Brand</th>
@@ -147,7 +147,7 @@
                                 </thead>
                                 <tbody id="orderItemsBody">
                                     <tr id="noItemsRow">
-                                        <td colspan="6" class="text-center text-muted py-4">
+                                        <td colspan="8" class="text-center text-muted py-4">
                                             <i class="bx bx-package fs-2 d-block mb-2"></i>
                                             No products scanned yet
                                         </td>
@@ -158,7 +158,7 @@
                                         <td>Total</td>
                                         <td id="totalSets">0 Set</td>
                                         <td colspan="2" id="totalPcs">0 Pcs</td>
-                                        <td colspan="2"></td>
+                                        <td colspan="4"></td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -203,4 +203,5 @@
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
+<script src="assets/js/order-quantities.js?v=<?= filemtime(__DIR__ . '/assets/js/order-quantities.js') ?>"></script>
 <script src="assets/js/order-punch.js?v=<?= filemtime(__DIR__ . '/assets/js/order-punch.js') ?>"></script>

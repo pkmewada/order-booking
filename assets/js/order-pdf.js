@@ -34,7 +34,7 @@ window.OrderPdf = (() => {
         let totalSets = 0, totalPieces = 0;
         const rows = products.map((item, index) => {
             const qty = Math.max(0, Number(item.qty) || 0);
-            const perSet = Math.max(1, Number(item.piecesPerSet) || brandPieces[String(item.brand || '').toUpperCase().replace(/\s/g, '')] || 1);
+            const perSet = OrderQuantities.perSet(item);
             totalSets += qty;
             totalPieces += qty * perSet;
             return `<tr><td>${index + 1}</td><td>${escape(item.description || item.itemDescription || item.itemCode || '--')}</td><td>${escape(item.brand)}</td><td>${escape(item.size)}</td><td>${qty} Set / ${qty * perSet} pcs</td></tr>`;

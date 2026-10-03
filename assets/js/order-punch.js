@@ -184,7 +184,7 @@ $(document).ready(function() {
                 description: product.description,
                 size: product.size,
                 brand: product.brand,
-                piecesPerSet: product.piecesPerSet || 1,
+                piecesPerSet: OrderQuantities.perSet(product),
                 qty: 1
             });
         }
@@ -237,7 +237,7 @@ $(document).ready(function() {
         if (orderItems.length === 0) {
             tbody.append(`
                 <tr id="noItemsRow">
-                    <td colspan="6" class="text-center text-muted py-4">
+                    <td colspan="8" class="text-center text-muted py-4">
                         <i class="bx bx-package fs-2 d-block mb-2"></i>
                         No products scanned yet
                     </td>
@@ -255,7 +255,7 @@ $(document).ready(function() {
                                 <button class="btn btn-outline-secondary qty-increase" type="button" data-index="${index}">+</button>
                             </div>
                         </td>
-                        <td>${item.size}</td>
+                        <td>${OrderQuantities.perSet(item)}</td><td>${OrderQuantities.pieces(item)}</td><td>${item.size}</td>
                         <td>${item.barcode}</td>
                         <td>${item.brand}</td>
                         <td class="text-center">
@@ -267,7 +267,7 @@ $(document).ready(function() {
         }
 
         const totalSets = orderItems.reduce((sum, i) => sum + i.qty, 0);
-        const totalPcs = orderItems.reduce((sum, i) => sum + (i.qty * i.piecesPerSet), 0);
+        const totalPcs = orderItems.reduce((sum, i) => sum + OrderQuantities.pieces(i), 0);
         $('#totalSets').text(`${totalSets} Set`);
         $('#totalPcs').text(`${totalPcs} Pcs`);
 
@@ -381,7 +381,7 @@ $(document).ready(function() {
         }
 
         const totalSets = orderItems.reduce((sum, i) => sum + i.qty, 0);
-        const totalPcs = orderItems.reduce((sum, i) => sum + (i.qty * i.piecesPerSet), 0);
+        const totalPcs = orderItems.reduce((sum, i) => sum + OrderQuantities.pieces(i), 0);
 
         const orderFields = {
             customerId: currentCustomer.id,
@@ -463,7 +463,7 @@ $(document).ready(function() {
         $('#orgExistingCustomer').val(order.existingCustomer);
         $('#orgDeliveryDate').val(order.deliveryDate);
 
-        orderItems = JSON.parse(JSON.stringify(order.items));
+        orderItems = JSON.parse(JSON.stringify(order.items)).map(item => ({...item, piecesPerSet: OrderQuantities.perSet(item)}));
         renderItemsTable();
     }
 

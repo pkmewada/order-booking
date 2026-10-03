@@ -18,7 +18,7 @@ $(document).ready(function() {
     }
 
     function getFilteredOrders() {
-        let filtered = orders;
+        let filtered = orders.filter(order => !order.dispatchPassedAt);
 
         if (statusFilter !== 'all') {
             filtered = filtered.filter(o => (o.status || 'Active') === statusFilter);
@@ -67,8 +67,8 @@ $(document).ready(function() {
                         <td>${order.customerName || 'N/A'}</td>
                         <td>${order.shopName || 'N/A'}</td>
                         <td>${order.deliveryDate || 'N/A'}</td>
-                        <td>${order.totalSets ?? 0}</td>
-                        <td>${order.totalPcs ?? 0}</td>
+                        <td>${OrderQuantities.totals(order).sets}</td>
+                        <td>${OrderQuantities.totals(order).pieces}</td>
                         <td>
                             <div class="form-check form-switch mb-0">
                                 <input class="form-check-input status-toggle" type="checkbox" role="switch"
@@ -77,14 +77,15 @@ $(document).ready(function() {
                             </div>
                         </td>
                         <td class="text-center">
-                            <div class="btn-group" role="group">
-                                <button class="btn btn-sm btn-success pdf-btn" title="Download order PDF" aria-label="Download order PDF">
+                            <div class="d-inline-flex gap-2 bg-white p-1 rounded" role="group">
+                                <button class="btn btn-sm btn-dark pass-btn" data-id="${order.id}" title="Pass to Dispatch" aria-label="Pass to Dispatch"><i class="bx bx-right-arrow-alt"></i></button>
+                                <button class="btn btn-sm btn-dark pdf-btn" title="Download order PDF" aria-label="Download order PDF">
                                     <i class="bx bxs-file-pdf"></i>
                                 </button>
-                                <a href="order-punch?id=${order.id}" class="btn btn-sm btn-primary" title="Edit">
-                                    <i class="bx bx-edit"></i>
+                                <a href="order-punch?id=${order.id}" class="btn btn-sm btn-dark" title="Edit">
+                                    <i class="bx bx-edit" style="color: #fff !important;"></i>
                                 </a>
-                                <button class="btn btn-sm btn-danger delete-btn" data-id="${order.id}" title="Delete">
+                                <button class="btn btn-sm btn-dark delete-btn" data-id="${order.id}" title="Delete">
                                     <i class="bx bx-trash"></i>
                                 </button>
                             </div>
@@ -120,6 +121,17 @@ $(document).ready(function() {
             toggleStatus(id, checked);
         });
 
+        $('.pass-btn').click(function() {
+            const id = String($(this).data('id'));
+            const latest = JSON.parse(localStorage.getItem('orders') || '[]');
+            const order = latest.find(order => String(order.id) === id);
+            if (!order) { loadOrders(); return; }
+            order.dispatchPassedAt = order.dispatchPassedAt || new Date().toISOString();
+            try { localStorage.setItem('orders', JSON.stringify(latest)); }
+            catch (_) { Swal.fire('Could not pass', 'Order could not be saved. Please try again.', 'error'); return; }
+            loadOrders();
+            Swal.fire({icon:'success', title:'Passed to Dispatch', timer:1200, showConfirmButton:false});
+        });
         $('.delete-btn').click(function() {
             showDeleteConfirmation($(this).data('id'));
         });
@@ -194,6 +206,8 @@ $(document).ready(function() {
             }
         });
     }
+
+    window.addEventListener('storage', event => { if (event.key === 'orders') loadOrders(); });
 
     $('#searchInput').on('keyup', function() {
         searchTerm = $(this).val();

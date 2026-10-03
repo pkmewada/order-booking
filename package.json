@@ -3,7 +3,9 @@
     "test": "node --test tests/production-engine.test.cjs tests/packing.test.cjs",
     "verify": "node tests/verify-source.cjs",
     "test:browser": "node tests/browser-production.cjs",
-    "test:packing": "node tests/browser-packing.cjs"
+    "test:packing": "node tests/browser-packing.cjs",
+    "test:dispatch": "node --test tests/order-quantities.test.cjs tests/dispatch-flow.test.cjs",
+    "test:dispatch:browser": "node tests/browser-dispatch.cjs"
   },
   "dependencies": {
     "sweetalert2": "^11.26.25"

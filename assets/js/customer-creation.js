@@ -84,13 +84,13 @@ $(document).ready(function() {
                     <td>${getNameById('distributors', cust.distributorId)}</td>
                     <td class="text-center">
                         <div class="btn-group" role="group">
-                            <button class="btn btn-sm btn-info qr-btn" data-id="${cust.id}" title="QR Code">
+                            <button class="btn btn-sm btn-dark qr-btn" data-id="${cust.id}" title="QR Code">
                                 <i class="bx bx-qr"></i>
                             </button>
                             <button class="btn btn-sm btn-primary edit-btn" data-id="${cust.id}" title="Edit">
                                 <i class="bx bx-edit"></i>
                             </button>
-                            <button class="btn btn-sm btn-danger delete-btn" data-id="${cust.id}" title="Delete">
+                            <button class="btn btn-sm btn-dark delete-btn" data-id="${cust.id}" title="Delete">
                                 <i class="bx bx-trash"></i>
                             </button>
                         </div>
