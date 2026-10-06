@@ -14,9 +14,11 @@ $(function () {
                 return {sets: total.sets + Math.floor(count / perSet), extra: total.extra + count % perSet, pieces: total.pieces + count};
             }, {sets:0, extra:0, pieces:0});
             const quantity = totals.sets + ' Sets' + (totals.extra ? ' + ' + totals.extra + ' Pieces' : '') + ' (' + totals.pieces + ' Pieces)';
-            body.append('<tr><td>' + esc(order.id) + '</td><td>' + esc(order.customerName) + '</td><td>' + esc(order.shopName) + '</td><td>' + esc(order.deliveryDate || '--') + '</td><td>' + quantity + '</td><td><span class="badge bg-success">Delivered</span></td></tr>');
+            const row = $('<tr><td>' + esc(order.id) + '</td><td>' + esc(order.customerName) + '</td><td>' + esc(order.shopName) + '</td><td>' + esc(order.deliveryDate || '--') + '</td><td>' + quantity + '</td><td><span class="badge bg-success">Delivered</span></td><td><button type="button" class="btn btn-sm btn-dark"><i class="bx bx-show me-1"></i>View</button></td></tr>');
+            row.find('button').on('click', () => OrderDetails.show(order,true));
+            body.append(row);
         });
-        if (!orders.length) body.append('<tr><td colspan="6" class="text-center text-muted py-4">No delivered orders found</td></tr>');
+        if (!orders.length) body.append('<tr><td colspan="7" class="text-center text-muted py-4">No delivered orders found</td></tr>');
         $('#paginationInfo').text(orders.length ? 'Showing ' + (start + 1) + '-' + Math.min(start + 10, orders.length) + ' of ' + orders.length + ' orders' : 'No orders');
         const controls = $('#paginationControls').empty();
         function button(label, target, disabled, active) {

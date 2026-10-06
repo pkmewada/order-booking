@@ -24,6 +24,13 @@
         </div>
         <!-- Page Header Close -->
 
+        <div class="card custom-card">
+            <div class="card-header"><div class="card-title">Passed Orders</div></div>
+            <div class="card-body"><div class="table-responsive">
+                <table class="table table-bordered text-nowrap"><thead><tr><th>Order ID</th><th>Customer</th><th>Shop Name</th><th>Delivery Date</th><th>Sets</th><th>Pcs</th><th>Passed At</th><th>Action</th></tr></thead><tbody id="passedOrdersBody"></tbody></table>
+            </div></div>
+        </div>
+
         <div class="row">
             <div class="col-xl-12">
                 <div class="card custom-card">
@@ -92,3 +99,4 @@
 <script src="assets/js/order-pdf.js?v=<?= filemtime(__DIR__ . '/assets/js/order-pdf.js') ?>"></script>
 <script src="assets/js/order-quantities.js?v=<?= filemtime(__DIR__ . '/assets/js/order-quantities.js') ?>"></script>
 <script src="assets/js/order-list.js?v=<?= filemtime(__DIR__ . '/assets/js/order-list.js') ?>"></script>
+<script src="assets/js/order-details.js?v=<?= filemtime(__DIR__ . '/assets/js/order-details.js') ?>"></script>

@@ -23,21 +23,22 @@ window.OrderPdf = (() => {
         });
         return loaded ? `<img src="${escape(img.src)}" style="${style}" alt="">` : fallback;
     }
-    async function download(order) {
+    async function download(order, options = {}) {
         if (typeof html2pdf !== 'function') throw new Error('PDF library unavailable');
         const customer = list('customers').find(row => row.id === order.customerId) || {};
         const agent = list('agents').find(row => row.id === order.agentId) || {};
         const transport = list('transporters').find(row => row.id === order.transporterId) || {};
-        const products = (Array.isArray(order.items) ? order.items : []).slice().sort((a, b) =>
+        const products = (Array.isArray(order.items) ? order.items : []).filter(item => !options.delivery || DispatchFlow.deliveredPieces(order,item) > 0).slice().sort((a, b) =>
             String(a.description || a.itemDescription || '').localeCompare(String(b.description || b.itemDescription || '')));
         const brandPieces = { NIVIBLOSSOM: 4, AMARI: 3, LITTLEDOLLY: 5 };
         let totalSets = 0, totalPieces = 0;
         const rows = products.map((item, index) => {
-            const qty = Math.max(0, Number(item.qty) || 0);
             const perSet = OrderQuantities.perSet(item);
+            const pieces = options.delivery ? DispatchFlow.deliveredPieces(order,item) : OrderQuantities.pieces(item);
+            const qty = options.delivery ? Math.floor(pieces / perSet) : Math.max(0, Number(item.qty) || 0);
             totalSets += qty;
-            totalPieces += qty * perSet;
-            return `<tr><td>${index + 1}</td><td>${escape(item.description || item.itemDescription || item.itemCode || '--')}</td><td>${escape(item.brand)}</td><td>${escape(item.size)}</td><td>${qty} Set / ${qty * perSet} pcs</td></tr>`;
+            totalPieces += pieces;
+            return `<tr><td>${index + 1}</td><td>${escape(item.description || item.itemDescription || item.itemCode || '--')}</td><td>${escape(item.brand)}</td><td>${escape(item.size)}</td><td>${qty} Set / ${pieces} pcs</td></tr>`;
         });
         const mantra = await imageOrText('assets/mantra.png', '<strong style="font-size:16px">श्री महावीराय नमः</strong>', 'width:150px;height:auto');
         const logo = await imageOrText('assets/images/logoooo.jpg', '<span style="font-size:26px;font-weight:bold">Little Dolly &nbsp; | &nbsp; AMARI &nbsp; | &nbsp; Nivi Blossom</span>', 'width:70%;height:auto;display:block;margin:0 auto');
@@ -63,7 +64,7 @@ window.OrderPdf = (() => {
             <ol style="padding-left:20px;margin:6px 0"><li>Order once placed can not be cancelled</li>
             <li>If payment is made after one month, interest will be charged @ 24% p.a. from bill date.</li>
             <li>Subject to INDORE Jurisdiction.</li><li>Other Charges as per applicable will be charged extra.</li>
-            <li><strong>Note : </strong>For Any Query Regarding Order Please Contact - <strong>+91 83588 79118</strong></li></ol></div>`;
+            ${options.hideNote ? '' : '<li><strong>Note : </strong>For Any Query Regarding Order Please Contact - <strong>+91 83588 79118</strong></li>'}</ol></div>`;
         const table = content => `<table style="width:100%;border-collapse:collapse;table-layout:fixed;text-align:center">
             <colgroup><col style="width:8%"><col style="width:32%"><col style="width:20%"><col style="width:18%"><col style="width:22%"></colgroup>
             <thead><tr style="background:#f0f0f0"><th>S.No</th><th>Item Description</th><th>Brand</th><th>Size</th><th>Sets</th></tr></thead>
@@ -110,7 +111,7 @@ window.OrderPdf = (() => {
                 if (i < pages.length - 1) pdf.text('PTO', 201, 290, { align: 'right' });
             }
             const filename = `${order.id}-${order.shopName || order.customerName || 'ORDER'}`.replace(/[^a-z0-9_-]+/gi, '-');
-            pdf.save(`${filename}.pdf`);
+            pdf.save(`${filename}${options.delivery ? '-DELIVERY' : ''}.pdf`);
         } finally { host.remove(); }
     }
     return { download };

@@ -92,7 +92,7 @@
             </form>
             <div id="dispatchReader" style="max-width:400px" class="mb-3"></div>
             <div id="dispatchScanMessage" class="mb-3" role="status" aria-live="polite"></div>
-            <div class="table-responsive"><table class="table table-bordered"><thead><tr><th>Status</th><th>Barcode</th><th>Item Description</th><th>Brand</th><th>Size</th><th>Pieces / Set</th><th>Ordered</th><th>Scanned</th><th>Passed</th><th>Remaining</th><th>Ready to Pass</th><th>Action</th></tr></thead><tbody id="dispatchItems"></tbody></table></div>
+            <div class="table-responsive"><table class="table table-bordered"><thead><tr><th>Status</th><th>Barcode</th><th>Item Description</th><th>Brand</th><th>Ordered</th><th>Scanned</th><th>Passed</th><th>Remaining</th><th>Ready to Pass</th><th>Action</th></tr></thead><tbody id="dispatchItems"></tbody></table></div>
             <div id="dispatchProgress" class="fw-semibold" role="status" aria-live="polite"></div>
         </div>
         <div class="modal-footer"><span class="text-muted me-auto">Each scan counts 1 piece and saves automatically.</span><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="button" id="dispatchConfirmBtn" class="btn btn-success">Pass Sets</button></div>

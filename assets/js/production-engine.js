@@ -200,7 +200,7 @@
                     batchId: p.batchId, pieceNumber: p.pieceNumber, stage: work.stage, recoveredQty: 0, status: "pending_repair" };
                 s.repairData.push(repair);
             }
-            if (repair) { repair.damageQty = work.damageQty; repair.totalDamagedQty = work.damageQty + (repair.recoveredQty || 0); repair.updatedAt = time(); }
+            if (repair) { repair.damageQty = work.damageQty; repair.totalDamagedQty = work.damageQty + (repair.recoveredQty || 0) + (repair.reassignedQty || 0); repair.worker = work.worker || work.firm || ''; if (work.damageQty > 0) repair.status = 'pending_repair'; repair.updatedAt = time(); }
         }
         function validateState(s) {
             for (const p of s.approvedPool) {
@@ -351,6 +351,54 @@
                 repair.status = work.damageQty ? "pending_repair" : "recovered";
                 audit(p, { stage: work.stage, qty, action: "recovered", sourceWorkId: id });
                 return work;
+            });
+        }
+        function damageRepairs() {
+            const s = readState(), result = [];
+            for (const [key, stage] of Object.entries(managers)) for (const w of s[key]) {
+                if (w.damageQty <= 0) continue;
+                const lotId = w.packingLotId || `legacy-${w.id}`;
+                if (key === 'packingData' && result.some(r => r.sourceKey === key && r.packingLotId === lotId)) continue;
+                const rows = key === 'packingData' ? s[key].filter(r => (r.packingLotId || `legacy-${r.id}`) === lotId) : [w];
+                result.push({...copy(w), stage, sourceKey:key, sourceWorkId:w.id,
+                    packingLotId:key === 'packingData' ? lotId : undefined,
+                    pieces:rows.map(r => r.pieceType || `Piece ${r.pieceNumber}`).join(', '),
+                    worker:w.worker || w.firm || '-', unit:key === 'packingData' ? 'sets' : 'pcs'});
+            }
+            return result;
+        }
+        async function reassignDamage(key, id) {
+            if (!managers[key]) throw new Error('Unknown damage stage.');
+            return transaction(s => {
+                const source = s[key].find(w => same(w.id,id));
+                if (!source || source.damageQty <= 0) throw new Error('This damage has already been reassigned.');
+                const lotId = source.packingLotId || `legacy-${source.id}`;
+                const rows = key === 'packingData' ? s[key].filter(w => (w.packingLotId || `legacy-${w.id}`) === lotId) : [source];
+                const qty = source.damageQty;
+                if (rows.some(w => w.damageQty !== qty)) throw new Error('Packing damage quantities do not match.');
+                const closed = key === 'packingData' && (rows.some(w => w.packingClosed || (w.passedQty > 0 && w.passedQty === w.inputQty-w.damageQty)) || s.bundlingData.some(b => b.packingLotId === lotId));
+                let nextId = Math.max(0,...s[key].map(w => Number(w.id) || 0)) + 1;
+                const newLotId = `${lotId}-repair-${nextId}`;
+                for (const w of rows) {
+                    const p = getPool(s,w.poolId), before = copy(w);
+                    syncRepair(s,p,w,key);
+                    w.damageQty = 0;
+                    if (closed) {
+                        w.inputQty -= qty; w.assignedQty -= qty;
+                        const repairWork = aliases({...copy(before), id:nextId++, packingLotId:newLotId,
+                            subBatch:`${before.subBatch}-repair`, inputQty:qty, assignedQty:qty,
+                            completedQty:0, damageQty:0, passedQty:0, packingClosed:false,
+                            stopped:false, createdAt:time()});
+                        delete repairWork.passedAt;
+                        s[key].push(repairWork);
+                    }
+                    validateWork(w); aliases(w);
+                    const repair = s.repairData.find(r => r.sourceKey === key && same(r.sourceWorkId,w.id));
+                    repair.reassignedQty = (repair.reassignedQty || 0) + qty;
+                    repair.damageQty = 0; repair.status = 'reassigned'; repair.updatedAt = time();
+                    audit(p,{stage:w.stage, qty, action:'damage reassigned', sourceKey:key, sourceWorkId:w.id, before, after:copy(w)});
+                }
+                return {qty, stage:source.stage, batchId:source.batchId};
             });
         }
         function materialList(piece) {
@@ -606,7 +654,7 @@
                 return row;
             });
         }
-        return { views, assign, edit, pass, stop, recoverRepair, transaction, readState,
+        return { views, assign, edit, pass, stop, recoverRepair, damageRepairs, reassignDamage, transaction, readState,
             packingBatches, assignPacking, assignPackingBulk, assignBundlingBulk, setPackingHold, passPackingLot, packingLotMath, editPackingLot, bundlingReady, assignBundling, editBundling, passBundling, brandSizes,
             approve, tickRequirement, receiveRequirement, setBatchStopped,
             calculateAvailableQty, validateAssignment, pushToNextStage, pushToPackingPool,

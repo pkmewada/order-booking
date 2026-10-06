@@ -76,10 +76,10 @@ $(function () {
         items(order).forEach((item, index) => {
             const row = $(`<tr class="${OrderQuantities.checked(item) ? 'table-success' : ''}"><td><span class="badge bg-${OrderQuantities.checked(item) ? 'success' : 'warning'}">${OrderQuantities.checked(item) ? '&#10003; Scanned' : OrderQuantities.scanned(item) > 0 ? 'In Progress' : 'Pending'}</span></td>
                 <td>${esc(item.barcode || '--')}</td><td>${esc(item.description || item.itemDescription || item.itemCode || '--')}</td>
-                <td>${esc(item.brand)}</td><td>${esc(item.size)}</td><td>${OrderQuantities.perSet(item)}</td><td>${quantity(OrderQuantities.pieces(item), OrderQuantities.perSet(item))}</td><td>${quantity(OrderQuantities.scanned(item), OrderQuantities.perSet(item))}</td><td>${quantity(DispatchFlow.deliveredPieces(order, item), OrderQuantities.perSet(item))}</td><td>${quantity(Math.max(0, OrderQuantities.pieces(item) - DispatchFlow.deliveredPieces(order, item)), OrderQuantities.perSet(item))}</td><td>${quantity(DispatchFlow.available(order, item), OrderQuantities.perSet(item))}</td><td><button type="button" class="btn btn-sm btn-dark replace-item" data-index="${index}" ${DispatchFlow.deliveredPieces(order, item) >= OrderQuantities.pieces(item) ? 'disabled' : ''}>Replace</button></td></tr>`);
+                <td>${esc(item.brand)}</td><td>${quantity(OrderQuantities.pieces(item), OrderQuantities.perSet(item))}</td><td>${quantity(OrderQuantities.scanned(item), OrderQuantities.perSet(item))}</td><td>${quantity(DispatchFlow.deliveredPieces(order, item), OrderQuantities.perSet(item))}</td><td>${quantity(Math.max(0, OrderQuantities.pieces(item) - DispatchFlow.deliveredPieces(order, item)), OrderQuantities.perSet(item))}</td><td>${quantity(DispatchFlow.available(order, item), OrderQuantities.perSet(item))}</td><td><button type="button" class="btn btn-sm btn-dark replace-item" data-index="${index}" ${DispatchFlow.deliveredPieces(order, item) >= OrderQuantities.pieces(item) ? 'disabled' : ''}>Replace</button></td></tr>`);
             body.append(row);
         });
-        if (!items(order).length) body.append('<tr><td colspan="12" class="text-center">No items in this order.</td></tr>');
+        if (!items(order).length) body.append('<tr><td colspan="10" class="text-center">No items in this order.</td></tr>');
         $('#dispatchProgress').text(`${items(order).filter(item => OrderQuantities.checked(item)).length} / ${items(order).length} items scanned - ${status(order)}`)
             .toggleClass('text-success', complete(order));
     }

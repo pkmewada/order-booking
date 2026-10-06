@@ -982,6 +982,13 @@
                                     </a>
                                 </li>
 
+                                <li class="slide">
+                                    <a href="damage-repair.php" class="side-menu__item">
+                                        <i class="bx bx-wrench side-menu__icon"></i>
+                                        <span class="side-menu__label">Damage and Repair</span>
+                                    </a>
+                                </li>
+
                                 <li class="slide has-sub">
                                     <a href="javascript:void(0);" class="side-menu__item">
                                         <i class="ri-arrow-down-s-line side-menu__angle"></i>

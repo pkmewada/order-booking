@@ -38,6 +38,7 @@ $(document).ready(function() {
     }
 
     function renderTable() {
+        renderPassedOrders();
         const filtered = getFilteredOrders();
         const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
         if (currentPage > totalPages) currentPage = totalPages;
@@ -161,7 +162,7 @@ $(document).ready(function() {
             </li>
         `);
 
-        $('.page-link').click(function() {
+        $('#paginationControls .page-link').click(function() {
             const page = parseInt($(this).data('page'));
             if (!page || page < 1 || page > totalPages || page === currentPage) return;
             currentPage = page;
@@ -185,6 +186,21 @@ $(document).ready(function() {
             timer: 1500,
             showConfirmButton: false
         });
+    }
+
+    function renderPassedOrders() {
+        const esc = value => String(value ?? '--').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const term = searchTerm.trim().toLowerCase();
+        const passed = orders.filter(o => o.dispatchPassedAt && (!term || [o.id,o.customerName,o.shopName].some(v => String(v || '').toLowerCase().includes(term))))
+            .sort((a,b) => String(b.dispatchPassedAt).localeCompare(String(a.dispatchPassedAt)));
+        const body = $('#passedOrdersBody').empty();
+        passed.forEach(order => {
+            const totals = OrderQuantities.totals(order);
+            const row = $(`<tr>${[order.id,order.customerName,order.shopName,order.deliveryDate,totals.sets,totals.pieces,new Date(order.dispatchPassedAt).toLocaleString('en-IN')].map(v => `<td>${esc(v)}</td>`).join('')}<td><button type="button" class="btn btn-sm btn-dark">View</button></td></tr>`);
+            row.find('button').on('click', () => OrderDetails.show(order));
+            body.append(row);
+        });
+        if (!passed.length) body.append('<tr><td colspan="8" class="text-center text-muted">No passed orders found.</td></tr>');
     }
 
     function showDeleteConfirmation(id) {
