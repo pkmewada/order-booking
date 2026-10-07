@@ -35,11 +35,11 @@
                             <div class="row">
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label" for="productDesign">Design Number <span class="text-danger">*</span></label>
-                                    <input type="text" id="productDesign" class="form-control" placeholder="Enter design number" required>
+                                    <input type="text" id="productDesign" inputmode="numeric" pattern="[0-9]{1,18}" maxlength="18" class="form-control" placeholder="Enter design number" required>
                                 </div>
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label" for="color">Colour <span class="text-danger">*</span></label>
-                                    <input type="text" id="color" class="form-control" placeholder="Enter colour" required>
+                                    <select id="color" class="form-select" required><option value="">Select Colour</option></select>
                                 </div>
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label" for="brand">Brand <span class="text-danger">*</span></label>
@@ -72,4 +72,5 @@
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
+<script src="assets/js/catalog-api.js?v=<?= filemtime(__DIR__ . '/assets/js/catalog-api.js') ?>"></script>
 <script src="assets/js/product-codes.js?v=<?= filemtime(__DIR__ . '/assets/js/product-codes.js') ?>"></script><script src="assets/js/product-form.js?v=<?= filemtime(__DIR__ . '/assets/js/product-form.js') ?>"></script>

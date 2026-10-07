@@ -102,3 +102,42 @@ CREATE TABLE IF NOT EXISTS `itemList` (
     UNIQUE KEY `uniqueName` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
+-- Shared BOM Master / Product Creation record.
+CREATE TABLE IF NOT EXISTS productRecords (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ brand VARCHAR(100) NOT NULL,
+ designNumber BIGINT UNSIGNED NOT NULL,
+ colourId INT UNSIGNED NOT NULL,
+ pattern VARCHAR(150) NOT NULL DEFAULT '',
+ mrp DECIMAL(12,2) NULL,
+ photo VARCHAR(255) NULL,
+ pieces LONGTEXT NOT NULL,
+ pieceCount TINYINT UNSIGNED NOT NULL DEFAULT 1,
+ createdFrom ENUM('bom','product') NOT NULL,
+ inProductList BOOLEAN NOT NULL DEFAULT FALSE,
+ bomCompleted BOOLEAN NOT NULL DEFAULT FALSE,
+ status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+ createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ UNIQUE KEY uniqueDesign (designNumber),
+ CONSTRAINT productColourFk FOREIGN KEY (colourId) REFERENCES colourRecords(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS productItemLinks (
+ productId BIGINT UNSIGNED NOT NULL,
+ pieceNumber TINYINT UNSIGNED NOT NULL,
+ itemId INT UNSIGNED NOT NULL,
+ role ENUM('piece','material') NOT NULL,
+ PRIMARY KEY(productId, pieceNumber, itemId, role),
+ FOREIGN KEY(productId) REFERENCES productRecords(id) ON DELETE CASCADE,
+ FOREIGN KEY(itemId) REFERENCES itemList(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS productWorkLinks (
+ productId BIGINT UNSIGNED NOT NULL,
+ pieceNumber TINYINT UNSIGNED NOT NULL,
+ workId INT UNSIGNED NOT NULL,
+ stage ENUM('Before Cutting','After Cutting','After Stitching') NOT NULL,
+ PRIMARY KEY(productId, pieceNumber, workId, stage),
+ FOREIGN KEY(productId) REFERENCES productRecords(id) ON DELETE CASCADE,
+ FOREIGN KEY(workId) REFERENCES additionalWork(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

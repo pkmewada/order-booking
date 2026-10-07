@@ -723,7 +723,7 @@ include __DIR__ . "/includes/header.php";
 
                             <input
                                 type="text"
-                                id="designNumber"
+                                id="designNumber" inputmode="numeric" pattern="[0-9]{1,18}" maxlength="18"
                                 class="form-control"
                                 placeholder="Enter design number"
                                 required>
@@ -734,19 +734,7 @@ include __DIR__ . "/includes/header.php";
                                 Color <span class="text-danger">*</span>
                             </label>
 
-                            <select id="colorSelect" class="form-select" required>
-                                <option value="">Select Color</option>
-                                <option>Red</option>
-                                <option>Blue</option>
-                                <option>Green</option>
-                                <option>Yellow</option>
-                                <option>Black</option>
-                                <option>White</option>
-                                <option>Orange</option>
-                                <option>Purple</option>
-                                <option>Pink</option>
-                                <option>Brown</option>
-                            </select>
+                            <select id="colorSelect" class="form-select" required><option value="">Select Color</option></select>
                         </div>
 
                         <div class="col-md-6">
@@ -953,6 +941,7 @@ include __DIR__ . "/includes/header.php";
 <?php include __DIR__ . "/includes/footer.php"; ?>
 
 <script src="assets/js/production-engine.js"></script>
+<script src="assets/js/catalog-api.js?v=<?= filemtime(__DIR__ . '/assets/js/catalog-api.js') ?>"></script>
 <script src="assets/js/product-codes.js?v=<?= filemtime(__DIR__ . '/assets/js/product-codes.js') ?>"></script>
 <script src="assets/js/bom-master.js?v=<?= filemtime(__DIR__ . '/assets/js/bom-master.js') ?>"></script>
 

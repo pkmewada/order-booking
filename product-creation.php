@@ -67,4 +67,5 @@
 <div class="modal fade" id="productBarcodeModal" tabindex="-1" aria-label="Product Barcode"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Product Barcode</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body text-center"><div id="productBarcodeText" class="mb-3 text-break"></div><svg id="productBarcodePreview" style="max-width:100%"></svg><div id="productBarcodeQr" class="d-flex justify-content-center mt-3"></div></div></div></div></div>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 <script src="assets/libs/jsbarcode/JsBarcode.all.min.js"></script>
+<script src="assets/js/catalog-api.js?v=<?= filemtime(__DIR__ . '/assets/js/catalog-api.js') ?>"></script>
 <script src="assets/js/product-codes.js?v=<?= filemtime(__DIR__ . '/assets/js/product-codes.js') ?>"></script><script src="assets/js/product-creation.js?v=<?= filemtime(__DIR__ . '/assets/js/product-creation.js') ?>"></script>

@@ -3,50 +3,31 @@ $(document).ready(function () {
 
     const STORAGE_KEY = "bomMasterData";
 
-    const MATERIALS = [
-        "Main Fabric",
-        "Cotton",
-        "Net",
-        "Satin",
-        "Zip",
-        "Elastic"
-    ];
-
-    const ITEMS = [
-        "Jacket",
-        "Shirt",
-        "Inner",
-        "Cap",
-        "Jeans"
-    ];
-
-    const WORK_TYPES = [
-        "Digital Print",
-        "Embroidery",
-        "Peco",
-        "Screen Print",
-        "Hand Work"
-    ];
-
-
+    let MATERIALS = [], ITEMS = [], WORK_TYPES = [];
 
     const DEFAULT_WORK_ROWS = 3;
 
-    let bomData = loadData();
-    let nextId = getNextId();
+    let bomData = [];
+    let nextId = 1;
     let currentPhoto = "";
     let editingProductId = null;
     function loadProducts() {
         try { const rows = JSON.parse(localStorage.getItem('products') || '[]'); return Array.isArray(rows) ? rows : []; }
         catch (_) { return []; }
     }
-    function tableRecords() {
-        const products = loadProducts().map(product => ({ ...product, _product: true, status: product.status || 'active' }));
-        const bomDesigns = new Set(bomData.map(bom => String(bom.designNumber || '').trim().toLowerCase()));
-        let deletedSourceIds = [];
-        try { const stored = JSON.parse(localStorage.getItem('productDeletedBomIds') || '[]'); if (Array.isArray(stored)) deletedSourceIds = stored; } catch (_) {}
-        const hidden = new Set(deletedSourceIds.map(String));
-        return bomData.filter(bom => !hidden.has(String(bom.id))).concat(products.filter(product => !bomDesigns.has(String(product.designNumber || product.description || '').trim().toLowerCase())));
+    function tableRecords() { return bomData; }
+    async function reloadCatalog() {
+        $('#createBomBtn, #saveBomBtn').prop('disabled', true);
+        const rows = await CatalogApi.load();
+        bomData = rows.map(r => ({...r, _product: r.createdFrom === 'product' && !r.bomCompleted}));
+        MATERIALS = CatalogApi.masters.items.map(r => r.name);
+        ITEMS = MATERIALS.slice(); WORK_TYPES = CatalogApi.masters.works.map(r => r.name);
+        const current = $('#colorSelect').val();
+        $('#colorSelect').empty().append($('<option>').val('').text('Select Color'));
+        CatalogApi.masters.colors.forEach(c => $('#colorSelect').append($('<option>').val(c.name).text(c.name)));
+        $('#colorSelect').val(current || '');
+        $('#createBomBtn, #saveBomBtn').prop('disabled', false);
+        renderTable(); return rows;
     }
 
     /* ======================================================
@@ -73,59 +54,8 @@ $(document).ready(function () {
        LOCAL STORAGE
        ====================================================== */
 
-    function loadData() {
-        try {
-            const data = JSON.parse(
-                localStorage.getItem(STORAGE_KEY)
-            );
-
-            if (!Array.isArray(data)) return [];
-
-            // Normalize: ensure every record has a status (default active)
-            return data.map(function (item) {
-                if (!item.status) {
-                    item.status = "active";
-                }
-                return item;
-            });
-
-        } catch (error) {
-            console.error("BOM load error:", error);
-            return [];
-        }
-    }
-
-    function saveData() {
-        try {
-            localStorage.setItem(
-                STORAGE_KEY,
-                JSON.stringify(bomData)
-            );
-
-            return true;
-        } catch (error) {
-            console.error("BOM save error:", error);
-
-            alertMsg(
-                "LocalStorage Full Image.",
-                "error"
-            );
-
-            return false;
-        }
-    }
-
-    function getNextId() {
-        if (!bomData.length) return 1;
-
-        return Math.max(
-            ...bomData.map(item => Number(item.id) || 0)
-        ) + 1;
-    }
-
-    function generateBomId() {
-        return "BOM-" + String(nextId).padStart(3, "0");
-    }
+    function loadData() { return bomData; }
+    function getNextId() { return 1; }
 
     /* ======================================================
        HELPERS
@@ -230,42 +160,8 @@ $(document).ready(function () {
        ====================================================== */
 
     function isDesignNumberDuplicate(designNumber, editId) {
-        const design = String(designNumber || "")
-            .trim()
-            .toLowerCase();
-
-        if (!design) return false;
-
-        // Read current data so another open page cannot bypass the uniqueness check.
-        const currentBoms = loadData();
-        const existing = currentBoms.find(bom => editId && Number(bom.id) === Number(editId));
-        const unchangedDesign = existing && String(existing.designNumber || '').trim().toLowerCase() === design;
-        let products = [];
-        try {
-            const stored = JSON.parse(localStorage.getItem('products') || '[]');
-            if (Array.isArray(stored)) products = stored;
-        } catch (_) {}
-        if (editingProductId) {
-            const originalProduct = products.find(product => String(product.id) === editingProductId);
-            const sameDesign = originalProduct && String(originalProduct.designNumber || originalProduct.description || '').trim().toLowerCase() === design;
-            if (products.some(product => String(product.id) !== editingProductId && String(product.designNumber || product.description || '').trim().toLowerCase() === design)) return true;
-            return !sameDesign && currentBoms.some(bom => String(bom.designNumber || '').trim().toLowerCase() === design);
-        }
-        if (!unchangedDesign && products.some(product =>
-            String(product.designNumber || product.description || '').trim().toLowerCase() === design
-        )) return true;
-
-        return currentBoms.some(function (bom) {
-
-            // Skip the record currently being edited
-            if (editId && Number(bom.id) === Number(editId)) {
-                return false;
-            }
-
-            return String(bom.designNumber || "")
-                .trim()
-                .toLowerCase() === design;
-        });
+        const number = String(designNumber).replace(/^0+(?=\d)/, '');
+        return bomData.some(r => String(r.id) !== String(editId || '') && String(r.designNumber) === number);
     }
 
     /* ======================================================
@@ -806,34 +702,7 @@ $(document).ready(function () {
        REFRESH BUTTON
        ====================================================== */
 
-    $("#refreshBomBtn").on("click", function () {
-
-        const btn = $(this);
-
-        btn.addClass("spinning");
-
-        bomData = loadData();
-
-        nextId = getNextId();
-
-        $("#brandFilter").val("");
-
-        $("#pieceFilter").val("");
-
-        $("#statusFilter").val("");
-
-        $("#searchInput").val("");
-
-        updateBrandFilter();
-
-        renderTable();
-
-        setTimeout(function () {
-            btn.removeClass("spinning");
-        }, 800);
-
-        alertMsg("BOM list refreshed successfully.", "success");
-    });
+    $('#refreshBomBtn').on('click', async function(){try { await reloadCatalog(); alertMsg('BOM list refreshed.', 'success'); } catch(e) { alertMsg(e.message,'error'); }});
 
     /* ======================================================
        VALIDATION
@@ -939,119 +808,19 @@ $(document).ready(function () {
        SAVE BOM
        ====================================================== */
 
-    $("#saveBomBtn").on("click", function () {
-
-        const btn = $(this);
-
-        // Prevent double-click double save
-        if (btn.data("saving")) return;
-        btn.data("saving", true);
-
-        if (!document.getElementById("mrp").reportValidity() || !validateForm()) {
-            btn.data("saving", false);
-            return;
-        }
-
-        const editId = $("#editId").val();
-
-        const bomDetails = {
-
-            brand: $("#brandSelect").val(),
-            pattern: $("#pattern").val().trim(),
-            mrp: $("#mrp").val(),
-
-            designNumber: $("#designNumber")
-                .val()
-                .trim(),
-
-            color: $("#colorSelect").val(),
-
-            pieceCount: getPieceCount(),
-
-            pieces: collectPieces(),
-
-            photo: currentPhoto
-        };
-
-        if (editingProductId) {
-            const products = loadProducts();
-            const index = products.findIndex(product => String(product.id) === editingProductId);
-            if (index < 0) { btn.data('saving', false); alertMsg('Product no longer exists.', 'error'); return; }
-            const size = ProductCodes.sizes[String(bomDetails.brand || '').trim().toUpperCase()] || '';
-            const barcode = ProductCodes.generate(bomDetails.brand, bomDetails.designNumber, bomDetails.color, size);
-            if (!barcode) { btn.data('saving', false); alertMsg('Brand, design number, color and size are required.', 'warning'); return; }
-            products[index] = { ...products[index], ...bomDetails, description: bomDetails.designNumber, size, barcode, bomCompleted: true, updatedAt: getToday() };
-            try { localStorage.setItem('products', JSON.stringify(products)); }
-            catch (_) { btn.data('saving', false); alertMsg('Browser storage is full. Product could not be saved.', 'error'); return; }
-            alertMsg('Product BOM details updated successfully.', 'success');
-        } else if (editId) {
-
-            const index = bomData.findIndex(item =>
-                Number(item.id) === Number(editId)
-            );
-
-            if (index === -1) {
-                btn.data("saving", false);
-                return;
-            }
-
-            bomData[index] = {
-                ...bomData[index],
-                ...bomDetails,
-                updatedAt: getToday()
-            };
-
-            if (!saveData()) {
-                btn.data("saving", false);
-                return;
-            }
-
-            alertMsg("BOM updated successfully.", "success");
-
-        } else {
-
-            const newBom = {
-
-                id: nextId,
-
-                bomId: generateBomId(),
-
-                ...bomDetails,
-
-                // Newly created BOM is Active by default
-                status: "active",
-
-                createdAt: getToday(),
-
-                updatedAt: getToday()
-            };
-
-            bomData.push(newBom);
-
-            nextId++;
-
-            if (!saveData()) {
-
-                bomData.pop();
-
-                nextId--;
-
-                btn.data("saving", false);
-
-                return;
-            }
-
-            alertMsg(
-                `${newBom.bomId} created successfully.`,
-                "success"
-            );
-        }
-
-        btn.data("saving", false);
-
-        renderTable();
-
-        $("#bomModal").modal("hide");
+    $('#saveBomBtn').on('click',async function(){
+        const button=$(this);if(button.prop('disabled')||button.data('saving'))return;
+        if(!validateForm())return;
+        const designNumber=$('#designNumber').val().trim(),pattern=$('#pattern').val().trim();
+        if(!/^[0-9]{1,18}$/.test(designNumber)){alertMsg('Design number must contain 1?18 digits.','warning');return;}
+        if(pattern&&!/^[A-Za-z ]{1,150}$/.test(pattern)){alertMsg('Pattern must contain letters and spaces only.','warning');return;}
+        if(!document.getElementById('mrp').reportValidity())return;
+        button.data('saving',true).prop('disabled',true);
+        try{
+            const data=CatalogApi.details({id:$('#editId').val()||null,brand:$('#brandSelect').val(),designNumber,color:$('#colorSelect').val(),pattern,mrp:$('#mrp').val(),pieces:collectPieces()});
+            await CatalogApi.request('bom',data,document.getElementById('photoUpload').files[0]);
+            await reloadCatalog();$('#bomModal').modal('hide');alertMsg('BOM saved successfully.','success');
+        }catch(e){alertMsg(e.message,'error');}finally{button.data('saving',false).prop('disabled',false);}
     });
 
     /* ======================================================
@@ -1081,9 +850,6 @@ $(document).ready(function () {
 
             $("#editId").val(bom.id);
 
-            for (const [selector, value] of [['#brandSelect', bom.brand], ['#colorSelect', bom.color]]) {
-                if (value && !$(selector + ' option').toArray().some(option => option.value === value)) $('<option>').val(value).text(value).appendTo(selector);
-            }
             $("#brandSelect").val(bom.brand);
             $("#pattern").val(bom.pattern || "");
             $("#mrp").val(bom.mrp ?? "");
@@ -1289,69 +1055,15 @@ $(document).ready(function () {
        ACTIVE / INACTIVE TOGGLE (inside Action column)
        ====================================================== */
 
-    $(document).on(
-        "change",
-        ".bom-status-switch",
-        function () {
-
-            const checkbox = $(this);
-
-            if (checkbox.attr('data-product') === 'true') {
-                const products = loadProducts();
-                const product = products.find(item => String(item.id) === checkbox.attr('data-id'));
-                if (!product) return;
-                const oldStatus = product.status || 'active';
-                product.status = checkbox.is(':checked') ? 'active' : 'inactive';
-                product.updatedAt = getToday();
-                try { localStorage.setItem('products', JSON.stringify(products)); }
-                catch (_) { checkbox.prop('checked', oldStatus === 'active'); alertMsg('Product status could not be saved. Browser storage is full.', 'error'); return; }
-                renderTable();
-                alertMsg('Product marked as ' + (product.status === 'active' ? 'Active' : 'Inactive') + '.', 'success');
-                return;
-            }
-            const id = Number(checkbox.data("id"));
-
-            const index = bomData.findIndex(item =>
-                Number(item.id) === id
-            );
-
-            if (index === -1) return;
-
-            const newStatus = checkbox.is(":checked")
-                ? "active"
-                : "inactive";
-
-            const oldStatus = bomData[index].status || "active";
-
-            if (oldStatus === newStatus) return;
-
-            bomData[index].status = newStatus;
-
-            bomData[index].updatedAt = getToday();
-
-            if (!saveData()) {
-
-                // Revert on failure
-                bomData[index].status = oldStatus;
-
-                checkbox.prop(
-                    "checked",
-                    oldStatus === "active"
-                );
-
-                return;
-            }
-
-            renderTable();
-
-            const bomId = bomData[index].bomId || "BOM";
-
-            alertMsg(
-                `${bomId} marked as ${newStatus === "active" ? "Active" : "Inactive"}.`,
-                "success"
-            );
-        }
-    );
+    $(document).on('change','.bom-status-switch',async function(){
+        const checkbox=$(this),status=this.checked?'active':'inactive';checkbox.prop('disabled',true);
+        try{await CatalogApi.request('bom',{action:'status',id:this.dataset.id,status});await reloadCatalog();}
+        catch(e){checkbox.prop('checked',status!=='active');alertMsg(e.message,'error');}finally{checkbox.prop('disabled',false);}
+    });
+    $(document).on('click','.delete-bom-record',async function(){
+        const result=await Swal.fire({title:'Delete record?',text:'This also removes the product and uploaded photo.',icon:'warning',showCancelButton:true});if(!result.isConfirmed)return;
+        try{await CatalogApi.request('bom',{id:this.dataset.id},null,'DELETE');await reloadCatalog();alertMsg('Record deleted.','success');}catch(e){alertMsg(e.message,'error');}
+    });
 
     /* ======================================================
     RENDER BOM TABLE
@@ -1472,7 +1184,7 @@ $(document).ready(function () {
 
                 <td>
 
-                    <div class="action-cell">
+                    <div class="action-cell"><button type="button" class="btn btn-sm btn-dark delete-bom-record" data-id="${escapeHtml(bom.id)}" title="Delete"><i class="bx bx-trash"></i></button>
                         ${bom._product && !bom.bomCompleted ? `<button type="button" class="btn btn-sm btn-primary edit-product-bom-btn" data-id="${escapeHtml(bom.id)}"><i class="bx bx-edit me-1"></i></button>` : `
 
                         <button
@@ -1851,15 +1563,5 @@ $(document).ready(function () {
        INITIAL LOAD
        ====================================================== */
 
-    window.addEventListener('storage', function (event) {
-        if (event.key === 'products' || event.key === 'productDeletedBomIds' || event.key === STORAGE_KEY) {
-            bomData = loadData();
-            renderTable();
-        }
-    });
-
-    updateBrandFilter();
-
-    renderTable();
-
+    reloadCatalog().catch(e=>alertMsg(e.message,'error'));
 });

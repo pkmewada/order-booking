@@ -29,7 +29,7 @@ Management pages load records from the database and maintain a localStorage comp
 
 Master selection → customer creation → product creation/BOM import → order punch with customer/items/sets → active order list → passed order summary → dispatch with item details → each partial dispatch pass creates a separate delivery → delivery In Progress → Pass with PDF upload → that delivery Success and PDF available for download.
 
-Customer records now use the database through `api/customer.php`. Products, orders, dispatch and delivery metadata still use existing browser storage. Delivery PDF files use IndexedDB. Products/orders/dispatch/delivery do not yet have database APIs/tables. The three master management pages refresh their cached dropdown records for the current browser.
+Customer records now use the database through `api/customer.php`. Products and BOM records now share database persistence. Orders, dispatch and delivery metadata still use existing browser storage. Delivery PDF files use IndexedDB. Orders/dispatch/delivery do not yet have database APIs/tables. The three master management pages refresh their cached dropdown records for the current browser.
 
 ## Existing manufacturing flow
 
@@ -79,3 +79,25 @@ Page ? GET separate API ? MySQL list ? render. Add/edit ? validate name (and cat
 | Additional Work | api/additional-work.php | additionalWork |
 
 Shared handler: `api/manufacturing-records.php`. Employee IDs are generated WRK strings; other IDs are database-generated integers. Colour retains its existing add/delete UI; other masters retain edit. No old records are uploaded automatically and no existing SQL data is deleted. SQL definitions remain in the single `database/order-booking.sql`. Manufacturing assignment/production storage remains unchanged.
+
+## Shared BOM Master / Product Creation catalog
+
+Both screens use ONE main table, `productRecords`. `createdFrom` records whether the original creation was from BOM (`bom`) or Product Creation (`product`); completing/importing a record preserves its origin. `inProductList` controls Product List visibility. `bomCompleted` distinguishes the three-field product draft from a fully configured BOM. Every database row appears once in BOM Master; Product List shows only rows with inProductList enabled.
+
+| Table | Purpose / fields |
+| --- | --- |
+| productRecords | id, brand, numeric designNumber, colourId, pattern, mrp, photo, pieces, pieceCount, createdFrom, inProductList, bomCompleted, status, createdAt, updatedAt |
+| productItemLinks | Foreign keys to productRecords and itemList; pieceNumber and role (piece/material). |
+| productWorkLinks | Foreign keys to productRecords and additionalWork; pieceNumber and stage. |
+
+The two link tables enforce real foreign keys for multiple items/work entries; they are not separate BOM/product main tables. Colour has a direct foreign key to colourRecords. All table definitions are in the single database/order-booking.sql. Re-import the updated SQL to create these new tables without dropping existing master data.
+
+APIs: api/bom.php and api/product.php, shared implementation api/product-records.php. GET lists from SQL. POST saves, changes active/inactive status, or imports. DELETE removes the shared record, its item/work links and its uploaded photo. Import Selected enables Product List visibility on the same existing complete/active BOM rows; it does not duplicate records.
+
+Product Creation starts with brand, numeric design number and Colour dropdown. Its row appears In Progress in BOM Master until full details are saved there. BOM creation stores all piece/item/material/work details and becomes Completed. Product editing preserves those BOM details. Brand choices and automatic sizes/barcodes remain unchanged. Design number is 1?18 digits stored as BIGINT (leading zeros are normalized), unique across the shared catalog. Pattern accepts letters/spaces; MRP is optional, non-negative with two decimal places.
+
+Colour options come only from colourRecords. Piece item and material choices come only from itemList. Work choices come only from additionalWork. Old hardcoded dropdown lists and browser-only catalog records are not imported or rendered. Foreign keys prevent deleting a master referenced by catalog records. Lists resolve current master names from SQL, including renamed items/works/colours.
+
+Photo upload accepts JPEG/PNG/WebP, maximum 5 MB. Server generates a random filename under uploads/products; database stores its relative path. Replacing an image removes the old file after the save commits. Failed saves remove newly uploaded files. Deleting from either screen deletes the shared row and photo. Folder rules disable listing/script access.
+
+Browser localStorage receives a compatibility cache after catalog load for existing production/order consumers; catalog saves are authoritative in MySQL. Manufacturing production/order transactions remain otherwise unchanged. Verification: PHP/JS syntax checks; live database import/upload flow has not been executed here.

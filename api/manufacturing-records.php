@@ -71,6 +71,7 @@ function manufacturingRecords(string $table): void
         respond($method === 'POST' ? 201 : 200, ['success' => true, 'data' => ['id' => $id] + $fields]);
     } catch (PDOException $error) {
         if (($error->errorInfo[1] ?? null) === 1062) { respond(409, ['success' => false, 'message' => 'This name already exists.']); }
+        if (($error->errorInfo[1] ?? null) === 1451) { respond(409, ['success' => false, 'message' => 'This master record is used by a BOM/product. Update or delete the linked record first.']); }
         error_log('Manufacturing master database error: ' . $error->getMessage());
         respond(503, ['success' => false, 'message' => 'Database unavailable. Import database/order-booking.sql and check includes/db.php.']);
     } catch (Throwable $error) {
