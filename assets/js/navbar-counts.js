@@ -27,11 +27,10 @@
         const bundlingAssigned = s.bundlingData.filter(r => r.status !== 'passed').length;
         result.bundling = {available: ready, assigned: bundlingAssigned, total: ready + bundlingAssigned};
         Object.assign(result, {
-            'bom-master': {total: read('bomMasterData').length},
-            batch: {total: s.batchData.length},
-            'batch-approval': {total: s.approvedBatchData.length || s.batchData.filter(b => b.status === 'approved').length},
+            batch: {total: s.batchData.filter(b => b.status !== 'approved' && !b.passedAt).length},
+            'batch-approval': {total: (s.approvedBatchData.length ? s.approvedBatchData : s.batchData.filter(b => b.status === 'approved')).filter(b => !(b.pieces || []).length || b.pieces.some(p => !['pass','in_progress'].includes(p.approval?.status || 'pending'))).length},
             'damage-repair': {total: P.damageRepairs().length},
-            requirment: {total: s.requirementData.filter(r => r.status !== 'completed').length},
+            requirment: {total: unique(s.requirementData.filter(r => r.status !== 'completed'), r => JSON.stringify([r.batchId || r.designNumber, r.pieceNumber ?? r.pieceId ?? r.id]))},
             'final-production': {total: s.inventoryData.length},
             inventory: {total: unique([...s.inventoryData, ...s.approvedPool], inventoryKey)}
         });
@@ -40,23 +39,41 @@
     function start() {
         const links = [];
         const read = key => { const rows = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(rows) ? rows : []; };
-        const names = new Set([...Object.keys(routes),'packing','bundling','bom-master','batch','batch-approval','damage-repair','requirment','final-production','inventory']);
+        const names = new Set([...Object.keys(routes),'packing','bundling','batch','batch-approval','damage-repair','requirment','final-production','inventory']);
         document.querySelectorAll('a.side-menu__item[href]').forEach(link => {
             const route = link.getAttribute('href').split(/[?#]/)[0].split('/').pop().replace(/\.php$/i, '').toLowerCase();
             if (!names.has(route)) return;
-            const badge = document.createElement('span');
-            badge.className = 'badge rounded-pill bg-danger ms-auto production-nav-count';
-            link.appendChild(badge); links.push({badge, route});
+            const wrapper = document.createElement('span');
+            wrapper.className = 'd-inline-flex gap-1 ms-auto';
+            const split = Object.hasOwn(routes, route) || route === 'packing' || route === 'bundling';
+            function makeBadge(label, blue) {
+                const badge = document.createElement('span');
+                badge.className = 'badge rounded-pill production-nav-count ' + (blue ? 'production-nav-assigned' : 'production-nav-unassigned');
+                badge.style.cssText = `background-color:${blue ? '#0d6efd' : '#dc3545'} !important;color:#fff !important;`;
+                badge.title = label;
+                wrapper.appendChild(badge);
+                return badge;
+            }
+            const badge = makeBadge(split ? 'Unassigned' : 'Pending', false);
+            const assignedBadge = split ? makeBadge('Assigned', true) : null;
+            link.appendChild(wrapper); links.push({badge, assignedBadge, route});
         });
         function refresh() {
             if (!window.Production) return;
             try {
                 const counts = calculate(Production, read);
-                links.forEach(({badge, route}) => {
-                    const count = counts[route], value = String(count.total);
+                links.forEach(({badge, assignedBadge, route}) => {
+                    const count = counts[route];
+                    const value = String(assignedBadge ? count.available : count.total);
                     if (badge.textContent !== value) badge.textContent = value;
-                    badge.title = count.available === undefined ? `${value} records` : `Available: ${count.available} + Assigned: ${count.assigned}`;
+                    badge.title = assignedBadge ? `Unassigned: ${value}` : `${value} records`;
                     badge.setAttribute('aria-label', badge.title);
+                    if (assignedBadge) {
+                        const assigned = String(count.assigned);
+                        if (assignedBadge.textContent !== assigned) assignedBadge.textContent = assigned;
+                        assignedBadge.title = `Assigned: ${assigned}`;
+                        assignedBadge.setAttribute('aria-label', assignedBadge.title);
+                    }
                 });
             } catch (_) { /* Recovery and invalid storage are handled by the owning page. */ }
         }

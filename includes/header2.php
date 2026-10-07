@@ -7,7 +7,7 @@
     <meta charset="UTF-8">
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title> MAMIX - Bootstrap 5 Premium Admin & Dashboard Template </title>
+    <title>Bothra Creation</title>
     <meta name="Description" content="Bootstrap Responsive Admin Web Dashboard HTML5 Template">
     <meta name="Author" content="Spruko Technologies Private Limited">
     <meta name="keywords"
@@ -185,6 +185,18 @@
             color: #161617 !important;
             stroke: #161617 !important;
         }
+    </style>
+    <style>
+        /* Show submenu icons and labels without the theme's dash markers. */
+        .app-sidebar .slide-menu .side-menu__item::before {
+            content: none !important;
+            display: none !important;
+        }
+    </style>
+    <style>
+        .app-sidebar .slide-menu.child2 > li { padding-inline-start: .5rem; }
+        .app-sidebar .slide-menu .side-menu__label { margin-inline-end: 8px; }
+        .app-sidebar .slide-menu .side-menu__icon { flex-shrink: 0; }
     </style>
 </head>
 
