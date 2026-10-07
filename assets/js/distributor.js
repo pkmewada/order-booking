@@ -5,14 +5,35 @@ $(document).ready(function() {
 
     loadDistributors();
 
-    function loadDistributors() {
-        const stored = localStorage.getItem('distributors');
-        distributors = stored ? JSON.parse(stored) : [];
-        renderTable();
+    async function request(method = 'GET', data) {
+        const response = await fetch('api/distributor.php', {
+            method, headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+            body: data ? JSON.stringify(data) : undefined
+        });
+        let result;
+        try { result = await response.json(); }
+        catch (_) { throw new Error('Invalid server response. Check that Apache is running.'); }
+        if (!response.ok || !result.success) throw new Error(result.message || 'Unable to save record.');
+        return result.data;
     }
-
-    function saveToLocalStorage() {
-        localStorage.setItem('distributors', JSON.stringify(distributors));
+    function cacheRecords() {
+        // Compatibility cache for existing customer/order dropdowns; database remains authoritative.
+        try { localStorage.setItem('distributors', JSON.stringify(distributors)); }
+        catch (error) { console.warn('Unable to update master record cache', error); }
+    }
+    function showError(error) { Swal.fire('Unable to complete', error.message || 'Please try again.', 'error'); }
+    function escapeHtml(value) { return $('<div>').text(value == null ? '' : String(value)).html(); }
+    async function loadDistributors() {
+        $('#saveDistributorBtn, #addDistributorBtn').prop('disabled', true);
+        $('#distributorTableBody').html('<tr><td colspan="7" class="text-center py-4">Loading...</td></tr>');
+        try {
+            distributors = await request();
+            cacheRecords();
+            renderTable();
+        } catch (error) {
+            $('#distributorTableBody').html('<tr><td colspan="7" class="text-center py-4">Unable to load records. Refresh after checking database setup.</td></tr>');
+            showError(error);
+        } finally { $('#saveDistributorBtn, #addDistributorBtn').prop('disabled', false); }
     }
 
     function renderTable() {
@@ -41,11 +62,11 @@ $(document).ready(function() {
             tbody.append(`
                 <tr>
                     <td>${index + 1}</td>
-                    <td>${dist.name}</td>
-                    <td>${dist.contact}</td>
-                    <td>${dist.email}</td>
-                    <td>${dist.city}</td>
-                    <td>${dist.state}</td>
+                    <td>${escapeHtml(dist.name)}</td>
+                    <td>${escapeHtml(dist.contact)}</td>
+                    <td>${escapeHtml(dist.email)}</td>
+                    <td>${escapeHtml(dist.city)}</td>
+                    <td>${escapeHtml(dist.state)}</td>
                     <td class="text-center">
                         <div class="d-inline-flex gap-2" role="group">
                             <button class="btn btn-sm btn-primary edit-btn" data-id="${dist.id}" title="Edit">
@@ -79,12 +100,15 @@ $(document).ready(function() {
             cancelButtonColor: '#3085d6',
             confirmButtonText: 'Yes, delete it!',
             cancelButtonText: 'Cancel'
-        }).then((result) => {
+        }).then(async (result) => {
             if (result.isConfirmed) {
-                distributors = distributors.filter(d => d.id !== id);
-                saveToLocalStorage();
-                renderTable();
-                Swal.fire('Deleted!', 'Distributor has been deleted successfully.', 'success');
+                try {
+                    await request('DELETE', { id });
+                    distributors = distributors.filter(record => record.id !== id);
+                    cacheRecords();
+                    renderTable();
+                    Swal.fire('Deleted!', 'Distributor has been deleted successfully.', 'success');
+                } catch (error) { showError(error); }
             }
         });
     }
@@ -110,7 +134,7 @@ $(document).ready(function() {
         $('#distributorModal').modal('show');
     }
 
-    $('#saveDistributorBtn').click(function() {
+    $('#saveDistributorBtn').click(async function() {
         const editId = $('#editId').val();
         const name = $('#distributorName').val().trim();
         const contact = $('#distributorContact').val().trim();
@@ -123,9 +147,14 @@ $(document).ready(function() {
             $('#distributorName').focus();
             return;
         }
-        if (!contact) {
-            Swal.fire('Warning!', 'Please enter contact number', 'warning');
+        if (!/^[6-9][0-9]{9}$/.test(contact)) {
+            Swal.fire('Warning!', 'Phone number must be 10 digits and start with 6, 7, 8 or 9.', 'warning');
             $('#distributorContact').focus();
+            return;
+        }
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            Swal.fire('Warning!', 'Please enter a valid email address.', 'warning');
+            $('#distributorEmail').focus();
             return;
         }
         if (!city) {
@@ -139,21 +168,22 @@ $(document).ready(function() {
             return;
         }
 
-        if (editId) {
-            const index = distributors.findIndex(d => d.id === editId);
-            if (index !== -1) {
-                distributors[index] = { ...distributors[index], name, contact, email, city, state };
-                Swal.fire('Success!', 'Distributor updated successfully!', 'success');
-            }
-        } else {
-            distributors.push({ id: 'DIS' + Date.now(), name, contact, email, city, state });
-            Swal.fire('Success!', 'Distributor added successfully!', 'success');
-        }
-
-        saveToLocalStorage();
-        renderTable();
-        $('#distributorModal').modal('hide');
-        $('#distributorForm')[0].reset();
+        const button = $(this);
+        if (button.prop('disabled')) return;
+        button.prop('disabled', true);
+        try {
+            const record = await request(editId ? 'PUT' : 'POST', { id: editId, name, contact, email, city, state });
+            if (editId) {
+                const index = distributors.findIndex(item => item.id === editId);
+                if (index !== -1) distributors[index] = record;
+            } else { distributors.unshift(record); }
+            cacheRecords();
+            renderTable();
+            $('#distributorModal').modal('hide');
+            $('#distributorForm')[0].reset();
+            Swal.fire('Success!', 'Distributor ' + (editId ? 'updated' : 'added') + ' successfully!', 'success');
+        } catch (error) { showError(error); }
+        finally { button.prop('disabled', false); }
     });
 
     $('#searchInput').on('keyup', function() {

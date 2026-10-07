@@ -5,51 +5,29 @@ $(document).ready(function() {
     let typeFilter = 'all';
     let searchTerm = '';
 
-    // Indian names array
-    const indianNames = [
-        'Aarav Sharma', 'Vivaan Patel', 'Aditya Singh', 'Vihaan Kumar', 'Arjun Reddy',
-        'Sai Krishna', 'Rahul Verma', 'Amit Gupta', 'Rajesh Kumar', 'Sanjay Singh',
-        'Priya Sharma', 'Ananya Reddy', 'Diya Patel', 'Aisha Khan', 'Neha Gupta',
-        'Meera Singh', 'Kavya Reddy', 'Sara Ali', 'Ishita Verma', 'Riya Sharma',
-        'Rohan Desai', 'Suresh Nair', 'Ganesh Iyer', 'Karthik Raj', 'Manoj Pillai',
-        'Deepak Joshi', 'Prakash Rao', 'Vikram Singh', 'Naveen Kumar', 'Ravi Shankar'
-    ];
-
-    // Load employees on page load
-    loadEmployees();
-
-    // Generate worker ID (hidden from UI)
-    function generateWorkerId() {
-        const prefix = 'WRK';
-        const timestamp = Date.now().toString().slice(-6);
-        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        return prefix + timestamp + random;
+    async function request(method = 'GET', data) {
+        const response = await fetch('api/employee.php', { method, cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: data ? JSON.stringify(data) : undefined });
+        let result;
+        try { result = await response.json(); } catch (_) { throw new Error('Invalid server response. Check Apache and database setup.'); }
+        if (!response.ok || !result.success) throw new Error(result.message || 'Unable to complete request.');
+        return result.data;
     }
-
-    // Load employees from localStorage or initialize with sample data
-    function loadEmployees() {
-        const stored = localStorage.getItem('employees');
-        if (stored) {
-            employees = JSON.parse(stored);
-        } else {
-            // Sample data with Indian names and employee types
-            employees = [
-                { id: generateWorkerId(), name: 'Aarav Sharma', category: 'cutting', employeeType: 'housein' },
-                { id: generateWorkerId(), name: 'Priya Reddy', category: 'stitching', employeeType: 'outsource' },
-                { id: generateWorkerId(), name: 'Rajesh Kumar', category: 'ironing', employeeType: 'housein' },
-                { id: generateWorkerId(), name: 'Ananya Patel', category: 'cutting', employeeType: 'outsource' },
-                { id: generateWorkerId(), name: 'Rahul Verma', category: 'stitching', employeeType: 'housein' },
-                { id: generateWorkerId(), name: 'Neha Singh', category: 'ironing', employeeType: 'outsource' }
-            ];
-            saveToLocalStorage();
+    function cacheRecords() {
+        try { localStorage.setItem('employees', JSON.stringify(employees)); } catch (error) { console.warn('Master cache unavailable', error); }
+    }
+    function escapeHtml(value) { return $('<div>').text(String(value ?? '')).html(); }
+    async function loadRecords() {
+        $('#addEmployeeBtn, #saveEmployeeBtn').prop('disabled', true);
+        $('#employeeTableBody').html('<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>');
+        try {
+            employees = await request(); cacheRecords(); renderTable();
+            $('#addEmployeeBtn, #saveEmployeeBtn').prop('disabled', false);
+        } catch (error) {
+            $('#employeeTableBody').html('<tr><td colspan="5" class="text-center py-4">Unable to load records. Refresh after database setup.</td></tr>');
+            Swal.fire('Unable to load', error.message, 'error');
         }
-        renderTable();
     }
-
-    // Save to localStorage
-    function saveToLocalStorage() {
-        localStorage.setItem('employees', JSON.stringify(employees));
-    }
+    loadRecords();
 
     // Get category label
     function getCategoryLabel(category) {
@@ -120,7 +98,7 @@ $(document).ready(function() {
             tbody.append(`
                 <tr>
                     <td>${serialNumber}</td>
-                    <td>${emp.name}</td>
+                    <td>${escapeHtml(emp.name)}</td>
                     <td>${categoryLabel}</td>
                     <td><span class="${typeBadge}">${typeLabel}</span></td>
                     <td class="text-center">
@@ -164,16 +142,12 @@ $(document).ready(function() {
             cancelButtonColor: '#3085d6',
             confirmButtonText: 'Yes, delete it!',
             cancelButtonText: 'Cancel'
-        }).then((result) => {
+        }).then(async (result) => {
             if (result.isConfirmed) {
-                employees = employees.filter(emp => emp.id !== id);
-                saveToLocalStorage();
-                renderTable();
-                Swal.fire(
-                    'Deleted!',
-                    'Employee has been deleted successfully.',
-                    'success'
-                );
+                try {
+                    await request('DELETE', { id }); employees = employees.filter(emp => emp.id !== id);
+                    cacheRecords(); renderTable(); Swal.fire('Deleted!', 'Employee deleted successfully.', 'success');
+                } catch (error) { Swal.fire('Unable to delete', error.message, 'error'); }
             }
         });
     }
@@ -202,7 +176,7 @@ $(document).ready(function() {
     }
 
     // Save Employee
-    $('#saveEmployeeBtn').click(function() {
+    $('#saveEmployeeBtn').click(async function() {
         const editId = $('#editId').val();
         const workerName = $('#workerName').val().trim();
         const category = $('#categorySelect').val();
@@ -236,34 +210,17 @@ $(document).ready(function() {
             return;
         }
 
-        if (editId) {
-            // Update existing employee
-            const index = employees.findIndex(emp => emp.id === editId);
-            if (index !== -1) {
-                employees[index] = {
-                    ...employees[index],
-                    name: workerName,
-                    category: category,
-                    employeeType: employeeType
-                };
-                Swal.fire('Success!', 'Employee updated successfully!', 'success');
-            }
-        } else {
-            // Add new employee
-            const workerId = generateWorkerId();
-            employees.push({
-                id: workerId,
-                name: workerName,
-                category: category,
-                employeeType: employeeType
-            });
-            Swal.fire('Success!', 'Employee added successfully!', 'success');
-        }
-
-        saveToLocalStorage();
-        renderTable();
-        $('#employeeModal').modal('hide');
-        $('#employeeForm')[0].reset();
+        const button = $(this);
+        if (button.prop('disabled')) return;
+        button.prop('disabled', true);
+        try {
+            const record = await request(editId ? 'PUT' : 'POST', { id: editId, name: workerName, category, employeeType });
+            if (editId) { const index = employees.findIndex(emp => emp.id === editId); if (index !== -1) employees[index] = record; }
+            else { employees.unshift(record); }
+            cacheRecords(); renderTable(); $('#employeeModal').modal('hide'); $('#employeeForm')[0].reset();
+            Swal.fire('Success!', 'Employee saved successfully.', 'success');
+        } catch (error) { Swal.fire('Unable to save', error.message, 'error'); }
+        finally { button.prop('disabled', false); }
     });
 
     // Filter functionality

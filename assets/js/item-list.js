@@ -1,22 +1,28 @@
 $(document).ready(function() {
-    // Sample item data
-    let items = [
-        { id: 1, name: 'Main Fabric' },
-        { id: 2, name: 'Cotton' },
-        { id: 3, name: 'Zip' },
-        { id: 4, name: 'Label' },
-        { id: 5, name: 'Elastic' },
-        { id: 6, name: 'Button' },
-        { id: 7, name: 'Thread' },
-        { id: 8, name: 'Interlining' },
-        { id: 9, name: 'Lace' },
-        { id: 10, name: 'Ribbon' }
-    ];
-
-    let nextId = 11;
-
-    // Initialize
-    renderItemTable();
+    let items = [];
+    async function request(method = 'GET', data) {
+        const response = await fetch('api/item-list.php', { method, cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: data ? JSON.stringify(data) : undefined });
+        let result;
+        try { result = await response.json(); } catch (_) { throw new Error('Invalid server response. Check Apache and database setup.'); }
+        if (!response.ok || !result.success) throw new Error(result.message || 'Unable to complete request.');
+        return result.data;
+    }
+    function cacheRecords() {
+        try { localStorage.setItem('items', JSON.stringify(items)); } catch (error) { console.warn('Master cache unavailable', error); }
+    }
+    function escapeHtml(value) { return $('<div>').text(String(value ?? '')).html(); }
+    async function loadRecords() {
+        $('#addItemBtn, #saveItemBtn, #confirmDeleteItemBtn').prop('disabled', true);
+        $('#itemTableBody').html('<tr><td colspan="3" class="text-center py-4">Loading...</td></tr>');
+        try {
+            items = await request(); cacheRecords(); renderItemTable();
+            $('#addItemBtn, #saveItemBtn, #confirmDeleteItemBtn').prop('disabled', false);
+        } catch (error) {
+            $('#itemTableBody').html('<tr><td colspan="3" class="text-center py-4">Unable to load records. Refresh after database setup.</td></tr>');
+            Swal.fire('Unable to load', error.message, 'error');
+        }
+    }
+    loadRecords();
 
     // Render table
     function renderItemTable() {
@@ -48,7 +54,7 @@ $(document).ready(function() {
             tbody.append(`
                 <tr>
                     <td>${index + 1}</td>
-                    <td><strong>${item.name}</strong></td>
+                    <td><strong>${escapeHtml(item.name)}</strong></td>
                     <td class="text-center">
                         <button class="btn btn-sm btn-primary edit-item-btn me-1" 
                                 data-id="${item.id}" 
@@ -107,7 +113,7 @@ $(document).ready(function() {
     }
 
     // Save Item (Add or Edit)
-    $('#saveItemBtn').click(function() {
+    $('#saveItemBtn').click(async function() {
         const name = $('#itemName').val().trim();
         const editId = $('#editItemId').val();
 
@@ -139,56 +145,32 @@ $(document).ready(function() {
             return;
         }
 
-        if (editId) {
-            // Update existing item
-            const index = items.findIndex(i => i.id === parseInt(editId));
-            if (index !== -1) {
-                items[index].name = name;
-            }
-
-            Swal.fire({
-                icon: 'success',
-                title: 'Updated!',
-                text: 'Item updated successfully!',
-                timer: 2000,
-                showConfirmButton: false
-            });
-        } else {
-            // Add new item
-            items.push({
-                id: nextId++,
-                name: name
-            });
-
-            Swal.fire({
-                icon: 'success',
-                title: 'Added!',
-                text: 'Item added successfully!',
-                timer: 2000,
-                showConfirmButton: false
-            });
-        }
-
-        renderItemTable();
-        $('#itemModal').modal('hide');
-        $('#itemForm')[0].reset();
-        $('#editItemId').val('');
+        const button = $(this);
+        if (button.prop('disabled')) return;
+        button.prop('disabled', true);
+        try {
+            const id = editId ? Number(editId) : null;
+            const record = await request(id ? 'PUT' : 'POST', { id, name });
+            if (id) { const index = items.findIndex(row => row.id === id); if (index !== -1) items[index] = record; }
+            else { items.unshift(record); }
+            cacheRecords(); renderItemTable(); $('#itemModal').modal('hide'); $('#itemForm')[0].reset();
+            $('#editItemId').val('');
+            Swal.fire('Success!', 'Item saved successfully.', 'success');
+        } catch (error) { Swal.fire('Unable to save', error.message, 'error'); }
+        finally { button.prop('disabled', false); }
     });
 
     // Confirm Delete
-    $('#confirmDeleteItemBtn').click(function() {
-        const id = parseInt($('#deleteItemId').val());
-        items = items.filter(i => i.id !== id);
-        renderItemTable();
-        $('#deleteItemModal').modal('hide');
-        
-        Swal.fire({
-            icon: 'success',
-            title: 'Deleted!',
-            text: 'Item has been deleted successfully.',
-            timer: 2000,
-            showConfirmButton: false
-        });
+    $('#confirmDeleteItemBtn').click(async function() {
+        const button = $(this);
+        if (button.prop('disabled')) return;
+        button.prop('disabled', true);
+        try {
+            const id = Number($('#deleteItemId').val()); await request('DELETE', { id });
+            items = items.filter(row => row.id !== id); cacheRecords(); renderItemTable();
+            $('#deleteItemModal').modal('hide'); Swal.fire('Deleted!', 'Item deleted successfully.', 'success');
+        } catch (error) { Swal.fire('Unable to delete', error.message, 'error'); }
+        finally { button.prop('disabled', false); }
     });
 
     // Search
@@ -202,6 +184,5 @@ $(document).ready(function() {
         $('#editItemId').val('');
     });
 
-    // Initial render
-    renderItemTable();
+
 });

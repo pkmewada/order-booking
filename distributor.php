@@ -88,12 +88,12 @@
 
                     <div class="mb-3">
                         <label class="form-label">Contact</label>
-                        <input type="text" class="form-control" id="distributorContact" name="contact" required placeholder="Enter contact number">
+                        <input type="text" class="form-control" id="distributorContact" name="contact" required placeholder="Enter contact number" maxlength="10" inputmode="numeric" pattern="[6-9][0-9]{9}">
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label">Email</label>
-                        <input type="email" class="form-control" id="distributorEmail" name="email" required placeholder="Enter email">
+                        <input type="email" class="form-control" id="distributorEmail" name="email" placeholder="Enter email">
                     </div>
 
                     <div class="mb-3">

@@ -5,14 +5,35 @@ $(document).ready(function() {
 
     loadAgents();
 
-    function loadAgents() {
-        const stored = localStorage.getItem('agents');
-        agents = stored ? JSON.parse(stored) : [];
-        renderTable();
+    async function request(method = 'GET', data) {
+        const response = await fetch('api/agent.php', {
+            method, headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+            body: data ? JSON.stringify(data) : undefined
+        });
+        let result;
+        try { result = await response.json(); }
+        catch (_) { throw new Error('Invalid server response. Check that Apache is running.'); }
+        if (!response.ok || !result.success) throw new Error(result.message || 'Unable to save record.');
+        return result.data;
     }
-
-    function saveToLocalStorage() {
-        localStorage.setItem('agents', JSON.stringify(agents));
+    function cacheRecords() {
+        // Compatibility cache for existing customer/order dropdowns; database remains authoritative.
+        try { localStorage.setItem('agents', JSON.stringify(agents)); }
+        catch (error) { console.warn('Unable to update master record cache', error); }
+    }
+    function showError(error) { Swal.fire('Unable to complete', error.message || 'Please try again.', 'error'); }
+    function escapeHtml(value) { return $('<div>').text(value == null ? '' : String(value)).html(); }
+    async function loadAgents() {
+        $('#saveAgentBtn, #addAgentBtn').prop('disabled', true);
+        $('#agentTableBody').html('<tr><td colspan="7" class="text-center py-4">Loading...</td></tr>');
+        try {
+            agents = await request();
+            cacheRecords();
+            renderTable();
+        } catch (error) {
+            $('#agentTableBody').html('<tr><td colspan="7" class="text-center py-4">Unable to load records. Refresh after checking database setup.</td></tr>');
+            showError(error);
+        } finally { $('#saveAgentBtn, #addAgentBtn').prop('disabled', false); }
     }
 
     function renderTable() {
@@ -41,11 +62,11 @@ $(document).ready(function() {
             tbody.append(`
                 <tr>
                     <td>${index + 1}</td>
-                    <td>${agent.name}</td>
-                    <td>${agent.contact}</td>
-                    <td>${agent.email}</td>
-                    <td>${agent.city}</td>
-                    <td>${agent.state}</td>
+                    <td>${escapeHtml(agent.name)}</td>
+                    <td>${escapeHtml(agent.contact)}</td>
+                    <td>${escapeHtml(agent.email)}</td>
+                    <td>${escapeHtml(agent.city)}</td>
+                    <td>${escapeHtml(agent.state)}</td>
                     <td class="text-center">
                         <div class="d-inline-flex gap-2" role="group">
                             <button class="btn btn-sm btn-primary edit-btn" data-id="${agent.id}" title="Edit">
@@ -79,12 +100,15 @@ $(document).ready(function() {
             cancelButtonColor: '#3085d6',
             confirmButtonText: 'Yes, delete it!',
             cancelButtonText: 'Cancel'
-        }).then((result) => {
+        }).then(async (result) => {
             if (result.isConfirmed) {
-                agents = agents.filter(a => a.id !== id);
-                saveToLocalStorage();
-                renderTable();
-                Swal.fire('Deleted!', 'Agent has been deleted successfully.', 'success');
+                try {
+                    await request('DELETE', { id });
+                    agents = agents.filter(record => record.id !== id);
+                    cacheRecords();
+                    renderTable();
+                    Swal.fire('Deleted!', 'Agent has been deleted successfully.', 'success');
+                } catch (error) { showError(error); }
             }
         });
     }
@@ -110,7 +134,7 @@ $(document).ready(function() {
         $('#agentModal').modal('show');
     }
 
-    $('#saveAgentBtn').click(function() {
+    $('#saveAgentBtn').click(async function() {
         const editId = $('#editId').val();
         const name = $('#agentName').val().trim();
         const contact = $('#agentContact').val().trim();
@@ -123,9 +147,14 @@ $(document).ready(function() {
             $('#agentName').focus();
             return;
         }
-        if (!contact) {
-            Swal.fire('Warning!', 'Please enter contact number', 'warning');
+        if (!/^[6-9][0-9]{9}$/.test(contact)) {
+            Swal.fire('Warning!', 'Phone number must be 10 digits and start with 6, 7, 8 or 9.', 'warning');
             $('#agentContact').focus();
+            return;
+        }
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            Swal.fire('Warning!', 'Please enter a valid email address.', 'warning');
+            $('#agentEmail').focus();
             return;
         }
         if (!city) {
@@ -139,21 +168,22 @@ $(document).ready(function() {
             return;
         }
 
-        if (editId) {
-            const index = agents.findIndex(a => a.id === editId);
-            if (index !== -1) {
-                agents[index] = { ...agents[index], name, contact, email, city, state };
-                Swal.fire('Success!', 'Agent updated successfully!', 'success');
-            }
-        } else {
-            agents.push({ id: 'AGT' + Date.now(), name, contact, email, city, state });
-            Swal.fire('Success!', 'Agent added successfully!', 'success');
-        }
-
-        saveToLocalStorage();
-        renderTable();
-        $('#agentModal').modal('hide');
-        $('#agentForm')[0].reset();
+        const button = $(this);
+        if (button.prop('disabled')) return;
+        button.prop('disabled', true);
+        try {
+            const record = await request(editId ? 'PUT' : 'POST', { id: editId, name, contact, email, city, state });
+            if (editId) {
+                const index = agents.findIndex(item => item.id === editId);
+                if (index !== -1) agents[index] = record;
+            } else { agents.unshift(record); }
+            cacheRecords();
+            renderTable();
+            $('#agentModal').modal('hide');
+            $('#agentForm')[0].reset();
+            Swal.fire('Success!', 'Agent ' + (editId ? 'updated' : 'added') + ' successfully!', 'success');
+        } catch (error) { showError(error); }
+        finally { button.prop('disabled', false); }
     });
 
     $('#searchInput').on('keyup', function() {

@@ -1,18 +1,28 @@
 $(document).ready(function() {
-    // Sample additional work data
-    let works = [
-        { id: 1, name: 'Screen Print' },
-        { id: 2, name: 'Digital Print' },
-        { id: 3, name: 'Peco' },
-        { id: 4, name: 'Handwork' },
-        { id: 5, name: 'Embroidery' },
-        { id: 6, name: 'Pleating' }
-    ];
-
-    let nextId = 7;
-
-    // Initialize
-    renderWorkTable();
+    let works = [];
+    async function request(method = 'GET', data) {
+        const response = await fetch('api/additional-work.php', { method, cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: data ? JSON.stringify(data) : undefined });
+        let result;
+        try { result = await response.json(); } catch (_) { throw new Error('Invalid server response. Check Apache and database setup.'); }
+        if (!response.ok || !result.success) throw new Error(result.message || 'Unable to complete request.');
+        return result.data;
+    }
+    function cacheRecords() {
+        try { localStorage.setItem('additionalWorks', JSON.stringify(works)); } catch (error) { console.warn('Master cache unavailable', error); }
+    }
+    function escapeHtml(value) { return $('<div>').text(String(value ?? '')).html(); }
+    async function loadRecords() {
+        $('#addWorkBtn, #saveWorkBtn, #confirmDeleteWorkBtn').prop('disabled', true);
+        $('#workTableBody').html('<tr><td colspan="3" class="text-center py-4">Loading...</td></tr>');
+        try {
+            works = await request(); cacheRecords(); renderWorkTable();
+            $('#addWorkBtn, #saveWorkBtn, #confirmDeleteWorkBtn').prop('disabled', false);
+        } catch (error) {
+            $('#workTableBody').html('<tr><td colspan="3" class="text-center py-4">Unable to load records. Refresh after database setup.</td></tr>');
+            Swal.fire('Unable to load', error.message, 'error');
+        }
+    }
+    loadRecords();
 
     // Render table
     function renderWorkTable() {
@@ -44,7 +54,7 @@ $(document).ready(function() {
             tbody.append(`
                 <tr>
                     <td>${index + 1}</td>
-                    <td><strong>${work.name}</strong></td>
+                    <td><strong>${escapeHtml(work.name)}</strong></td>
                     <td class="text-center">
                         <button class="btn btn-sm btn-primary edit-work-btn me-1" 
                                 data-id="${work.id}" 
@@ -103,7 +113,7 @@ $(document).ready(function() {
     }
 
     // Save Additional Work (Add or Edit)
-    $('#saveWorkBtn').click(function() {
+    $('#saveWorkBtn').click(async function() {
         const name = $('#workName').val().trim();
         const editId = $('#editWorkId').val();
 
@@ -135,56 +145,32 @@ $(document).ready(function() {
             return;
         }
 
-        if (editId) {
-            // Update existing work
-            const index = works.findIndex(w => w.id === parseInt(editId));
-            if (index !== -1) {
-                works[index].name = name;
-            }
-
-            Swal.fire({
-                icon: 'success',
-                title: 'Updated!',
-                text: 'Additional work updated successfully!',
-                timer: 2000,
-                showConfirmButton: false
-            });
-        } else {
-            // Add new work
-            works.push({
-                id: nextId++,
-                name: name
-            });
-
-            Swal.fire({
-                icon: 'success',
-                title: 'Added!',
-                text: 'Additional work added successfully!',
-                timer: 2000,
-                showConfirmButton: false
-            });
-        }
-
-        renderWorkTable();
-        $('#workModal').modal('hide');
-        $('#workForm')[0].reset();
-        $('#editWorkId').val('');
+        const button = $(this);
+        if (button.prop('disabled')) return;
+        button.prop('disabled', true);
+        try {
+            const id = editId ? Number(editId) : null;
+            const record = await request(id ? 'PUT' : 'POST', { id, name });
+            if (id) { const index = works.findIndex(row => row.id === id); if (index !== -1) works[index] = record; }
+            else { works.unshift(record); }
+            cacheRecords(); renderWorkTable(); $('#workModal').modal('hide'); $('#workForm')[0].reset();
+            $('#editWorkId').val('');
+            Swal.fire('Success!', 'Work saved successfully.', 'success');
+        } catch (error) { Swal.fire('Unable to save', error.message, 'error'); }
+        finally { button.prop('disabled', false); }
     });
 
     // Confirm Delete
-    $('#confirmDeleteWorkBtn').click(function() {
-        const id = parseInt($('#deleteWorkId').val());
-        works = works.filter(w => w.id !== id);
-        renderWorkTable();
-        $('#deleteWorkModal').modal('hide');
-        
-        Swal.fire({
-            icon: 'success',
-            title: 'Deleted!',
-            text: 'Additional work has been deleted successfully.',
-            timer: 2000,
-            showConfirmButton: false
-        });
+    $('#confirmDeleteWorkBtn').click(async function() {
+        const button = $(this);
+        if (button.prop('disabled')) return;
+        button.prop('disabled', true);
+        try {
+            const id = Number($('#deleteWorkId').val()); await request('DELETE', { id });
+            works = works.filter(row => row.id !== id); cacheRecords(); renderWorkTable();
+            $('#deleteWorkModal').modal('hide'); Swal.fire('Deleted!', 'Work deleted successfully.', 'success');
+        } catch (error) { Swal.fire('Unable to delete', error.message, 'error'); }
+        finally { button.prop('disabled', false); }
     });
 
     // Search
@@ -198,6 +184,5 @@ $(document).ready(function() {
         $('#editWorkId').val('');
     });
 
-    // Initial render
-    renderWorkTable();
+
 });

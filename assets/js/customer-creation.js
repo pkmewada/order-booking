@@ -3,22 +3,49 @@ $(document).ready(function() {
     let searchTerm = '';
     const stateCity = StateCity.init(document.getElementById('customerState'), document.getElementById('customerCity'));
 
+
+
+    const masters = { agents: [], transporters: [], distributors: [] };
+    async function request(endpoint, method = 'GET', data) {
+        const response = await fetch('api/' + endpoint + '.php', {
+            method, headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+            body: data ? JSON.stringify(data) : undefined
+        });
+        let result;
+        try { result = await response.json(); }
+        catch (_) { throw new Error('Invalid server response. Check Apache and database setup.'); }
+        if (!response.ok || !result.success) throw new Error(result.message || 'Unable to complete request.');
+        return result.data;
+    }
+    function escapeHtml(value) { return $('<div>').text(value == null ? '' : String(value)).html(); }
+    function saveToLocalStorage() {
+        // Compatibility cache for existing order punch/QR lookup; database is authoritative.
+        try {
+            localStorage.setItem('customers', JSON.stringify(customers));
+            for (const key of Object.keys(masters)) localStorage.setItem(key, JSON.stringify(masters[key]));
+        } catch (error) { console.warn('Customer compatibility cache unavailable', error); }
+    }
+    async function loadCustomers() {
+        $('#addCustomerBtn, #saveCustomerBtn').prop('disabled', true);
+        $('#customerTableBody').html('<tr><td colspan="11" class="text-center py-4">Loading...</td></tr>');
+        try {
+            const [rows, agents, transporters, distributors] = await Promise.all([
+                request('customer'), request('agent'), request('transporter'), request('distributor')
+            ]);
+            customers = rows;
+            Object.assign(masters, { agents, transporters, distributors });
+            saveToLocalStorage();
+            populateAllSelects();
+            renderTable();
+            $('#addCustomerBtn, #saveCustomerBtn').prop('disabled', false);
+        } catch (error) {
+            $('#customerTableBody').html('<tr><td colspan="11" class="text-center py-4">Unable to load records. Refresh after checking database setup.</td></tr>');
+            Swal.fire('Unable to load', error.message, 'error');
+        }
+    }
     loadCustomers();
 
-    function loadCustomers() {
-        const stored = localStorage.getItem('customers');
-        customers = stored ? JSON.parse(stored) : [];
-        renderTable();
-    }
-
-    function saveToLocalStorage() {
-        localStorage.setItem('customers', JSON.stringify(customers));
-    }
-
-    function getList(key) {
-        const stored = localStorage.getItem(key);
-        return stored ? JSON.parse(stored) : [];
-    }
+    function getList(key) { return masters[key] || []; }
 
     function getNameById(key, id) {
         const item = getList(key).find(i => i.id === id);
@@ -35,7 +62,7 @@ $(document).ready(function() {
             $select.append(`<option value="" disabled>No records found</option>`);
         } else {
             list.forEach(item => {
-                $select.append(`<option value="${item.id}">${item.name}</option>`);
+                $select.append($('<option>').val(item.id).text(item.name));
             });
         }
         $select.val(currentVal || '');
@@ -73,15 +100,15 @@ $(document).ready(function() {
             tbody.append(`
                 <tr>
                     <td>${index + 1}</td>
-                    <td>${cust.name}</td>
-                    <td>${cust.shopName}</td>
-                    <td>${cust.contact}</td>
-                    <td>${cust.email}</td>
-                    <td>${cust.city}</td>
-                    <td>${cust.state}</td>
-                    <td>${getNameById('agents', cust.agentId)}</td>
-                    <td>${getNameById('transporters', cust.transporterId)}</td>
-                    <td>${getNameById('distributors', cust.distributorId)}</td>
+                    <td>${escapeHtml(cust.name)}</td>
+                    <td>${escapeHtml(cust.shopName)}</td>
+                    <td>${escapeHtml(cust.contact)}</td>
+                    <td>${escapeHtml(cust.email)}</td>
+                    <td>${escapeHtml(cust.city)}</td>
+                    <td>${escapeHtml(cust.state)}</td>
+                    <td>${escapeHtml(getNameById('agents', cust.agentId))}</td>
+                    <td>${escapeHtml(getNameById('transporters', cust.transporterId))}</td>
+                    <td>${escapeHtml(getNameById('distributors', cust.distributorId))}</td>
                     <td class="text-center">
                         <div class="d-inline-flex gap-2" role="group">
                             <button class="btn btn-sm btn-dark qr-btn" data-id="${cust.id}" title="QR Code">
@@ -153,14 +180,15 @@ $(document).ready(function() {
 
         $('#qrWhatsappBtn').off('click').on('click', function() {
             const phone = normalizePhoneForWhatsapp(cust.contact);
-            const message = `Hello ${cust.name}, here is your customer QR code for ${cust.shopName}. Please save the attached/downloaded QR image and keep it handy for order booking. Code: ${buildQrValue(cust.id)}`;
+            const message = `Hello ${escapeHtml(cust.name)}, here is your customer QR code for ${escapeHtml(cust.shopName)}. Please save the attached/downloaded QR image and keep it handy for order booking. Code: ${buildQrValue(cust.id)}`;
             window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
         });
 
+        $('#qrEmailBtn').prop('disabled', !cust.email);
         $('#qrEmailBtn').off('click').on('click', function() {
-            const subject = `Your Customer QR Code - ${cust.shopName}`;
-            const body = `Hello ${cust.name},\n\nHere is your customer QR code for ${cust.shopName}.\nCustomer Code: ${buildQrValue(cust.id)}\n\nPlease find the QR code image downloaded from the portal and keep it handy for order booking.\n\nThank you.`;
-            window.location.href = `mailto:${cust.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            const subject = `Your Customer QR Code - ${escapeHtml(cust.shopName)}`;
+            const body = `Hello ${escapeHtml(cust.name)},\n\nHere is your customer QR code for ${escapeHtml(cust.shopName)}.\nCustomer Code: ${buildQrValue(cust.id)}\n\nPlease find the QR code image downloaded from the portal and keep it handy for order booking.\n\nThank you.`;
+            window.location.href = `mailto:${escapeHtml(cust.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         });
 
         $('#qrModal').modal('show');
@@ -176,12 +204,14 @@ $(document).ready(function() {
             cancelButtonColor: '#3085d6',
             confirmButtonText: 'Yes, delete it!',
             cancelButtonText: 'Cancel'
-        }).then((result) => {
+        }).then(async (result) => {
             if (result.isConfirmed) {
-                customers = customers.filter(c => c.id !== id);
-                saveToLocalStorage();
-                renderTable();
-                Swal.fire('Deleted!', 'Customer has been deleted successfully.', 'success');
+                try {
+                    await request('customer', 'DELETE', { id });
+                    customers = customers.filter(c => c.id !== id);
+                    saveToLocalStorage(); renderTable();
+                    Swal.fire('Deleted!', 'Customer has been deleted successfully.', 'success');
+                } catch (error) { Swal.fire('Unable to delete', error.message, 'error'); }
             }
         });
     }
@@ -213,7 +243,7 @@ $(document).ready(function() {
         $('#customerModal').modal('show');
     }
 
-    $('#saveCustomerBtn').click(function() {
+    $('#saveCustomerBtn').click(async function() {
         const editId = $('#editId').val();
         const name = $('#customerName').val().trim();
         const shopName = $('#customerShopName').val().trim();
@@ -235,32 +265,31 @@ $(document).ready(function() {
             $('#customerShopName').focus();
             return;
         }
-        if (!contact) {
-            Swal.fire('Warning!', 'Please enter contact number', 'warning');
-            $('#customerContact').focus();
-            return;
+        if (!/^[6-9][0-9]{9}$/.test(contact)) {
+            Swal.fire('Warning!', 'Phone number must be 10 digits and start with 6, 7, 8 or 9.', 'warning');
+            $('#customerContact').focus(); return;
         }
-
-
-
-
-
-
-        if (editId) {
-            const index = customers.findIndex(c => c.id === editId);
-            if (index !== -1) {
-                customers[index] = { ...customers[index], name, shopName, contact, email, city, state, agentId, transporterId, distributorId };
-                Swal.fire('Success!', 'Customer updated successfully!', 'success');
-            }
-        } else {
-            customers.push({ id: 'CUS' + Date.now(), name, shopName, contact, email, city, state, agentId, transporterId, distributorId });
-            Swal.fire('Success!', 'Customer added successfully!', 'success');
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            Swal.fire('Warning!', 'Please enter a valid email address.', 'warning');
+            $('#customerEmail').focus(); return;
         }
-
-        saveToLocalStorage();
-        renderTable();
-        $('#customerModal').modal('hide');
-        $('#customerForm')[0].reset();
+        const button = $(this);
+        if (button.prop('disabled')) return;
+        button.prop('disabled', true);
+        try {
+            const record = await request('customer', editId ? 'PUT' : 'POST', {
+                id: editId, name, shopName, contact, email, city, state, agentId, transporterId, distributorId
+            });
+            if (editId) {
+                const index = customers.findIndex(c => c.id === editId);
+                if (index !== -1) customers[index] = record;
+            } else { customers.unshift(record); }
+            saveToLocalStorage(); renderTable();
+            $('#customerModal').modal('hide');
+            $('#customerForm')[0].reset();
+            Swal.fire('Success!', 'Customer ' + (editId ? 'updated' : 'added') + ' successfully!', 'success');
+        } catch (error) { Swal.fire('Unable to save', error.message, 'error'); }
+        finally { button.prop('disabled', false); }
     });
 
     $('#searchInput').on('keyup', function() {

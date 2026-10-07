@@ -5,14 +5,35 @@ $(document).ready(function() {
 
     loadTransporters();
 
-    function loadTransporters() {
-        const stored = localStorage.getItem('transporters');
-        transporters = stored ? JSON.parse(stored) : [];
-        renderTable();
+    async function request(method = 'GET', data) {
+        const response = await fetch('api/transporter.php', {
+            method, headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+            body: data ? JSON.stringify(data) : undefined
+        });
+        let result;
+        try { result = await response.json(); }
+        catch (_) { throw new Error('Invalid server response. Check that Apache is running.'); }
+        if (!response.ok || !result.success) throw new Error(result.message || 'Unable to save record.');
+        return result.data;
     }
-
-    function saveToLocalStorage() {
-        localStorage.setItem('transporters', JSON.stringify(transporters));
+    function cacheRecords() {
+        // Compatibility cache for existing customer/order dropdowns; database remains authoritative.
+        try { localStorage.setItem('transporters', JSON.stringify(transporters)); }
+        catch (error) { console.warn('Unable to update master record cache', error); }
+    }
+    function showError(error) { Swal.fire('Unable to complete', error.message || 'Please try again.', 'error'); }
+    function escapeHtml(value) { return $('<div>').text(value == null ? '' : String(value)).html(); }
+    async function loadTransporters() {
+        $('#saveTransporterBtn, #addTransporterBtn').prop('disabled', true);
+        $('#transporterTableBody').html('<tr><td colspan="7" class="text-center py-4">Loading...</td></tr>');
+        try {
+            transporters = await request();
+            cacheRecords();
+            renderTable();
+        } catch (error) {
+            $('#transporterTableBody').html('<tr><td colspan="7" class="text-center py-4">Unable to load records. Refresh after checking database setup.</td></tr>');
+            showError(error);
+        } finally { $('#saveTransporterBtn, #addTransporterBtn').prop('disabled', false); }
     }
 
     function renderTable() {
@@ -41,11 +62,11 @@ $(document).ready(function() {
             tbody.append(`
                 <tr>
                     <td>${index + 1}</td>
-                    <td>${trans.name}</td>
-                    <td>${trans.contact}</td>
-                    <td>${trans.email}</td>
-                    <td>${trans.city}</td>
-                    <td>${trans.state}</td>
+                    <td>${escapeHtml(trans.name)}</td>
+                    <td>${escapeHtml(trans.contact)}</td>
+                    <td>${escapeHtml(trans.email)}</td>
+                    <td>${escapeHtml(trans.city)}</td>
+                    <td>${escapeHtml(trans.state)}</td>
                     <td class="text-center">
                         <div class="d-inline-flex gap-2" role="group">
                             <button class="btn btn-sm btn-primary edit-btn" data-id="${trans.id}" title="Edit">
@@ -79,12 +100,15 @@ $(document).ready(function() {
             cancelButtonColor: '#3085d6',
             confirmButtonText: 'Yes, delete it!',
             cancelButtonText: 'Cancel'
-        }).then((result) => {
+        }).then(async (result) => {
             if (result.isConfirmed) {
-                transporters = transporters.filter(t => t.id !== id);
-                saveToLocalStorage();
-                renderTable();
-                Swal.fire('Deleted!', 'Transporter has been deleted successfully.', 'success');
+                try {
+                    await request('DELETE', { id });
+                    transporters = transporters.filter(record => record.id !== id);
+                    cacheRecords();
+                    renderTable();
+                    Swal.fire('Deleted!', 'Transporter has been deleted successfully.', 'success');
+                } catch (error) { showError(error); }
             }
         });
     }
@@ -110,7 +134,7 @@ $(document).ready(function() {
         $('#transporterModal').modal('show');
     }
 
-    $('#saveTransporterBtn').click(function() {
+    $('#saveTransporterBtn').click(async function() {
         const editId = $('#editId').val();
         const name = $('#transporterName').val().trim();
         const contact = $('#transporterContact').val().trim();
@@ -121,6 +145,16 @@ $(document).ready(function() {
         if (!name) {
             Swal.fire('Warning!', 'Please enter name', 'warning');
             $('#transporterName').focus();
+            return;
+        }
+        if (!/^[6-9][0-9]{9}$/.test(contact)) {
+            Swal.fire('Warning!', 'Phone number must be 10 digits and start with 6, 7, 8 or 9.', 'warning');
+            $('#transporterContact').focus();
+            return;
+        }
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            Swal.fire('Warning!', 'Please enter a valid email address.', 'warning');
+            $('#transporterEmail').focus();
             return;
         }
         if (!city) {
@@ -134,21 +168,22 @@ $(document).ready(function() {
             return;
         }
 
-        if (editId) {
-            const index = transporters.findIndex(t => t.id === editId);
-            if (index !== -1) {
-                transporters[index] = { ...transporters[index], name, contact, email, city, state };
-                Swal.fire('Success!', 'Transporter updated successfully!', 'success');
-            }
-        } else {
-            transporters.push({ id: 'TRN' + Date.now(), name, contact, email, city, state });
-            Swal.fire('Success!', 'Transporter added successfully!', 'success');
-        }
-
-        saveToLocalStorage();
-        renderTable();
-        $('#transporterModal').modal('hide');
-        $('#transporterForm')[0].reset();
+        const button = $(this);
+        if (button.prop('disabled')) return;
+        button.prop('disabled', true);
+        try {
+            const record = await request(editId ? 'PUT' : 'POST', { id: editId, name, contact, email, city, state });
+            if (editId) {
+                const index = transporters.findIndex(item => item.id === editId);
+                if (index !== -1) transporters[index] = record;
+            } else { transporters.unshift(record); }
+            cacheRecords();
+            renderTable();
+            $('#transporterModal').modal('hide');
+            $('#transporterForm')[0].reset();
+            Swal.fire('Success!', 'Transporter ' + (editId ? 'updated' : 'added') + ' successfully!', 'success');
+        } catch (error) { showError(error); }
+        finally { button.prop('disabled', false); }
     });
 
     $('#searchInput').on('keyup', function() {

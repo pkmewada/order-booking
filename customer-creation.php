@@ -126,12 +126,12 @@
 
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Contact</label>
-                            <input type="text" class="form-control" id="customerContact" name="contact" required placeholder="Enter contact number">
+                            <input type="text" class="form-control" id="customerContact" name="contact" maxlength="10" inputmode="numeric" pattern="[6-9][0-9]{9}" required placeholder="Enter contact number">
                         </div>
 
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Email</label>
-                            <input type="email" class="form-control" id="customerEmail" name="email" required placeholder="Enter email">
+                            <input type="email" class="form-control" id="customerEmail" name="email" placeholder="Enter email">
                         </div>
 
                         <div class="col-md-6 mb-3">
