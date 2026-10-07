@@ -50,10 +50,10 @@ $(document).ready(function() {
                     <td>${index + 1}</td>
                     <td><strong>${color.name}</strong></td>
                     <td class="text-center">
-                        <button class="btn btn-sm btn-danger delete-btn" 
+                        <button class="btn btn-sm btn-dark text-white delete-btn" style="background-color:#000;border-color:#000;color:#fff;" 
                                 data-id="${color.id}" 
                                 title="Delete">
-                                <i class="bx bx-trash"></i>
+                                <i class="bx bx-trash text-white"></i>
                             </button>
                     </td>
                 </tr>

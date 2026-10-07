@@ -24,7 +24,7 @@
                 <div class="card custom-card">
                     <div class="card-header">
                         <div class="card-title">
-                            Delivered Orders
+                            Deliveries
                         </div>
                     </div>
 
@@ -43,7 +43,7 @@
                         <div class="table-responsive">
                             <table id="orderTable" class="table table-bordered text-nowrap w-100">
                                 <thead>
-<tr><th>Order ID</th><th>Customer</th><th>Shop Name</th><th>Delivery Date</th><th>Sets</th><th>Status</th><th>Action</th></tr>
+<tr><th>Delivery ID</th><th>Order ID</th><th>Customer / Shop</th><th>Passed At</th><th>Sets</th><th>Status</th><th>Action</th></tr>
                                 </thead>
                                 <tbody id="orderTableBody">
                                     <!-- Data will be loaded here -->
@@ -70,4 +70,5 @@
 <script src="assets/libs/html2pdf/html2pdf.bundle.min.js"></script>
 <script src="assets/js/order-pdf.js?v=<?= filemtime(__DIR__ . '/assets/js/order-pdf.js') ?>"></script>
 <script src="assets/js/order-details.js?v=<?= filemtime(__DIR__ . '/assets/js/order-details.js') ?>"></script>
+<script src="assets/js/delivery-records.js?v=<?= filemtime(__DIR__ . '/assets/js/delivery-records.js') ?>"></script>
 <script src="assets/js/delivery.js?v=<?= filemtime(__DIR__ . '/assets/js/delivery.js') ?>"></script>

@@ -854,10 +854,6 @@
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Update Type</label>
                         <select class="form-select" id="progressTypeSelect">
-<option value="set_completed">Set completed total (edit)</option>
-<option value="set_damage">Set damage total (edit)</option>
-<option value="set_assigned">Set assigned total (edit)</option>
-<option value="recover">Recover linked repair quantity</option>
                             <option value="completed" selected>Completed (+)</option>
                             <option value="damage">Damage (+)</option>
                         </select>
@@ -925,12 +921,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="listDetailBody"></div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-dark" id="printListDetailBtn">
-                    <i class="bx bx-printer me-1"></i> Print / Download
-                </button>
-            </div>
+
         </div>
     </div>
 </div>
@@ -946,12 +937,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="listAllBody"></div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-dark" id="printListAllBtn">
-                    <i class="bx bx-printer me-1"></i> Print / Download
-                </button>
-            </div>
+
         </div>
     </div>
 </div>
@@ -967,12 +953,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="batchHistoryBody"></div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-dark" id="printBatchHistoryBtn">
-                    <i class="bx bx-printer me-1"></i> Print / Download
-                </button>
-            </div>
+
         </div>
     </div>
 </div>
@@ -983,6 +964,7 @@
 <script src="assets/js/production-controls.js"></script>
 <link rel="stylesheet" href="assets/css/assignment-details.css?v=<?= filemtime(__DIR__ . "/assets/css/assignment-details.css") ?>">
 <script src="assets/js/assignment-details.js?v=<?= filemtime(__DIR__ . "/assets/js/assignment-details.js") ?>"></script>
+<script src="assets/js/batch-history-pdf.js?v=<?= filemtime(__DIR__ . "/assets/js/batch-history-pdf.js") ?>"></script>
 <script src="assets/js/cutting-manager.js?v=<?= filemtime(__DIR__ . "/assets/js/cutting-manager.js") ?>"></script>
 </body>
 </html>

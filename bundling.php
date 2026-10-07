@@ -104,8 +104,24 @@
         </div>
     </div>
 </div>
+<div class="modal fade" id="bundlingListModal" tabindex="-1" aria-labelledby="bundlingListTitle" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title" id="bundlingListTitle"><i class="bx bx-list-ul me-1"></i> All Passed Bundling Assignments</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+        <div class="modal-body"><div class="alert alert-success" id="bundlingListSummary"></div><div class="table-responsive">
+            <table class="table table-bordered text-nowrap finishing-table"><thead><tr><th>#</th><th>Batch ID</th><th>Sub-Batch / Lot</th><th>Brand</th><th>Design / Pattern</th><th>MRP</th><th>Pieces</th><th>Worker</th><th>Qty</th><th>Progress</th><th>Remaining</th><th>Delivery</th><th>Status</th><th>Action</th></tr></thead><tbody id="bundlingPassedBody"></tbody></table>
+        </div></div>
+    </div></div>
+</div>
+<div class="modal fade" id="batchHistoryModal" tabindex="-1" aria-labelledby="batchHistoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:1000px"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title" id="batchHistoryModalLabel"><i class="bx bx-history me-1"></i> Batch History</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+        <div class="modal-body" id="batchHistoryBody"></div>
+    </div></div>
+</div>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
+<link rel="stylesheet" href="assets/css/assignment-details.css?v=<?= filemtime(__DIR__ . '/assets/css/assignment-details.css') ?>">
+<script src="assets/js/batch-history-pdf.js?v=<?= filemtime(__DIR__ . '/assets/js/batch-history-pdf.js') ?>"></script>
 <script src="assets/js/production-engine.js?v=<?= filemtime(__DIR__ . '/assets/js/production-engine.js') ?>"></script>
 <script src="assets/js/set-assignments.js?v=<?= filemtime(__DIR__ . '/assets/js/set-assignments.js') ?>"></script>
-<script src="assets/js/bundling-progress.js"></script>
+<script src="assets/js/bundling-progress.js?v=<?= filemtime(__DIR__ . '/assets/js/bundling-progress.js') ?>"></script>
 <script src="assets/js/finishing.js?v=<?= filemtime(__DIR__ . '/assets/js/finishing.js') ?>"></script>

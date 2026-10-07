@@ -162,6 +162,30 @@
             color: #000000 !important;
         }
     </style>
+    <style>
+        /* Match the main header's black navigation text in light mode. */
+        html[data-theme-mode="light"] .main-menu .side-menu__item,
+        html[data-theme-mode="light"] .main-menu .side-menu__label,
+        html[data-theme-mode="light"] .main-menu .side-menu__angle,
+        html[data-theme-mode="light"] .main-menu .side-menu__icon,
+        html[data-theme-mode="light"] .slide-menu .side-menu__label1 > a,
+        html[data-theme-mode="light"] .slide__category .category-name,
+        html[data-theme-mode="light"] .breadcrumb a,
+        html[data-theme-mode="light"] .page-link {
+            color: #161617 !important;
+        }
+        html[data-theme-mode="light"] .main-menu .side-menu__item.active,
+        html[data-theme-mode="light"] .main-menu .side-menu__item:hover,
+        html[data-theme-mode="light"] .main-menu .side-menu__item.active .side-menu__label,
+        html[data-theme-mode="light"] .main-menu .side-menu__item:hover .side-menu__label {
+            color: #000 !important;
+        }
+        html[data-theme-mode="light"] .main-menu .side-menu__icon svg,
+        html[data-theme-mode="light"] svg.side-menu__icon {
+            color: #161617 !important;
+            stroke: #161617 !important;
+        }
+    </style>
 </head>
 
 <body>

@@ -116,4 +116,4 @@
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
-<script src="assets/js/color.js"></script>
+<script src="assets/js/color.js?v=<?= filemtime(__DIR__ . '/assets/js/color.js') ?>"></script>

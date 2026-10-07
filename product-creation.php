@@ -18,7 +18,7 @@
             </div>
             <div class="btn-list">
                 <button class="btn btn-primary btn-wave me-2" id="importBomBtn">Import Bom Master</button>
-                <a href="product-form" class="btn btn-teal btn-wave me-2">
+                <a href="product-form" class="btn btn-dark text-white btn-wave me-2" style="background-color:#000;border-color:#000;color:#fff;">
                     <i class="bx bx-plus align-middle"></i> Add Product
                 </a>
             </div>

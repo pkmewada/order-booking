@@ -83,7 +83,7 @@ $(document).ready(function() {
                     <td>${getNameById('transporters', cust.transporterId)}</td>
                     <td>${getNameById('distributors', cust.distributorId)}</td>
                     <td class="text-center">
-                        <div class="btn-group" role="group">
+                        <div class="d-inline-flex gap-2" role="group">
                             <button class="btn btn-sm btn-dark qr-btn" data-id="${cust.id}" title="QR Code">
                                 <i class="bx bx-qr"></i>
                             </button>

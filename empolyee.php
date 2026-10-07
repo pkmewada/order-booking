@@ -137,4 +137,4 @@
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
-<script src="assets/js/empolyee.js"></script>
+<script src="assets/js/empolyee.js?v=<?= filemtime(__DIR__ . '/assets/js/empolyee.js') ?>"></script>

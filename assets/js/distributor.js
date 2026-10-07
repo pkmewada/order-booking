@@ -47,12 +47,12 @@ $(document).ready(function() {
                     <td>${dist.city}</td>
                     <td>${dist.state}</td>
                     <td class="text-center">
-                        <div class="btn-group" role="group">
+                        <div class="d-inline-flex gap-2" role="group">
                             <button class="btn btn-sm btn-primary edit-btn" data-id="${dist.id}" title="Edit">
                                 <i class="bx bx-edit"></i>
                             </button>
-                            <button class="btn btn-sm btn-danger delete-btn" data-id="${dist.id}" title="Delete">
-                                <i class="bx bx-trash"></i>
+                            <button class="btn btn-sm btn-dark text-white delete-btn" style="background-color:#000;border-color:#000;color:#fff;" data-id="${dist.id}" title="Delete">
+                                <i class="bx bx-trash text-white"></i>
                             </button>
                         </div>
                     </td>

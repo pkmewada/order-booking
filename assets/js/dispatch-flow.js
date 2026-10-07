@@ -23,16 +23,20 @@
             });
             if (!rows.some(row => row.count > 0)) throw Error('Choose at least one complete set to pass.');
             const timestamp = new Date().toISOString();
-            const batch = {id: 'DLV' + Date.now(), createdAt: timestamp, items: []};
+            const baseId = 'DLV-' + order.id + '-' + Date.now();
+            let batchId = baseId, suffix = 1;
+            while ((order.deliveryBatches || []).some(b => b.id === batchId)) batchId = baseId + '-' + suffix++;
+            const batch = {id: batchId, createdAt: timestamp, status: 'In Progress', items: []};
             rows.forEach(({item, count, previous}) => {
                 item.dispatchDeliveredPieces = previous + count;
-                if (count) batch.items.push({barcode:item.barcode, description:item.description, brand:item.brand, size:item.size, piecesPerSet:Q.perSet(item), sets:count / Q.perSet(item), pieces:count});
+                if (count) batch.items.push({...item, piecesPerSet:Q.perSet(item), qty:count / Q.perSet(item), sets:count / Q.perSet(item), pieces:count, dispatchScannedPieces:count, dispatchDeliveredPieces:count});
             });
             order.deliveryBatches = (order.deliveryBatches || []).concat(batch);
             order.deliveredAt = timestamp;
-            order.deliveryStatus = 'Delivered';
+            order.deliveryStatus = 'In Progress';
             order.dispatchStatus = status(order);
             if (confirmed(order)) { order.dispatchConfirmedAt = timestamp; order.dispatchCompletedAt = timestamp; order.dispatchConfirmedItems = signature(order); }
+            return batch;
         },
         scan(order, barcode) {
             if (confirmed(order)) throw Error('This dispatch has already been confirmed.');

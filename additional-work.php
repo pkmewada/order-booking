@@ -117,4 +117,4 @@
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
-<script src="assets/js/additional-work.js"></script>
+<script src="assets/js/additional-work.js?v=<?= filemtime(__DIR__ . '/assets/js/additional-work.js') ?>"></script>

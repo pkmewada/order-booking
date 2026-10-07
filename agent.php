@@ -124,4 +124,4 @@
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
 <script src="assets/js/state-city.js"></script>
-<script src="assets/js/agent.js"></script>
+<script src="assets/js/agent.js?v=<?= filemtime(__DIR__ . '/assets/js/agent.js') ?>"></script>

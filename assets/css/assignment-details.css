@@ -40,6 +40,11 @@
     .assignment-info-cell { padding:10px; }
     .assignment-placeholder { font-size:22px; }
 }
+#batchHistoryModal .modal-dialog { width:calc(100% - 2rem); max-height:calc(100dvh - 2rem); margin:1rem auto; }
+#batchHistoryModal .modal-content { max-height:calc(100dvh - 2rem); }
+#batchHistoryModal .modal-body { min-height:0; overflow:auto; }
+#batchHistoryBody td { padding:8px 12px; vertical-align:top; overflow-wrap:anywhere; }
+#batchHistoryBody th { padding:8px 12px; text-align:left; }
 @page { size:A4 portrait; margin:10mm; }
 @media print {
     .assignment-print-document { margin:0!important; padding:0!important; }
@@ -55,4 +60,40 @@
     .assignment-print-document .assignment-summary .assignment-value { font-size:15pt; }
     .assignment-print-document .assignment-info-cell { padding:4mm; }
     .assignment-print-document .assignment-signature { padding:8mm 2mm 5mm; }
+}
+
+/* Shared manager list sizing and progress history spacing. */
+@media screen {
+    #listAllModal .modal-dialog, #listDetailModal .modal-dialog, #listModal .modal-dialog {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        min-height: 100%;
+    }
+    #listAllModal .modal-content, #listDetailModal .modal-content, #listModal .modal-content {
+        height: 100vh;
+        height: 100dvh;
+        border-radius: 0;
+    }
+    #listAllModal .modal-body, #listDetailModal .modal-body, #listModal .modal-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none !important;
+        overflow: auto;
+    }
+    #progressModal .progress-history-row {
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, .65fr);
+        gap: 12px;
+        align-items: start;
+    }
+    #progressModal .progress-history-row > div {
+        min-width: 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        line-height: 1.5;
+    }
+}
+@media screen and (max-width: 575.98px) {
+    #progressModal .progress-history-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    #progressModal .progress-history-row .h-at { grid-column: 1 / -1; }
 }

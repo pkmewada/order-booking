@@ -17,19 +17,15 @@
                 </div>
             </div>
             <div class="btn-list">
+<button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#passedOrdersModal">Order Pass <span class="badge bg-light text-dark ms-1" id="passedOrdersCount">0</span></button>
+
                 <a href="order-punch" class="btn btn-primary btn-wave me-2">
                     <i class="bx bx-plus align-middle"></i> New Order
                 </a>
+                
             </div>
         </div>
         <!-- Page Header Close -->
-
-        <div class="card custom-card">
-            <div class="card-header"><div class="card-title">Passed Orders</div></div>
-            <div class="card-body"><div class="table-responsive">
-                <table class="table table-bordered text-nowrap"><thead><tr><th>Order ID</th><th>Customer</th><th>Shop Name</th><th>Delivery Date</th><th>Sets</th><th>Pcs</th><th>Passed At</th><th>Action</th></tr></thead><tbody id="passedOrdersBody"></tbody></table>
-            </div></div>
-        </div>
 
         <div class="row">
             <div class="col-xl-12">
@@ -93,6 +89,14 @@
     </div>
 </div>
 
+<div class="modal fade" id="passedOrdersModal" tabindex="-1" aria-labelledby="passedOrdersTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title" id="passedOrdersTitle">Order Pass</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+        <div class="modal-body"><div class="text-muted mb-3" id="passedOrdersSummary"></div><div class="table-responsive">
+            <table class="table table-bordered"><thead><tr><th>Order ID</th><th>Customer / Shop</th><th>Sets</th></tr></thead><tbody id="passedOrdersBody"></tbody></table>
+        </div></div>
+    </div></div>
+</div>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
 <script src="assets/libs/html2pdf/html2pdf.bundle.min.js"></script>

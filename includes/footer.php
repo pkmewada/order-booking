@@ -74,6 +74,9 @@
 
 <!-- Custom JS -->
 <script src="assets/js/custom.js"></script>
+<script src="assets/js/header-fullscreen.js?v=<?= filemtime(__DIR__ . '/../assets/js/header-fullscreen.js') ?>"></script>
+<script src="assets/js/production-engine.js?v=<?= filemtime(__DIR__ . '/../assets/js/production-engine.js') ?>"></script>
+<script src="assets/js/navbar-counts.js?v=<?= filemtime(__DIR__ . '/../assets/js/navbar-counts.js') ?>"></script>
 
 
 <!-- Custom-Switcher JS -->

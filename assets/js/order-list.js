@@ -196,11 +196,12 @@ $(document).ready(function() {
         const body = $('#passedOrdersBody').empty();
         passed.forEach(order => {
             const totals = OrderQuantities.totals(order);
-            const row = $(`<tr>${[order.id,order.customerName,order.shopName,order.deliveryDate,totals.sets,totals.pieces,new Date(order.dispatchPassedAt).toLocaleString('en-IN')].map(v => `<td>${esc(v)}</td>`).join('')}<td><button type="button" class="btn btn-sm btn-dark">View</button></td></tr>`);
-            row.find('button').on('click', () => OrderDetails.show(order));
+            const row = $(`<tr><td>${esc(order.id)}</td><td>${esc(order.shopName || order.customerName)}</td><td>${totals.sets}</td></tr>`);
             body.append(row);
         });
-        if (!passed.length) body.append('<tr><td colspan="8" class="text-center text-muted">No passed orders found.</td></tr>');
+        $('#passedOrdersCount').text(orders.filter(o => o.dispatchPassedAt).length);
+        $('#passedOrdersSummary').text(`${passed.length} orders · ${passed.reduce((sum,order) => sum + OrderQuantities.totals(order).sets, 0)} sets`);
+        if (!passed.length) body.append('<tr><td colspan="3" class="text-center text-muted">No passed orders found.</td></tr>');
     }
 
     function showDeleteConfirmation(id) {

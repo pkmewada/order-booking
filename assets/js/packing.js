@@ -26,7 +26,7 @@ $(document).ready(async function () {
     function lotRows(l,index) {
         const w=l.rows[0], m=P.packingLotMath(l.rows), bom=PackingLabels.find(w.designNumber);
         const icon=(cls,label,symbol)=>`<button class="btn btn-sm ${cls==='pass-lot-btn'?'btn-success':'btn-dark'} ${cls}" data-lot="${esc(l.id)}" title="${label}" aria-label="${label}"><i class="bx ${symbol}" aria-hidden="true"></i></button>`;
-        return `<tr><td>${index+1}</td><td>${esc(w.batchId)}</td><td><strong class="text-primary">${esc(l.id)}</strong></td><td>${esc(w.brand)}</td><td>${esc(w.designNumber)} / ${esc(bom?.pattern||'-')}</td><td>${esc(bom?.mrp??'-')}</td><td>${l.rows.map(w=>esc(w.pieceType)).join('<br>')}</td><td>${esc(w.worker)}</td><td>${m.inputQty}</td><td>${m.completedQty} <span class="progress-bar-container"><span class="progress-bar-fill" style="display:block;width:${m.effectiveQty?Math.min(100,m.completedQty/m.effectiveQty*100):100}%"></span></span></td><td>${m.damageQty?`<span class="damage-badge">${m.damageQty}</span>`:'<span class="damage-empty">-</span>'}</td><td>${m.remainingQty}</td><td>${deliveryBadge(w.deliveryDate,passed(l))}</td><td><span class="status-badge ${passed(l)?'passed':'pending'}">${passed(l)?'Passed':'Pending'}</span></td><td><div class="d-flex gap-1">${passed(l)?'':icon('progress-btn','Edit','bx-edit')}${canPassLot(l)?icon('pass-lot-btn','Pass','bx-check-circle'):''}${icon('view-lot-btn','View','bx-show')}${icon('label-lot-btn','QR Code','bx-qr')}</div></td></tr>`;
+        return `<tr><td>${index+1}</td><td>${esc(w.batchId)}</td><td><strong class="text-primary">${esc(l.id)}</strong></td><td>${esc(w.brand)}</td><td>${esc(w.designNumber)} / ${esc(bom?.pattern||'-')}</td><td>${esc(bom?.mrp??'-')}</td><td>${l.rows.map(w=>esc(w.pieceType)).join('<br>')}</td><td>${esc(w.worker)}</td><td>${m.inputQty}</td><td>${m.completedQty} <span class="progress-bar-container"><span class="progress-bar-fill" style="display:block;width:${m.effectiveQty?Math.min(100,m.completedQty/m.effectiveQty*100):100}%"></span></span></td><td>${m.damageQty?`<span class="damage-badge">${m.damageQty}</span>`:'<span class="damage-empty">-</span>'}</td><td>${m.remainingQty}</td><td>${deliveryBadge(w.deliveryDate,passed(l))}</td><td><span class="status-badge ${passed(l)?'passed':'pending'}">${passed(l)?'Passed':'Pending'}</span></td><td><div class="d-flex gap-1">${passed(l)?'':icon('progress-btn','Edit','bx-edit')}${canPassLot(l)?icon('pass-lot-btn','Pass','bx-right-arrow-alt'):''}${icon('view-lot-btn','View','bx-show')}${icon('label-lot-btn','QR Code','bx-qr')}</div></td></tr>`;
     }
     function pager(selector,page,total,set) {
         $(selector).html(`<div class="info-text">${total} ${selector === '#availablePagination' ? 'batches' : 'assignments'}</div><div class="pager"><button class="page-btn prev" ${page===1?'disabled':''} aria-label="Previous page">&lsaquo;</button><button class="page-btn active">${page}</button><button class="page-btn next" ${page*10>=total?'disabled':''} aria-label="Next page">&rsaquo;</button></div>`);
@@ -34,7 +34,7 @@ $(document).ready(async function () {
     }
     function render() {
         state = P.readState(); const ready = batches(false), assigned = lots().filter(l=>!passed(l));
-        $("#passedList").html(lots().filter(passed).map(lotRows).join('') || '<tr><td colspan="15">No passed packing lots.</td></tr>');
+        $("#passedList").html(lots().filter(l => lots().filter(other => String(other.rows[0].batchId) === String(l.rows[0].batchId)).every(passed)).map(lotRows).join('') || '<tr><td colspan="15">No fully passed packing batches.</td></tr>');
         availablePage = Math.min(availablePage,Math.max(1,Math.ceil(ready.length/10))); assignedPage = Math.min(assignedPage,Math.max(1,Math.ceil(assigned.length/10)));
         $('#availableList').html(ready.slice((availablePage-1)*10,availablePage*10).map(batchRows).join('') || '<tr><td colspan="11" class="text-center text-muted py-4">No items received for packing.</td></tr>');
         $('#assignedList').html(assigned.slice((assignedPage-1)*10,assignedPage*10).map((l,i)=>lotRows(l,(assignedPage-1)*10+i)).join('') || '<tr><td colspan="15" class="text-center text-muted py-4">No packing assignments yet.</td></tr>');
@@ -54,6 +54,11 @@ $(document).ready(async function () {
         const l=lots().find(l=>l.id===String($(this).data('lot')));
         if(!l) return;
         const first=l.rows[0], bom=PackingLabels.find(first.designNumber);
+        if ($(this).closest('#listModal').length) {
+            $('#batchHistoryBody').html(BatchHistoryPdf.packing(first.batchId));
+            modal('batchHistoryModal').show();
+            return;
+        }
         $('#viewDetailBody').html(AssignmentDetails.render({
             ...first,
             subBatch:l.id,

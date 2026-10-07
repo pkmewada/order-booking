@@ -1036,6 +1036,14 @@
         </div>
     </div>
 </div>
+<div class="modal fade" id="batchHistoryModal" tabindex="-1" aria-labelledby="batchHistoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="width:calc(100% - 2rem);max-width:1000px">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title" id="batchHistoryModalLabel"><i class="bx bx-history me-1"></i> Batch History</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+            <div class="modal-body" id="batchHistoryBody"></div>
+        </div>
+    </div>
+</div>
 <!-- VIEW DETAIL MODAL -->
 <div class="modal fade" id="viewDetailModal" tabindex="-1" aria-labelledby="viewDetailModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -1066,4 +1074,5 @@
 <script src="assets/js/packing-labels.js?v=<?= filemtime(__DIR__ . '/assets/js/packing-labels.js') ?>"></script>
 <link rel="stylesheet" href="assets/css/assignment-details.css?v=<?= filemtime(__DIR__ . '/assets/css/assignment-details.css') ?>">
 <script src="assets/js/assignment-details.js?v=<?= filemtime(__DIR__ . '/assets/js/assignment-details.js') ?>"></script>
+<script src="assets/js/batch-history-pdf.js?v=<?= filemtime(__DIR__ . '/assets/js/batch-history-pdf.js') ?>"></script>
 <script src="assets/js/packing.js?v=<?= filemtime(__DIR__ . '/assets/js/packing.js') ?>"></script>

@@ -110,7 +110,7 @@ window.OrderPdf = (() => {
                 pdf.text(`Page ${i + 1} of ${pages.length}`, 105, 290, { align: 'center' });
                 if (i < pages.length - 1) pdf.text('PTO', 201, 290, { align: 'right' });
             }
-            const filename = `${order.id}-${order.shopName || order.customerName || 'ORDER'}`.replace(/[^a-z0-9_-]+/gi, '-');
+            const filename = `${order.deliveryBatchId || order.id}-${order.shopName || order.customerName || 'ORDER'}`.replace(/[^a-z0-9_-]+/gi, '-');
             pdf.save(`${filename}${options.delivery ? '-DELIVERY' : ''}.pdf`);
         } finally { host.remove(); }
     }

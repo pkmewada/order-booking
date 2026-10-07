@@ -51,10 +51,10 @@ $(document).ready(function() {
                                 title="Edit">
                                 <i class="bx bx-edit"></i>
                             </button>
-                        <button class="btn btn-sm btn-danger delete-work-btn" 
+                        <button class="btn btn-sm btn-dark text-white delete-work-btn" style="background-color:#000;border-color:#000;color:#fff;" 
                                 data-id="${work.id}" 
                                 title="Delete">
-                                <i class="bx bx-trash"></i>
+                                <i class="bx bx-trash text-white"></i>
                             </button>
                     </td>
                 </tr>

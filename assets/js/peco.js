@@ -994,9 +994,9 @@ $(document).ready(async function () {
        LIST ALL MODAL
        ============================================================ */
     function buildListAllHtml() {
-        const passedData = workData.filter(d => isFullyPassed(d));
+        const passedData = workData.filter(d => workData.filter(w => String(w.batchId) === String(d.batchId)).every(isFullyPassed));
         if (!passedData.length) {
-            return `<div class="text-center text-muted py-5"><i class="bx bx-info-circle fs-2 d-block mb-2"></i>No fully passed assignments yet.</div>`;
+            return `<div class="text-center text-muted py-5"><i class="bx bx-info-circle fs-2 d-block mb-2"></i>No fully passed batches yet.</div>`;
         }
 
         const byBatch = {};
