@@ -5,6 +5,12 @@
 3. Connection settings are in `includes/db.php`: host `127.0.0.1`, port `3306`, database `order-booking`, username `root`, empty password. Change these defaults to match your MySQL setup, or set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` in the server environment. PHP needs PDO MySQL and mbstring (included with XAMPP).
 4. Open the application through Apache, then use the existing Agent, Distributor, and Transporter pages. Add, edit, delete, and list operations now use the database. Success appears only after the API accepts the change; database errors appear in the form instead.
 
+## Automatic live schema updates
+
+Hostinger Git deployment synchronizes files but does not execute SQL files. Versioned SQL files in `database/migrations/` are applied automatically the first time a PHP API connects to MySQL after deployment. Applied migration filenames are recorded in `appSchemaMigrations`; each migration runs once, in filename order. Migration statements use idempotent DDL/DML so they can be safely retried if a deployment is interrupted.
+
+Configure `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` and `DB_PASSWORD` in Hostinger's PHP environment or in the server's `includes/db.php` connection settings. Do not put live credentials in Git. Back up the live database before deploying schema changes. The current migration adds the piece-item catalog and manufacturing-state tables without replacing existing application data. SQL and migration files are blocked from direct web access.
+
 ## Separate APIs
 
 | Resource | Endpoint | Table |
@@ -18,7 +24,7 @@ Each endpoint supports `GET` (list), `POST` (create), `PUT` (update), and `DELET
 
 Responses are JSON: `{ "success": true, "data": ... }` or `{ "success": false, "message": ... }`. Queries use prepared statements. Shared endpoint implementation is in `api/master-records.php`.
 
-Existing browser-only records are not automatically uploaded or deleted. A compatibility cache of database records is maintained on these three pages for the existing customer/order dropdowns. Customer records also use the database; product, order and manufacturing persistence remains unchanged. Open the three master pages to refresh those cached dropdown lists on another browser.
+Existing browser-only records are not automatically uploaded or deleted. A compatibility cache of database records is maintained on these three pages for the existing customer/order dropdowns. Customer records also use the database; product and order persistence remains unchanged. Open the three master pages to refresh those cached dropdown lists on another browser.
 
 SQL import and database integration have not been run against your MySQL instance; PHP and JavaScript syntax were checked.
 
