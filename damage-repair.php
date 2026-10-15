@@ -11,6 +11,6 @@
     </div>
 </div></div>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
-<script src="assets/js/production-engine.js"></script>
+<script src="assets/js/production-engine.js?v=<?= filemtime(__DIR__ . '/assets/js/production-engine.js') ?>"></script>
 <script src="assets/js/damage-repair.js?v=<?= filemtime(__DIR__ . '/assets/js/damage-repair.js') ?>"></script>
 </body></html>

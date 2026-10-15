@@ -57,8 +57,9 @@
             </div>
         </div>
         <div class="card custom-card">
-            <div class="card-header">
+            <div class="card-header d-flex align-items-center justify-content-between">
                 <div class="card-title">Bundling Assignments</div>
+                <button class="btn btn-dark btn-sm" id="bulkPassBundlingBtn"><i class="bx bx-right-arrow-alt me-1"></i>Bulk Pass</button>
             </div>
             <div class="card-body table-responsive">
                 <table class="table table-bordered text-nowrap">
@@ -123,5 +124,6 @@
 <script src="assets/js/batch-history-pdf.js?v=<?= filemtime(__DIR__ . '/assets/js/batch-history-pdf.js') ?>"></script>
 <script src="assets/js/production-engine.js?v=<?= filemtime(__DIR__ . '/assets/js/production-engine.js') ?>"></script>
 <script src="assets/js/set-assignments.js?v=<?= filemtime(__DIR__ . '/assets/js/set-assignments.js') ?>"></script>
+<script src="assets/js/bulk-pass.js?v=<?= filemtime(__DIR__ . '/assets/js/bulk-pass.js') ?>"></script>
 <script src="assets/js/bundling-progress.js?v=<?= filemtime(__DIR__ . '/assets/js/bundling-progress.js') ?>"></script>
 <script src="assets/js/finishing.js?v=<?= filemtime(__DIR__ . '/assets/js/finishing.js') ?>"></script>

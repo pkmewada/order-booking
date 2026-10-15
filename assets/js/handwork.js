@@ -796,6 +796,38 @@ $(document).ready(async function () {
     }
 
     $("#bulkAssignBtn").on("click", openBulkModal);
+    $("#bulkPassHandworkBtn").on("click", function () {
+        const key = WORK_STORAGE_KEY;
+        const rows = Production.readState()[key]
+            .filter(item => !item.stopped && Production.status(item) !== "passed")
+            .map(item => ({
+                id: item.id, batchId: item.batchId, label: item.subBatch,
+                brand: item.brand, piece: item.pieceType,
+                worker: item.type === "outsource" ? item.firm : item.worker,
+                quantity: item.inputQty ?? item.assignedQty, completed: item.completedQty, damage: item.damageQty
+            }));
+        BulkPass.open({
+            title: `Bulk Pass ${WORK_TYPE} Assignments`,
+            rows,
+            onSave: async changes => {
+                const requests = changes.map(change => ({
+                    id: Number(change.id),
+                    ...(change.completedChanged ? { addCompleted: change.completed } : {}),
+                    ...(change.damageChanged ? { addDamage: change.damage } : {})
+                }));
+                return (await productionAction(() => Production.edit(key, requests))) !== null;
+            },
+            onPass: async () => {
+                const ready = Production.readState()[key].filter(item =>
+                    !item.stopped && Production.calculateProductionMath(item).passableQty > 0);
+                if (!ready.length) {
+                    await Swal.fire({ icon: "info", title: "Nothing to Pass", text: "No completed quantities are ready to pass." });
+                    return false;
+                }
+                return (await productionAction(() => Production.pass(key, ready.map(item => item.id)))) !== null;
+            }
+        });
+    });
     $("#multiSelectBox").on("click", function (e) {
         e.stopPropagation();
         $("#multiSelectDropdown").toggleClass("open");

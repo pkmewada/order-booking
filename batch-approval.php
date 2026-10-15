@@ -781,7 +781,7 @@
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
-<script src="assets/js/production-engine.js"></script>
+<script src="assets/js/production-engine.js?v=<?= filemtime(__DIR__ . '/assets/js/production-engine.js') ?>"></script>
 <script src="assets/js/batch-approval.js"></script>
 </body>
 

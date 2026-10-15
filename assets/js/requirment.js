@@ -22,10 +22,6 @@ $(document).ready(async function () {
         } catch (error) { return []; }
     }
 
-    function saveStorage(key, value) {
-        try { localStorage.setItem(key, JSON.stringify(value)); return true; }
-        catch (error) { return false; }
-    }
 
     let requirements = [];
 

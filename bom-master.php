@@ -940,7 +940,7 @@ include __DIR__ . "/includes/header.php";
 
 <?php include __DIR__ . "/includes/footer.php"; ?>
 
-<script src="assets/js/production-engine.js"></script>
+<script src="assets/js/production-engine.js?v=<?= filemtime(__DIR__ . '/assets/js/production-engine.js') ?>"></script>
 <script src="assets/js/catalog-api.js?v=<?= filemtime(__DIR__ . '/assets/js/catalog-api.js') ?>"></script>
 <script src="assets/js/product-codes.js?v=<?= filemtime(__DIR__ . '/assets/js/product-codes.js') ?>"></script>
 <script src="assets/js/bom-master.js?v=<?= filemtime(__DIR__ . '/assets/js/bom-master.js') ?>"></script>

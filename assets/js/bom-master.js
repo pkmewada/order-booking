@@ -21,7 +21,7 @@ $(document).ready(function () {
         const rows = await CatalogApi.load();
         bomData = rows.map(r => ({...r, _product: r.createdFrom === 'product' && !r.bomCompleted}));
         MATERIALS = CatalogApi.masters.items.map(r => r.name);
-        ITEMS = MATERIALS.slice(); WORK_TYPES = CatalogApi.masters.works.map(r => r.name);
+        ITEMS = CatalogApi.masters.pieceItems.map(r => r.name); WORK_TYPES = CatalogApi.masters.works.map(r => r.name);
         const current = $('#colorSelect').val();
         $('#colorSelect').empty().append($('<option>').val('').text('Select Color'));
         CatalogApi.masters.colors.forEach(c => $('#colorSelect').append($('<option>').val(c.name).text(c.name)));
@@ -98,6 +98,10 @@ $(document).ready(function () {
                 ${escapeHtml(placeholder)}
             </option>
         `;
+
+        if (selected && !options.includes(selected)) {
+            html += `<option value="${escapeHtml(selected)}" selected>${escapeHtml(selected)}</option>`;
+        }
 
         options.forEach(option => {
             html += `
@@ -766,7 +770,7 @@ $(document).ready(function () {
         if (missingItem) {
 
             alertMsg(
-                "Please select an item for every piece.",
+                "Please select a garment piece for every row from the Piece Items list.",
                 "warning"
             );
 

@@ -5,13 +5,14 @@ function productRows(PDO $db): array
 {
     $rows = $db->query('SELECT p.*, c.name AS color FROM productRecords p JOIN colourRecords c ON c.id = p.colourId ORDER BY p.id DESC')->fetchAll();
     $items = $db->query('SELECT id, name FROM itemList')->fetchAll(PDO::FETCH_KEY_PAIR);
+    $pieceItems = $db->query('SELECT id, name FROM pieceItemList')->fetchAll(PDO::FETCH_KEY_PAIR);
     $works = $db->query('SELECT id, name FROM additionalWork')->fetchAll(PDO::FETCH_KEY_PAIR);
     $sizes = ['LITTLE DOLLY' => '18-26', 'AMARI' => 'S-L', 'NIVI BLOSSOM' => '28-34'];
     $prefixes = ['LITTLE DOLLY' => 'Ld', 'AMARI' => 'Am', 'NIVI BLOSSOM' => 'Nv'];
     foreach ($rows as &$row) {
         $row['pieces'] = json_decode($row['pieces'], true) ?: [];
         foreach ($row['pieces'] as &$piece) {
-            $piece['item'] = $items[$piece['itemId']] ?? '';
+            $piece['item'] = $pieceItems[$piece['pieceItemId'] ?? 0] ?? $items[$piece['itemId'] ?? 0] ?? '';
             $piece['materials'] = array_map(static function ($id) use ($items) { return $items[$id] ?? ''; }, $piece['materialIds']);
             foreach ($piece['additionalWorks'] as &$work) { $work['workType'] = $works[$work['workId']] ?? ''; }
             unset($work);
@@ -109,13 +110,29 @@ function productRecords(string $mode): void
         $complete = $mode === 'bom' || ($old && $old['bomCompleted']);
         $pieces = $complete && $mode === 'product' ? json_decode($old['pieces'], true) : ($data['pieces'] ?? []);
         if (!is_array($pieces) || count($pieces) > 5 || ($mode === 'bom' && count($pieces) < 1)) { throw new InvalidArgumentException('Configure 1–5 pieces for BOM.'); }
-        $itemLookup = $db->prepare('SELECT id FROM itemList WHERE id = ?');
+        $itemLookup = $db->prepare('SELECT id, name FROM itemList WHERE id = ?');
+        $pieceItemLookup = $db->prepare('SELECT id FROM pieceItemList WHERE id = ?');
         $workLookup = $db->prepare('SELECT id FROM additionalWork WHERE id = ?');
         $normalized = [];
         foreach ($pieces as $index => $piece) {
             if (!is_array($piece)) { throw new InvalidArgumentException('Invalid piece.'); }
-            $itemId = $piece['itemId'] ?? 0; $itemLookup->execute([$itemId]);
-            if (!$itemLookup->fetch()) { throw new InvalidArgumentException('Select each piece item from Item List.'); }
+            $pieceItemId = $piece['pieceItemId'] ?? null;
+            $legacyItemId = $piece['legacyItemId'] ?? $piece['itemId'] ?? null;
+            if ($pieceItemId !== null) {
+                $pieceItemLookup->execute([$pieceItemId]);
+                if (!$pieceItemLookup->fetch()) { throw new InvalidArgumentException('Select each garment piece from Piece Items.'); }
+            } elseif ($legacyItemId !== null) {
+                $itemLookup->execute([$legacyItemId]);
+                if (!$itemLookup->fetch()) { throw new InvalidArgumentException('Select each garment piece from Piece Items.'); }
+            } else {
+                $itemName = $piece['itemName'] ?? '';
+                if (!is_string($itemName) || trim($itemName) === '' || mb_strlen($itemName, 'UTF-8') > 150) {
+                    throw new InvalidArgumentException('Select each garment piece from Piece Items.');
+                }
+                $pieceItemLookupByName = $db->prepare('SELECT id FROM pieceItemList WHERE name = ?');
+                $pieceItemLookupByName->execute([trim($itemName)]);
+                if (!$pieceItemLookupByName->fetch()) { throw new InvalidArgumentException('Select each garment piece from Piece Items.'); }
+            }
             $materials = $piece['materialIds'] ?? [];
             $works = $piece['additionalWorks'] ?? [];
             if (!is_array($materials) || !is_array($works) || count($materials) > 100 || count($works) > 100) { throw new InvalidArgumentException('Invalid piece details.'); }
@@ -126,7 +143,11 @@ function productRecords(string $mode): void
                 if (!$workLookup->fetch() || !in_array($work['stage'] ?? '', ['Before Cutting','After Cutting','After Stitching'], true)) { throw new InvalidArgumentException('Select valid additional work and timing.'); }
                 $validWorks[$work['workId'] . ':' . $work['stage']] = ['workId' => (int) $work['workId'], 'stage' => $work['stage']];
             }
-            $normalized[] = ['number' => $index + 1, 'itemId' => (int) $itemId, 'materialIds' => array_values(array_unique(array_map('intval', $materials))), 'additionalWorks' => array_values($validWorks)];
+            $normalized[] = ['number' => $index + 1, 'pieceItemId' => $pieceItemId === null ? null : (int) $pieceItemId,
+                'legacyItemId' => $pieceItemId === null ? (int) ($legacyItemId ?? 0) : null,
+                'itemName' => isset($itemName) ? trim($itemName) : null,
+                'materialIds' => array_values(array_unique(array_map('intval', $materials))), 'additionalWorks' => array_values($validWorks)];
+            unset($itemName);
         }
         if ($mode === 'product' && $old) { $pattern = $old['pattern']; $mrp = $old['mrp']; }
         if (isset($_FILES['photo']) && $_FILES['photo']['error'] !== UPLOAD_ERR_NO_FILE) {
@@ -141,6 +162,27 @@ function productRecords(string $mode): void
             if (!move_uploaded_file($file['tmp_name'], __DIR__ . '/../' . $newPhoto)) { throw new RuntimeException('Photo could not be saved.'); }
         }
         $db->beginTransaction();
+        $legacyItemName = $db->prepare('SELECT name FROM itemList WHERE id = ?');
+        $findPieceItem = $db->prepare('SELECT id FROM pieceItemList WHERE name = ?');
+        $insertPieceItem = $db->prepare('INSERT INTO pieceItemList (name) VALUES (?) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)');
+        foreach ($normalized as &$piece) {
+            if ($piece['pieceItemId'] !== null) { continue; }
+            $name = $piece['itemName'];
+            if ($piece['legacyItemId']) {
+                $legacyItemName->execute([$piece['legacyItemId']]);
+                $name = (string) $legacyItemName->fetchColumn();
+            }
+            if ($name === '') { throw new InvalidArgumentException('Select each garment piece from Piece Items.'); }
+            $findPieceItem->execute([$name]);
+            $piece['pieceItemId'] = $findPieceItem->fetchColumn();
+            if (!$piece['pieceItemId']) {
+                $insertPieceItem->execute([$name]);
+                $piece['pieceItemId'] = (int) $db->lastInsertId();
+            }
+            $piece['pieceItemId'] = (int) $piece['pieceItemId'];
+            unset($piece['legacyItemId'], $piece['itemName']);
+        }
+        unset($piece);
         $values = [$brand, $design, $data['colourId'], $pattern, $mrp, $newPhoto ?: ($old['photo'] ?? null), json_encode($normalized), max(1, count($normalized)), $complete ? 1 : 0];
         if ($old) {
             $query = $db->prepare('UPDATE productRecords SET brand=?, designNumber=?, colourId=?, pattern=?, mrp=?, photo=?, pieces=?, pieceCount=?, bomCompleted=? WHERE id=?');
@@ -153,7 +195,6 @@ function productRecords(string $mode): void
         $itemInsert = $db->prepare('INSERT INTO productItemLinks (productId,pieceNumber,itemId,role) VALUES (?,?,?,?)');
         $workInsert = $db->prepare('INSERT INTO productWorkLinks (productId,pieceNumber,workId,stage) VALUES (?,?,?,?)');
         foreach ($normalized as $piece) {
-            $itemInsert->execute([$id, $piece['number'], $piece['itemId'], 'piece']);
             foreach ($piece['materialIds'] as $material) { $itemInsert->execute([$id, $piece['number'], $material, 'material']); }
             foreach ($piece['additionalWorks'] as $work) { $workInsert->execute([$id, $piece['number'], $work['workId'], $work['stage']]); }
         }

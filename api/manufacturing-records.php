@@ -3,7 +3,7 @@ require_once __DIR__ . '/master-records.php';
 
 function manufacturingRecords(string $table): void
 {
-    if (!in_array($table, ['employeeRecords', 'colourRecords', 'itemList', 'additionalWork'], true)) {
+    if (!in_array($table, ['employeeRecords', 'colourRecords', 'itemList', 'pieceItemList', 'additionalWork'], true)) {
         respond(400, ['success' => false, 'message' => 'Invalid resource.']);
     }
     $employee = $table === 'employeeRecords';
@@ -39,6 +39,16 @@ function manufacturingRecords(string $table): void
             if (!$query->fetch()) { respond(404, ['success' => false, 'message' => 'Record not found. Refresh the page.']); }
         }
         if ($method === 'DELETE') {
+            if ($table === 'pieceItemList') {
+                $records = $db->query('SELECT pieces FROM productRecords')->fetchAll(PDO::FETCH_COLUMN);
+                foreach ($records as $piecesJson) {
+                    foreach (json_decode($piecesJson, true) ?: [] as $piece) {
+                        if ((string) ($piece['pieceItemId'] ?? '') === (string) $id) {
+                            respond(409, ['success' => false, 'message' => 'This piece item is used by a BOM/product and cannot be deleted.']);
+                        }
+                    }
+                }
+            }
             $query = $db->prepare("DELETE FROM `$table` WHERE id = ?");
             $query->execute([$id]);
             respond(200, ['success' => true]);

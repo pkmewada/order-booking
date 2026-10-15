@@ -42,9 +42,33 @@ $(document).ready(async function () {
         pager('#availablePagination',availablePage,ready.length,p=>{availablePage=p;render();});pager('#assignedPagination',assignedPage,assigned.length,p=>{assignedPage=p;render();});
     }
     let saving=false;
-    async function action(fn,close) { if(saving)return; saving=true; $("#saveAssignBtn,#updateProgressBtn,#passProgressBtn").prop("disabled",true); try { await fn(); if(close) modal(close).hide(); render(); } catch(e) { await Swal.fire({icon:'error',title:'Could not save packing',text:e.message});render(); } finally { saving=false; $("#saveAssignBtn,#updateProgressBtn,#passProgressBtn").prop("disabled",false); } }
+    async function action(fn,close) { if(saving)return false; saving=true; $("#saveAssignBtn,#updateProgressBtn,#passProgressBtn").prop("disabled",true); try { await fn(); if(close) modal(close).hide(); render(); return true; } catch(e) { await Swal.fire({icon:'error',title:'Could not save packing',text:e.message});render(); return false; } finally { saving=false; $("#saveAssignBtn,#updateProgressBtn,#passProgressBtn").prop("disabled",false); } }
     $(document).on('click','.assign-single-btn',function(){SetAssignments.open('packing',String($(this).data('batch')),render);});
     $('#bulkAssignPackingBtn').on('click',()=>SetAssignments.open('packing',null,render));
+    $('#bulkPassPackingBtn').on('click',()=>{
+        state=P.readState();
+        const rows=lots().filter(l=>!passed(l)).map(l=>{
+            const w=l.rows[0],m=P.packingLotMath(l.rows);
+            return {id:l.id,batchId:w.batchId,label:l.id,brand:w.brand,piece:l.rows.map(row=>row.pieceType).join(', '),worker:w.worker,quantity:m.inputQty,completed:m.completedQty,damage:m.damageQty};
+        });
+        BulkPass.open({
+            title:'Bulk Pass Packing Assignments',itemLabel:'Packing Lot',rows,
+            onSave:async changes=>{
+                for(const change of changes){
+                    if(change.damageChanged&&!(await action(()=>P.editPackingLot(change.id,'damage',change.damage))))return false;
+                    if(change.completedChanged&&!(await action(()=>P.editPackingLot(change.id,'completed',change.completed))))return false;
+                }
+                return true;
+            },
+            onPass:async()=>{
+                state=P.readState();
+                const ready=lots().filter(canPassLot);
+                if(!ready.length){await Swal.fire({icon:'info',title:'Nothing to Pass',text:'No completed packing lots are ready to pass.'});return false;}
+                for(const lot of ready)if(!(await action(()=>P.passPackingLot(lot.id))))return false;
+                return true;
+            }
+        });
+    });
     $('#listAllBtn').on('click',()=>{render();modal('listModal').show();});
     $('#labelBtn').on('click',()=>PackingLabels.open());
     $(document).on('click','.label-lot-btn',function(){const l=lots().find(l=>l.id===String($(this).data('lot')));PackingLabels.open(l.rows[0],1,true);});

@@ -74,10 +74,6 @@ $(document).ready(async function () {
             return Array.isArray(parsed) ? parsed : [];
         } catch (e) { return []; }
     }
-    function saveStorage(key, value) {
-        try { localStorage.setItem(key, JSON.stringify(value)); return true; }
-        catch (e) { return false; }
-    }
     function isThisStage(p) {
         return !!(
             p.currentStage && p.currentStage.type === "cutting"
@@ -94,18 +90,6 @@ $(document).ready(async function () {
     /* ============================================================
        HISTORY LOG
        ============================================================ */
-    function pushHistory(entry) {
-        try {
-            const history = readStorage(CUTTING_HISTORY_KEY);
-            history.push({
-                id: Date.now() + Math.floor(Math.random() * 1000),
-                at: new Date().toLocaleString("en-GB"),
-                ...entry
-            });
-            saveStorage(CUTTING_HISTORY_KEY, history);
-        } catch (e) { /* silent */ }
-    }
-
     function parseHistoryTime(str) {
         const m = String(str).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2}):(\d{2})/);
         if (!m) return Date.parse(str) || 0;
@@ -1314,6 +1298,37 @@ $(document).ready(async function () {
     }
 
     $("#bulkAssignBtn").on("click", openBulkModal);
+    $("#bulkPassCuttingBtn").on("click", function () {
+        const key = "cuttingData";
+        const rows = Production.readState()[key]
+            .filter(item => !item.stopped && Production.status(item) !== "passed")
+            .map(item => ({
+                id: item.id, batchId: item.batchId, label: item.subBatch,
+                brand: item.brand, piece: item.pieceType, worker: item.worker,
+                quantity: item.inputQty ?? item.assignedQty, completed: item.completedQty, damage: item.damageQty
+            }));
+        BulkPass.open({
+            title: "Bulk Pass Cutting Assignments",
+            rows,
+            onSave: async changes => {
+                const requests = changes.map(change => ({
+                    id: Number(change.id),
+                    ...(change.completedChanged ? { addCompleted: change.completed } : {}),
+                    ...(change.damageChanged ? { addDamage: change.damage } : {})
+                }));
+                return (await productionAction(() => Production.edit(key, requests))) !== undefined;
+            },
+            onPass: async () => {
+                const ready = Production.readState()[key].filter(item =>
+                    !item.stopped && Production.calculateProductionMath(item).passableQty > 0);
+                if (!ready.length) {
+                    await Swal.fire({ icon: "info", title: "Nothing to Pass", text: "No completed quantities are ready to pass." });
+                    return false;
+                }
+                return (await productionAction(() => Production.pass(key, ready.map(item => item.id)))) !== undefined;
+            }
+        });
+    });
     $("#multiSelectBox").on("click", function (e) {
         e.stopPropagation();
         $(this).toggleClass("open");

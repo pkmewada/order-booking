@@ -38,10 +38,6 @@ $(document).ready(async function () {
             return Array.isArray(parsed) ? parsed : [];
         } catch (error) { return []; }
     }
-    function saveStorage(key, value) {
-        try { localStorage.setItem(key, JSON.stringify(value)); return true; }
-        catch (error) { return false; }
-    }
     function normalize(value) { return String(value ?? "").trim().toLowerCase(); }
 
     function getPriorityClass(priority) {

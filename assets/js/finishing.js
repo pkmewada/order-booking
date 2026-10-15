@@ -17,8 +17,8 @@ $(document).ready(async function () {
     };
     async function save(fn,close=false) {
         if(busy)return;busy=true;$('#assignBundlingBtn,.pass-bundling').prop('disabled',true);
-        try {await fn();if(close)bootstrap.Modal.getOrCreateInstance(document.getElementById('bundlingModal')).hide();render();}
-        catch(e){await Swal.fire({icon:'error',title:'Could not save',text:e.message});render();}
+        try {await fn();if(close)bootstrap.Modal.getOrCreateInstance(document.getElementById('bundlingModal')).hide();render();return true;}
+        catch(e){await Swal.fire({icon:'error',title:'Could not save',text:e.message});render();return false;}
         finally{busy=false;$('#assignBundlingBtn,.pass-bundling').prop('disabled',false);}
     }
     function documentFor(batchId, allRows) {
@@ -51,6 +51,25 @@ $(document).ready(async function () {
     }
     $(document).on('click','.assign-bundling',function(){SetAssignments.open('bundling',String($(this).data('lot')),render);});
     $('#bulkAssignBundlingBtn').on('click',()=>SetAssignments.open('bundling',null,render));
+    $('#bulkPassBundlingBtn').on('click',()=>{
+        const rows=P.readState().bundlingData.filter(r=>r.status!=='passed').map(r=>({
+            id:r.id,batchId:r.batchId,label:r.id,brand:r.brand,piece:r.pieces.join(', '),
+            worker:r.worker,quantity:r.quantity,completed:r.completedQty||0,damage:0
+        }));
+        BulkPass.open({
+            title:'Bulk Pass Bundling Assignments',itemLabel:'Bundling Lot',mode:'absolute',showDamage:false,rows,
+            onSave:async changes=>{
+                for(const change of changes)if(!(await save(()=>P.editBundling(change.id,change.completed))))return false;
+                return true;
+            },
+            onPass:async()=>{
+                const ready=P.readState().bundlingData.filter(r=>r.status!=='passed'&&Number(r.completedQty)===Number(r.quantity));
+                if(!ready.length){await Swal.fire({icon:'info',title:'Nothing to Pass',text:'No fully completed bundling assignments are ready to pass.'});return false;}
+                for(const row of ready)if(!(await save(()=>P.passBundling(row.id))))return false;
+                return true;
+            }
+        });
+    });
     $(document).on('click','.pass-bundling',function(){const id=String($(this).data('id'));save(()=>P.passBundling(id));});
     $('#inventoryBatch,#inventoryDesign,#inventoryFrom,#inventoryTo').on('input change',()=>{if(state)renderInventory();});
     $('#refreshFinishingBtn').on('click',render);window.addEventListener('storage',()=>{if(state)render();});window.addEventListener('focus',()=>{if(state)render();});

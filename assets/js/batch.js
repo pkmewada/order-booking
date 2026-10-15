@@ -1,4 +1,4 @@
-$(document).ready(function () {
+$(document).ready(async function () {
     "use strict";
 
     const BATCH_STORAGE_KEY = "batchData";
@@ -50,13 +50,13 @@ $(document).ready(function () {
         }
     }
 
-    function saveStorage(key, value) {
+    async function saveState(updates) {
         try {
-            localStorage.setItem(key, JSON.stringify(value));
+            await Production.saveState(updates);
             return true;
         } catch (error) {
-            console.error("Storage save error:", error);
-            Swal.fire("Storage Error", "Could not save data.", "error");
+            console.error("Manufacturing database save error:", error);
+            Swal.fire("Database Error", error.message || "Could not save manufacturing data.", "error");
             return false;
         }
     }
@@ -189,9 +189,17 @@ $(document).ready(function () {
     // DATA LOAD
     // --------------------------------------------------
 
-    function loadData() {
+    async function loadData() {
+        await Production.refresh();
         batchData = readStorage(BATCH_STORAGE_KEY);
-        bomData = readStorage(BOM_STORAGE_KEY);
+        const response = await fetch("api/bom.php", { cache: "no-store" });
+        let result;
+        try { result = await response.json(); }
+        catch (_) { throw new Error("Invalid BOM database response. Check PHP and database setup."); }
+        if (!response.ok || !result.success) throw new Error(result.message || "Unable to load BOM data.");
+        bomData = result.data;
+        try { localStorage.setItem(BOM_STORAGE_KEY, JSON.stringify(bomData)); }
+        catch (error) { console.warn("BOM cache unavailable:", error); }
     }
 
     // --------------------------------------------------
@@ -362,10 +370,11 @@ $(document).ready(function () {
     // REFRESH
     // --------------------------------------------------
 
-    $("#refreshBatchBtn").on("click", function () {
+    $("#refreshBatchBtn").on("click", async function () {
         const btn = $(this);
         btn.addClass("spinning");
-        loadData();
+        try { await loadData(); }
+        catch (error) { Swal.fire("Database Error", error.message, "error"); btn.removeClass("spinning"); return; }
         $("#brandFilter").val("");
         $("#priorityFilter").val("");
         $("#colorFilter").val("");
@@ -386,7 +395,7 @@ $(document).ready(function () {
     // SAVE BATCH
     // --------------------------------------------------
 
-    $("#batchForm").on("submit", function (event) {
+    $("#batchForm").on("submit", async function (event) {
         event.preventDefault();
 
         const designNumber = $("#designNumber").val().trim();
@@ -448,7 +457,7 @@ $(document).ready(function () {
             batchData.push(batchRecord);
         }
 
-        if (!saveStorage(BATCH_STORAGE_KEY, batchData)) return;
+        if (!(await saveState({ [BATCH_STORAGE_KEY]: batchData }))) return;
 
         batchModal.hide();
         renderFilters();
@@ -605,7 +614,7 @@ $(document).ready(function () {
             confirmButtonText: "Yes, Pass",
             cancelButtonText: "Cancel",
             confirmButtonColor: "#198754"
-        }).then(function (result) {
+        }).then(async function (result) {
             if (!result.isConfirmed) return;
 
             // Mark approved + record current date/time
@@ -622,8 +631,10 @@ $(document).ready(function () {
                 approvedBatches.push({ ...batch });
             }
 
-            if (!saveStorage(APPROVED_BATCH_STORAGE_KEY, approvedBatches)) return;
-            if (!saveStorage(BATCH_STORAGE_KEY, batchData)) return;
+            if (!(await saveState({
+                [APPROVED_BATCH_STORAGE_KEY]: approvedBatches,
+                [BATCH_STORAGE_KEY]: batchData
+            }))) return;
 
             renderTable();
 
@@ -654,11 +665,11 @@ $(document).ready(function () {
             confirmButtonText: "Yes, Delete",
             cancelButtonText: "Cancel",
             confirmButtonColor: "#dc3545"
-        }).then(function (result) {
+        }).then(async function (result) {
             if (!result.isConfirmed) return;
 
             batchData = batchData.filter(item => Number(item.id) !== id);
-            if (!saveStorage(BATCH_STORAGE_KEY, batchData)) return;
+            if (!(await saveState({ [BATCH_STORAGE_KEY]: batchData }))) return;
 
             renderFilters();
             renderTable();
@@ -707,7 +718,12 @@ $(document).ready(function () {
     // INITIAL LOAD
     // --------------------------------------------------
 
-    loadData();
-    renderFilters();
-    renderTable();
+    try {
+        await Production.initialize();
+        await loadData();
+        renderFilters();
+        renderTable();
+    } catch (error) {
+        Swal.fire({ icon: "error", title: "Manufacturing database unavailable", text: error.message });
+    }
 });

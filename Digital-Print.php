@@ -215,11 +215,12 @@
         <div class="row">
             <div class="col-xl-12">
                 <div class="card custom-card">
-                    <div class="card-header">
+                    <div class="card-header d-flex align-items-center justify-content-between">
                         <div class="card-title">
                             <i class="bx bx-cut text-primary me-2"></i>
                             Digital Print Assignments
                         </div>
+                        <button class="btn btn-dark btn-sm" id="bulkPassDigitalBtn"><i class="bx bx-right-arrow-alt me-1"></i>Bulk Pass</button>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -402,8 +403,9 @@
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
-<script src="assets/js/production-engine.js"></script>
+<script src="assets/js/production-engine.js?v=<?= filemtime(__DIR__ . '/assets/js/production-engine.js') ?>"></script>
 <script src="assets/js/production-controls.js"></script>
+<script src="assets/js/bulk-pass.js?v=<?= filemtime(__DIR__ . "/assets/js/bulk-pass.js") ?>"></script>
 <link rel="stylesheet" href="assets/css/assignment-details.css?v=<?= filemtime(__DIR__ . "/assets/css/assignment-details.css") ?>">
 <script src="assets/js/assignment-details.js?v=<?= filemtime(__DIR__ . "/assets/js/assignment-details.js") ?>"></script>
 <script src="assets/js/batch-history-pdf.js?v=<?= filemtime(__DIR__ . "/assets/js/batch-history-pdf.js") ?>"></script>

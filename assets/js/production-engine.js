@@ -91,7 +91,9 @@
             { type: "ironing", stage: "Ironing" }, ...at("After Ironing"), { type: "packing", stage: "Packing" }];
     }
 
-    function createEngine(storage, locks) {
+    function createEngine(storage, locks, repository) {
+        let revision = null;
+        let initialized = false;
         function read(key) {
             const raw = storage.getItem(key);
             if (raw === null) return [];
@@ -157,6 +159,59 @@
             }
             return s;
         }
+        function applyRemoteState(state) {
+            for (const key of keys) {
+                storage.setItem(key, JSON.stringify(state[key] || []));
+            }
+        }
+        async function loadRemoteState() {
+            const result = await repository.load();
+            revision = result.revision;
+            initialized = result.initialized;
+            return result;
+        }
+        async function initialize() {
+            if (!repository) {
+                if (locks?.request) await locks.request("garment-production", { mode: "exclusive" }, recover);
+                return;
+            }
+            const result = await loadRemoteState();
+            if (result.initialized) {
+                applyRemoteState(result.state);
+                return;
+            }
+            const legacy = Object.fromEntries(keys.map(key => [key, read(key)]));
+            try {
+                revision = await repository.initialize(legacy, revision);
+                initialized = true;
+                applyRemoteState(legacy);
+            } catch (error) {
+                const latest = await loadRemoteState();
+                if (!latest.initialized) throw error;
+                applyRemoteState(latest.state);
+            }
+        }
+        async function saveState(updates) {
+            if (!repository) throw new Error("Manufacturing database persistence is unavailable.");
+            if (!initialized) await initialize();
+            for (const key of Object.keys(updates)) {
+                if (!keys.includes(key) || !Array.isArray(updates[key])) {
+                    throw new Error(`Invalid manufacturing data collection: ${key}.`);
+                }
+            }
+            const nextRevision = await repository.save(updates, revision);
+            revision = nextRevision;
+            for (const [key, value] of Object.entries(updates)) {
+                storage.setItem(key, JSON.stringify(value));
+            }
+            return true;
+        }
+        async function refresh() {
+            if (!repository) return readState();
+            const result = await loadRemoteState();
+            if (result.initialized) applyRemoteState(result.state);
+            return readState();
+        }
         function getPool(s, id) {
             const p = s.approvedPool.find(p => same(p.id, id));
             if (!p) throw new Error(`Pool ${id} was not found.`);
@@ -214,8 +269,14 @@
             }
         }
         async function transaction(action) {
-            if (!locks?.request) throw new Error("Production writes require browser Web Locks. Open this app on localhost or HTTPS in a current browser.");
-            return locks.request("garment-production", { mode: "exclusive" }, () => {
+            const execute = async () => {
+                if (repository) {
+                    if (!initialized) await initialize();
+                    const latest = await loadRemoteState();
+                    if (latest.initialized) applyRemoteState(latest.state);
+                } else if (!locks?.request) {
+                    throw new Error("Production writes require browser Web Locks or the manufacturing database API.");
+                }
                 recover();
                 const s = readState();
                 const result = action(s);
@@ -232,9 +293,21 @@
                     history.push({ id: auditId, auditId, [idField]: h.sourceWorkId, batchId: p.batchId,
                         subBatch: w?.subBatch, at: h.at, action: `${h.action}: ${h.qty} pcs`, by: "Manager" });
                 }
+                if (repository) {
+                    const changes = Object.fromEntries(Object.entries(s)
+                        .filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(read(key))));
+                    if (Object.keys(changes).length) {
+                        revision = await repository.save(changes, revision);
+                        initialized = true;
+                    }
+                }
                 commit(s);
                 return copy(result ?? null);
-            });
+            };
+            if (!repository && locks?.request) {
+                return locks.request("garment-production", { mode: "exclusive" }, execute);
+            }
+            return execute();
         }
         function views(key) {
             const s = readState(), stage = managers[key];
@@ -658,11 +731,32 @@
             packingBatches, assignPacking, assignPackingBulk, assignBundlingBulk, setPackingHold, passPackingLot, packingLotMath, editPackingLot, bundlingReady, assignBundling, editBundling, passBundling, brandSizes,
             approve, tickRequirement, receiveRequirement, setBatchStopped,
             calculateAvailableQty, validateAssignment, pushToNextStage, pushToPackingPool,
-            initialize: () => locks?.request ? locks.request("garment-production", { mode: "exclusive" }, recover) : Promise.resolve() };
+            initialize, refresh, saveState };
     }
     const api = { managers, calculateProductionMath, normalizeWork, validateWork, validateDamage, validatePass, status, buildRoute, createEngine };
     if (typeof localStorage !== "undefined") {
-        const engine = createEngine(localStorage, globalThis.navigator?.locks);
+        const repository = {
+            async request(method, body) {
+                const options = { method, cache: "no-store", headers: { "Content-Type": "application/json" } };
+                if (body) options.body = JSON.stringify(body);
+                const response = await fetch("api/manufacturing-state.php", options);
+                let result;
+                try { result = await response.json(); }
+                catch (_) { throw new Error("Invalid manufacturing database response. Check PHP and database setup."); }
+                if (!response.ok || !result.success) throw new Error(result.message || "Manufacturing database request failed.");
+                return result.data;
+            },
+            async load() { return this.request("GET"); },
+            async initialize(state) {
+                const result = await this.request("POST", { state, initialize: true });
+                return result.revision;
+            },
+            async save(state, revision) {
+                const result = await this.request("POST", { state, revision });
+                return result.revision;
+            }
+        };
+        const engine = createEngine(localStorage, globalThis.navigator?.locks, repository);
         Object.assign(api, engine);
     }
     return api;

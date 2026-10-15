@@ -926,11 +926,12 @@
         <div class="row">
             <div class="col-xl-12">
                 <div class="card custom-card">
-                    <div class="card-header">
+                    <div class="card-header d-flex align-items-center justify-content-between">
                         <div class="card-title">
                             <i class="bx bx-cut text-primary me-2"></i>
                             Packing Assignments
                         </div>
+                        <button class="btn btn-dark btn-sm" id="bulkPassPackingBtn"><i class="bx bx-right-arrow-alt me-1"></i>Bulk Pass</button>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -1069,6 +1070,7 @@
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 <script src="assets/js/production-engine.js?v=<?= filemtime(__DIR__ . '/assets/js/production-engine.js') ?>"></script>
 <script src="assets/js/set-assignments.js?v=<?= filemtime(__DIR__ . '/assets/js/set-assignments.js') ?>"></script>
+<script src="assets/js/bulk-pass.js?v=<?= filemtime(__DIR__ . '/assets/js/bulk-pass.js') ?>"></script>
 <script src="assets/libs/jsbarcode/JsBarcode.all.min.js"></script>
 <script src="assets/js/product-codes.js?v=<?= filemtime(__DIR__ . '/assets/js/product-codes.js') ?>"></script>
 <script src="assets/js/packing-labels.js?v=<?= filemtime(__DIR__ . '/assets/js/packing-labels.js') ?>"></script>

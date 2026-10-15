@@ -1,14 +1,24 @@
 $(document).ready(function() {
     let items = [];
+    const isPieceItem = new URLSearchParams(window.location.search).get('type') === 'piece';
+    const endpoint = isPieceItem ? 'piece-item-list' : 'item-list';
+    const itemLabel = isPieceItem ? 'Piece Item' : 'Item';
+    if (isPieceItem) {
+        $('.page-title').text('Piece Item Management');
+        $('.breadcrumb-item.active').text('Piece Items');
+        $('.card-title').html('<i class="bx bx-list-ul text-primary me-2"></i> Piece Items');
+        $('#addItemBtn').html('<i class="bx bx-plus align-middle"></i> Add Piece Item');
+        $('#itemName').attr('placeholder', 'Enter a garment item (e.g., Shirt, Jeans, Jacket)');
+    }
     async function request(method = 'GET', data) {
-        const response = await fetch('api/item-list.php', { method, cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: data ? JSON.stringify(data) : undefined });
+        const response = await fetch(`api/${endpoint}.php`, { method, cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: data ? JSON.stringify(data) : undefined });
         let result;
         try { result = await response.json(); } catch (_) { throw new Error('Invalid server response. Check Apache and database setup.'); }
         if (!response.ok || !result.success) throw new Error(result.message || 'Unable to complete request.');
         return result.data;
     }
     function cacheRecords() {
-        try { localStorage.setItem('items', JSON.stringify(items)); } catch (error) { console.warn('Master cache unavailable', error); }
+        try { localStorage.setItem(isPieceItem ? 'pieceItems' : 'items', JSON.stringify(items)); } catch (error) { console.warn('Master cache unavailable', error); }
     }
     function escapeHtml(value) { return $('<div>').text(String(value ?? '')).html(); }
     async function loadRecords() {
@@ -85,7 +95,7 @@ $(document).ready(function() {
 
     // Open Add Modal
     $('#addItemBtn').click(function() {
-        $('#itemModalLabel').text('Add Item');
+        $('#itemModalLabel').text(`Add ${itemLabel}`);
         $('#itemName').val('');
         $('#editItemId').val('');
         $('#itemModal').modal('show');
@@ -96,7 +106,7 @@ $(document).ready(function() {
         const item = items.find(i => i.id === id);
         if (!item) return;
 
-        $('#itemModalLabel').text('Edit Item');
+        $('#itemModalLabel').text(`Edit ${itemLabel}`);
         $('#itemName').val(item.name);
         $('#editItemId').val(item.id);
         $('#itemModal').modal('show');

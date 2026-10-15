@@ -70,10 +70,6 @@ $(document).ready(async function () {
         try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : []; }
         catch { return []; }
     }
-    function saveStorage(k, v) {
-        try { localStorage.setItem(k, JSON.stringify(v)); return true; }
-        catch { return false; }
-    }
     function normalize(v) { return String(v ?? "").trim().toLowerCase(); }
 
     function isThisStage(p) {
@@ -91,12 +87,6 @@ $(document).ready(async function () {
         nextId = Math.max(0, ...workData.map(w => Number(w.id) || 0)) + 1;
     }
     function saveData() { throw new Error("Use the shared production transaction API."); }
-
-    function pushHistory(entry) {
-        const h = readStorage(WORK_HISTORY_KEY);
-        h.push({ id: Date.now() + Math.floor(Math.random() * 1000), at: new Date().toLocaleString("en-GB"), ...entry });
-        saveStorage(WORK_HISTORY_KEY, h);
-    }
 
     function parseHistoryTime(str) {
         const m = String(str).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2}):(\d{2})/);
@@ -796,6 +786,38 @@ $(document).ready(async function () {
     }
 
     $("#bulkAssignBtn").on("click", openBulkModal);
+    $("#bulkPassDigitalBtn").on("click", function () {
+        const key = WORK_STORAGE_KEY;
+        const rows = Production.readState()[key]
+            .filter(item => !item.stopped && Production.status(item) !== "passed")
+            .map(item => ({
+                id: item.id, batchId: item.batchId, label: item.subBatch,
+                brand: item.brand, piece: item.pieceType,
+                worker: item.type === "outsource" ? item.firm : item.worker,
+                quantity: item.inputQty ?? item.assignedQty, completed: item.completedQty, damage: item.damageQty
+            }));
+        BulkPass.open({
+            title: `Bulk Pass ${WORK_TYPE} Assignments`,
+            rows,
+            onSave: async changes => {
+                const requests = changes.map(change => ({
+                    id: Number(change.id),
+                    ...(change.completedChanged ? { addCompleted: change.completed } : {}),
+                    ...(change.damageChanged ? { addDamage: change.damage } : {})
+                }));
+                return (await productionAction(() => Production.edit(key, requests))) !== null;
+            },
+            onPass: async () => {
+                const ready = Production.readState()[key].filter(item =>
+                    !item.stopped && Production.calculateProductionMath(item).passableQty > 0);
+                if (!ready.length) {
+                    await Swal.fire({ icon: "info", title: "Nothing to Pass", text: "No completed quantities are ready to pass." });
+                    return false;
+                }
+                return (await productionAction(() => Production.pass(key, ready.map(item => item.id)))) !== null;
+            }
+        });
+    });
     $("#multiSelectBox").on("click", function (e) {
         e.stopPropagation();
         $("#multiSelectDropdown").toggleClass("open");
