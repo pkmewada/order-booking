@@ -141,6 +141,16 @@ $(document).ready(async function () {
         return "";
     }
 
+    function getBrandSizeCount(brand) {
+        const sizes = {
+            "LITTLE DOLLY": ["18", "20", "22", "24", "26"],
+            "AMARI": ["S", "M", "L"],
+            "AMARU": ["S", "M", "L"],
+            "NIVI BLOSSOM": ["28", "30", "32", "34"]
+        };
+        return (sizes[String(brand || "").trim().toUpperCase()] || []).length;
+    }
+
     /* ======================================================
        PASSED DATE/TIME FORMAT
        ====================================================== */
@@ -416,6 +426,12 @@ $(document).ready(async function () {
 
         if (!quantity || quantity < 1) {
             showFormMessage("warning", "Please enter a valid quantity.");
+            return;
+        }
+
+        const sizeCount = getBrandSizeCount(getBrand(selectedBom));
+        if (sizeCount && quantity % sizeCount !== 0) {
+            showFormMessage("warning", `${getBrand(selectedBom)} has ${sizeCount} sizes. Quantity must be in complete size sets (multiples of ${sizeCount}).`);
             return;
         }
 

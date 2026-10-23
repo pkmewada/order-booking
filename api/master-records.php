@@ -25,7 +25,7 @@ function masterRecords(string $table, string $prefix): void
         $db = database();
         if ($method === 'GET') {
             $extraColumns = $isCustomer ? ', shopName, agentId, transporterId, distributorId' : '';
-            $rows = $db->query("SELECT id, name, contact, COALESCE(email, '') AS email, city, state$extraColumns FROM `$table` ORDER BY created_at DESC, id DESC")->fetchAll();
+            $rows = $db->query("SELECT id, name, contact, COALESCE(email, '') AS email, city, state$extraColumns FROM `$table` ORDER BY id DESC")->fetchAll();
             respond(200, ['success' => true, 'data' => $rows]);
         }
         if (stripos($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') !== 0) {

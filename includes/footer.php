@@ -70,17 +70,17 @@
 <script src="assets/libs/apexcharts/apexcharts.min.js"></script>
 
 <!-- Sales Dashboard -->
-<script src="assets/js/sales-dashboard.js"></script>
+<script src="assets/js/salesDashboard.js"></script>
 
 <!-- Custom JS -->
 <script src="assets/js/custom.js"></script>
-<script src="assets/js/header-fullscreen.js?v=<?= filemtime(__DIR__ . '/../assets/js/header-fullscreen.js') ?>"></script>
-<script src="assets/js/production-engine.js?v=<?= filemtime(__DIR__ . '/../assets/js/production-engine.js') ?>"></script>
-<script src="assets/js/navbar-counts.js?v=<?= filemtime(__DIR__ . '/../assets/js/navbar-counts.js') ?>"></script>
+<script src="assets/js/headerFullscreen.js?v=<?= filemtime(__DIR__ . '/../assets/js/headerFullscreen.js') ?>"></script>
+<script src="assets/js/productionEngine.js?v=<?= filemtime(__DIR__ . '/../assets/js/productionEngine.js') ?>"></script>
+<script src="assets/js/navbarCounts.js?v=<?= filemtime(__DIR__ . '/../assets/js/navbarCounts.js') ?>"></script>
 
 
 <!-- Custom-Switcher JS -->
-<script src="assets/js/custom-switcher.min.js"></script>
+<script src="assets/js/customSwitcher.min.js"></script>
 
 </body>
 

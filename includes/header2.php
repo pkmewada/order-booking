@@ -4,6 +4,15 @@
 
 <head>
 
+    <?php
+    $scriptPath = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/');
+    $nestedPage = preg_match('~/(manufacturing|orderBooking|settings)/[^/]+$~', $scriptPath) === 1;
+    $baseDirectory = $nestedPage ? dirname(dirname($scriptPath)) : dirname($scriptPath);
+    $appBaseHref = rtrim($baseDirectory, '/') . '/';
+    if ($appBaseHref === '/') { $appBaseHref = '/'; }
+    ?>
+    <base href="<?= htmlspecialchars($appBaseHref, ENT_QUOTES, 'UTF-8') ?>">
+
     <meta charset="UTF-8">
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -12,7 +21,7 @@
     <meta name="Author" content="Spruko Technologies Private Limited">
     <meta name="keywords"
         content="admin dashboard,admin template,admin panel,bootstrap admin dashboard,html template,sales dashboard,dashboard,template dashboard,admin,html and css template,admin dashboard bootstrap,personal dashboard,crypto dashboard,stocks dashboard,admin panel template">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>'
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="icon" href="assets/images/brand-logos/favicon.ico" type="image/x-icon">
     <script src="assets/libs/choices.js/public/assets/scripts/choices.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>

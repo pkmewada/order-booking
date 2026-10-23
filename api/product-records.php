@@ -102,7 +102,7 @@ function productRecords(string $mode): void
         if (!in_array($brand, ['LITTLE DOLLY', 'AMARI', 'NIVI BLOSSOM'], true)) { throw new InvalidArgumentException('Select a valid brand.'); }
         if (!preg_match('/^[0-9]{1,18}$/D', $design)) { throw new InvalidArgumentException('Design number must contain 1–18 digits only.'); }
         $design = ltrim($design, '0') ?: '0';
-        if (!is_string($pattern) || ($pattern !== '' && !preg_match('/^[A-Za-z ]{1,150}$/D', $pattern))) { throw new InvalidArgumentException('Pattern must contain letters and spaces only.'); }
+        if (!is_string($pattern) || ($pattern !== '' && !preg_match('/^[A-Za-z0-9 ]{1,150}$/D', $pattern))) { throw new InvalidArgumentException('Pattern must contain letters, numbers and spaces only.'); }
         if ($mrp === '') { $mrp = null; }
         if ($mrp !== null && (!is_scalar($mrp) || !preg_match('/^[0-9]{1,10}(\.[0-9]{1,2})?$/D', (string) $mrp))) { throw new InvalidArgumentException('MRP must be a non-negative number with up to two decimals.'); }
         $lookup = $db->prepare('SELECT id FROM colourRecords WHERE id = ?'); $lookup->execute([$data['colourId'] ?? 0]);
@@ -140,7 +140,7 @@ function productRecords(string $mode): void
             $validWorks = [];
             foreach ($works as $work) {
                 $workLookup->execute([$work['workId'] ?? 0]);
-                if (!$workLookup->fetch() || !in_array($work['stage'] ?? '', ['Before Cutting','After Cutting','After Stitching'], true)) { throw new InvalidArgumentException('Select valid additional work and timing.'); }
+                if (!$workLookup->fetch() || !in_array($work['stage'] ?? '', ['Before Cutting','After Cutting','After Stitching','After Ironing'], true)) { throw new InvalidArgumentException('Select valid additional work and timing.'); }
                 $validWorks[$work['workId'] . ':' . $work['stage']] = ['workId' => (int) $work['workId'], 'stage' => $work['stage']];
             }
             $normalized[] = ['number' => $index + 1, 'pieceItemId' => $pieceItemId === null ? null : (int) $pieceItemId,

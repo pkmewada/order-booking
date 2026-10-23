@@ -4,6 +4,15 @@
 
 <head>
 
+    <?php
+    $scriptPath = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/');
+    $nestedPage = preg_match('~/(manufacturing|orderBooking|settings)/[^/]+$~', $scriptPath) === 1;
+    $baseDirectory = $nestedPage ? dirname(dirname($scriptPath)) : dirname($scriptPath);
+    $appBaseHref = rtrim($baseDirectory, '/') . '/';
+    if ($appBaseHref === '/') { $appBaseHref = '/'; }
+    ?>
+    <base href="<?= htmlspecialchars($appBaseHref, ENT_QUOTES, 'UTF-8') ?>">
+
     <meta charset="UTF-8">
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
     <meta http-equiv="X-UA-Compatible" content="IE=edge">

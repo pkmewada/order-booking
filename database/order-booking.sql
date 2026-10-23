@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS `agents` (
     `email` VARCHAR(254) NULL DEFAULT NULL,
     `city` VARCHAR(100) NOT NULL,
     `state` VARCHAR(100) NOT NULL,
-    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX `idx_name` (`name`),
+    `createdAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX `nameIndex` (`name`),
     UNIQUE KEY `uniqueEmail` (`email`),
     CONSTRAINT `agentsPhoneCheck` CHECK (`contact` REGEXP '^[6-9][0-9]{9}$')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -24,9 +24,9 @@ CREATE TABLE IF NOT EXISTS `distributors` (
     `email` VARCHAR(254) NULL DEFAULT NULL,
     `city` VARCHAR(100) NOT NULL,
     `state` VARCHAR(100) NOT NULL,
-    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX `idx_name` (`name`),
+    `createdAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX `nameIndex` (`name`),
     UNIQUE KEY `uniqueEmail` (`email`),
     CONSTRAINT `distributorsPhoneCheck` CHECK (`contact` REGEXP '^[6-9][0-9]{9}$')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -38,9 +38,9 @@ CREATE TABLE IF NOT EXISTS `transporters` (
     `email` VARCHAR(254) NULL DEFAULT NULL,
     `city` VARCHAR(100) NOT NULL,
     `state` VARCHAR(100) NOT NULL,
-    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX `idx_name` (`name`),
+    `createdAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX `nameIndex` (`name`),
     UNIQUE KEY `uniqueEmail` (`email`),
     CONSTRAINT `transportersPhoneCheck` CHECK (`contact` REGEXP '^[6-9][0-9]{9}$')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -56,9 +56,9 @@ CREATE TABLE IF NOT EXISTS `customerRecords` (
     `agentId` VARCHAR(64) NULL,
     `transporterId` VARCHAR(64) NULL,
     `distributorId` VARCHAR(64) NULL,
-    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX `idx_name` (`name`),
+    `createdAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX `nameIndex` (`name`),
     UNIQUE KEY `uniqueEmail` (`email`),
     CONSTRAINT `customerPhoneCheck` CHECK (`contact` REGEXP '^[6-9][0-9]{9}$'),
     CONSTRAINT `customerAgentFk` FOREIGN KEY (`agentId`) REFERENCES `agents` (`id`) ON DELETE RESTRICT,
@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS `pieceItemList` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT IGNORE INTO `pieceItemList` (`name`) VALUES
-    ('Shirt'), ('Jeans'), ('Jacket'), ('Cap'), ('Frock');
+    ('Shirt'), ('Jeans'), ('Jacket'), ('Cap'), ('Frock'), ('Pant'), ('Tie');
 
 -- Production and manufacturing workflow state, migrated from browser storage on first visit.
 CREATE TABLE IF NOT EXISTS `manufacturingStateMeta` (
@@ -165,7 +165,7 @@ CREATE TABLE IF NOT EXISTS productWorkLinks (
  productId BIGINT UNSIGNED NOT NULL,
  pieceNumber TINYINT UNSIGNED NOT NULL,
  workId INT UNSIGNED NOT NULL,
- stage ENUM('Before Cutting','After Cutting','After Stitching') NOT NULL,
+ stage ENUM('Before Cutting','After Cutting','After Stitching','After Ironing') NOT NULL,
  PRIMARY KEY(productId, pieceNumber, workId, stage),
  FOREIGN KEY(productId) REFERENCES productRecords(id) ON DELETE CASCADE,
  FOREIGN KEY(workId) REFERENCES additionalWork(id) ON DELETE RESTRICT
