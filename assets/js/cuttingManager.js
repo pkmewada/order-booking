@@ -61,7 +61,8 @@ $(document).ready(async function () {
                 deliveryDate: row.find(".delivery-date-input").val(),
                 componentId: String(row.data("component-id") ?? "legacy"),
                 componentName: String(row.data("component-name") ?? ""),
-                splitGroupId: String(row.data("split-group-id") ?? row.data("row-index") ?? "1") };
+                splitGroupId: String(row.data("split-group-id") ?? row.data("row-index") ?? "1"),
+                subBatch: String(row.data("sub-batch") ?? "") };
         });
     }
 
@@ -129,23 +130,12 @@ $(document).ready(async function () {
             .sort((a, b) => parseHistoryTime(a.at) - parseHistoryTime(b.at));
     }
 
-    function sanitizePieceName(name) {
-        return String(name || "")
-            .trim()
-            .replace(/[^A-Za-z0-9]+/g, "-")
-            .replace(/^-+|-+$/g, "")
-            || "Piece";
-    }
-
-    function peekNextSubBatchId(batchId, pieceName, splitIndex, componentName) {
+    function peekNextSubBatchId(batchId, sequence) {
         let formatted = String(batchId || "");
         if (!formatted.includes("BATCH-")) {
             formatted = `BATCH-${String(batchId).padStart(3, "0")}`;
         }
-        const safePiece = sanitizePieceName(pieceName);
-        const cNumber = Number(splitIndex || 0) + 1;
-        const safeComponent = componentName ? `-${sanitizePieceName(componentName)}` : "";
-        return `${formatted}-${safePiece}${safeComponent}-C${cNumber}`;
+        return `${formatted}-C${Math.max(1, Number(sequence) || 1)}`;
     }
 
     function formatDateDisplay(dateString) {
@@ -217,8 +207,45 @@ $(document).ready(async function () {
         return [...groups.entries()].map(([componentId, rows]) => ({
             componentId,
             name: rows[0].itemName || "Item",
-            rows: rows.slice().sort((a, b) => String(a.subBatch || "").localeCompare(String(b.subBatch || "")))
+            rows: rows.slice().sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0))
         }));
+    }
+
+    function displayedSubBatch(item) {
+        const expectedSubBatchPrefix = `${item.batchId}-C`;
+        if (item.subBatch && String(item.subBatch).startsWith(expectedSubBatchPrefix) && /^\d+$/.test(String(item.subBatch).slice(expectedSubBatchPrefix.length))) return String(item.subBatch);
+        const batchRows = cuttingData.filter(row => String(row.batchId) === String(item.batchId))
+            .slice().sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+        const poolIds = [...new Set(batchRows.map(row => String(row.poolId)))];
+        let sequence = 0;
+        for (const poolId of poolIds) {
+            const poolRows = batchRows.filter(row => String(row.poolId) === poolId);
+            const splitKeys = [...new Set(poolRows.filter(row => row.splitGroupId).map(row => String(row.splitGroupId)))];
+            const componentKeys = [...new Set(poolRows.map(row => String(row.componentId ?? row.itemName ?? "legacy")))];
+            const splitCount = splitKeys.length || Math.max(1, ...componentKeys.map(key =>
+                poolRows.filter(row => String(row.componentId ?? row.itemName ?? "legacy") === key).length));
+            if (poolId === String(item.poolId)) {
+                let splitIndex = 0;
+                if (item.splitGroupId && splitKeys.length) splitIndex = splitKeys.indexOf(String(item.splitGroupId));
+                else {
+                    const componentKey = String(item.componentId ?? item.itemName ?? "legacy");
+                    splitIndex = poolRows.filter(row => String(row.componentId ?? row.itemName ?? "legacy") === componentKey)
+                        .findIndex(row => String(row.id) === String(item.id));
+                }
+                return peekNextSubBatchId(item.batchId, sequence + Math.max(0, splitIndex) + 1);
+            }
+            sequence += splitCount;
+        }
+        return peekNextSubBatchId(item.batchId, sequence + 1);
+    }
+
+    function nextBatchSubBatchNumber(batchId) {
+        return cuttingData.filter(row => String(row.batchId) === String(batchId))
+            .reduce((highest, row) => {
+                const label = displayedSubBatch(row);
+                const match = label.match(/-C(\d+)$/);
+                return Math.max(highest, match ? Number(match[1]) : 0);
+            }, 0) + 1;
     }
 
     function buildPager($container, currentPage, totalPages, totalItems, pageSize, onPageChange, label) {
@@ -419,7 +446,7 @@ $(document).ready(async function () {
         const tbody = $("#cuttingMastersList");
         tbody.empty();
         if (!cuttingData.length) {
-            tbody.html(`<tr><td colspan="9" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No cutting assignments yet.</td></tr>`);
+            tbody.html(`<tr><td colspan="10" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No cutting assignments yet.</td></tr>`);
             $("#cuttingPagination").empty();
             return;
         }
@@ -432,11 +459,11 @@ $(document).ready(async function () {
         });
         const groups = Object.values(grouped)
             .filter(rows => rows.some(item => !isFullyPassed(item)))
-            .map(rows => rows.sort((a, b) => String(a.itemName || "").localeCompare(String(b.itemName || "")) || String(a.subBatch || "").localeCompare(String(b.subBatch || ""))));
+            .map(rows => rows.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0)));
         groups.sort((a, b) => String(a[0].batchId || "").localeCompare(String(b[0].batchId || "")) ||
             Number(a[0].pieceNumber || 0) - Number(b[0].pieceNumber || 0));
         if (!groups.length) {
-            tbody.html(`<tr><td colspan="9" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No cutting assignments yet.</td></tr>`);
+            tbody.html(`<tr><td colspan="10" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No cutting assignments yet.</td></tr>`);
             $("#cuttingPagination").empty();
             return;
         }
@@ -449,21 +476,35 @@ $(document).ready(async function () {
             const first = items[0];
             const pieceLabel = first.pieceType || `Piece ${first.pieceNumber}`;
             const componentLines = (render) => `<div class="component-lines compact">${items.map(render).join("")}</div>`;
-            const batchHtml = `<strong>${escapeHtml(first.batchId || "-")}</strong>${componentLines(item => `<div class="component-line sub-batch-cell"><span class="sub-batch-text" title="${escapeHtml(item.subBatch || "-")}">${escapeHtml(item.subBatch || "-")}</span></div>`)}`;
-            const detailHtml = componentLines(item => `<div class="component-line piece-cell"><strong>${escapeHtml(pieceLabel)}</strong><span class="item-line">Item: ${escapeHtml(item.itemName || "Item")}</span><div class="small text-muted">Worker: ${escapeHtml(item.worker || "-")}</div></div>`);
-            const qtyHtml = componentLines(item => `<div class="component-line"><strong>${Number(item.assignedQty || 0)}</strong> <span class="text-muted">/ ${Number(item.completedQty || 0)} complete</span></div>`);
-            const damageHtml = componentLines(item => `<div class="component-line">${Number(item.damageQty || 0)}</div>`);
-            const remainingHtml = componentLines(item => `<div class="component-line">${Production.calculateProductionMath(item).uncompletedQty}</div>`);
-            const statusHtml = componentLines(item => {
-                const status = computeCuttingStatus(item);
-                const label = status === "stopped" ? "Stopped" : status === "passed" ? "Passed" : status === "ready_to_pass" ? "Ready to Pass" : status === "partial" ? "Partial" : status === "assigned" ? "Assigned" : "Pending";
-                const cls = status === "stopped" ? "stopped" : status === "passed" ? "passed" : "in_progress";
-                return `<div class="component-line"><span class="status-badge ${cls}">${label}</span></div>`;
-            });
+            const componentGroups = groupComponentAssignments(items);
+            const batchHtml = `<strong>${escapeHtml(first.batchId || "-")}</strong>`;
+            const subBatchHtml = componentLines(item => { const label = displayedSubBatch(item); return `<div class="component-line sub-batch-cell"><span class="sub-batch-text" title="${escapeHtml(label)}">${escapeHtml(label)}</span></div>`; });
+            const detailHtml = componentLines(item => `<div class="component-line piece-cell"><strong>${escapeHtml(pieceLabel)}</strong><span class="item-line">${escapeHtml(item.itemName || "Item")}</span><span class="worker-line">${escapeHtml(item.worker || "-")}</span></div>`);
+            const pairedQty = (field, mode = "min") => {
+                const totals = componentGroups.map(group => group.rows.reduce((sum, row) => sum + Number(row[field] || 0), 0));
+                return totals.length ? (mode === "max" ? Math.max(...totals) : Math.min(...totals)) : 0;
+            };
+            const pairedAssigned = pairedQty("assignedQty");
+            const pairedCompleted = pairedQty("completedQty");
+            const pairedDamage = Math.min(pairedAssigned, componentGroups.length
+                ? Math.max(...componentGroups.map(group => group.rows.reduce((sum, row) => sum + Number(row.damageQty || 0), 0)))
+                : 0);
+            const pairedPassed = pairedQty("passedQty");
+            const pairedRemaining = componentGroups.length
+                ? Math.min(...componentGroups.map(group => group.rows.reduce((sum, row) => sum + Math.max(0,
+                    Number(row.inputQty || row.assignedQty || 0) - Number(row.damageQty || 0) - Number(row.passedQty || 0)), 0)))
+                : 0;
+            const qtyHtml = `<strong>${pairedAssigned}</strong>`;
+            const damageHtml = `<span>${pairedDamage}</span>`;
+            const remainingHtml = `<strong>${pairedRemaining}</strong>`;
+            const stopped = items.some(item => item.stopped);
+            const statusKey = stopped ? "stopped" : pairedRemaining === 0 && pairedPassed > 0 ? "passed" : pairedCompleted > pairedPassed ? "ready_to_pass" : pairedCompleted > 0 ? "partial" : "assigned";
+            const statusLabel = ({stopped:"Stopped", passed:"Passed", ready_to_pass:"Ready to Pass", partial:"Partial", assigned:"Assigned"})[statusKey];
+            const statusClass = statusKey === "stopped" ? "stopped" : statusKey === "passed" ? "passed" : "in_progress";
+            const statusHtml = `<span class="status-badge ${statusClass}">${statusLabel}</span>`;
             const priorityClass = getPriorityClass(first.priority);
             const rowIds = items.map(item => Number(item.id)).join(",");
             const editBtn = `<button class="btn btn-sm btn-primary progress-btn" data-group-ids="${escapeHtml(rowIds)}" title="Update item progress"><i class="bx bx-edit"></i></button>`;
-            const componentGroups = groupComponentAssignments(items);
             const commonPassable = componentGroups.length ? Math.min(...componentGroups.map(group => group.rows.reduce((sum, item) => sum + Production.calculateProductionMath(item).passableQty, 0))) : 0;
             const canPass = items.length > 0 && items.every(item => !item.stopped) && commonPassable > 0;
             const passBtn = canPass ? `<button class="btn btn-sm btn-dark pass-row-action-btn" data-group-ids="${escapeHtml(rowIds)}" title="Review and pass this garment's items"><i class="bx bx-right-arrow-alt"></i></button>` : "";
@@ -471,6 +512,7 @@ $(document).ready(async function () {
             const stopBtn = `<button class="btn btn-sm ${isStopped ? "btn-success" : "btn-danger"} stop-row-action-btn" data-group-ids="${escapeHtml(rowIds)}" title="${isStopped ? "Resume all items" : "Stop all items"}"><i class="bx ${isStopped ? "bx-play" : "bx-stop"}"></i></button>`;
             tbody.append(`<tr>
                 <td class="batch-cell">${batchHtml}</td>
+                <td>${subBatchHtml}</td>
                 <td>${escapeHtml(first.brand || "-")}</td>
                 <td>${detailHtml}</td>
                 <td>${qtyHtml}</td>
@@ -882,15 +924,15 @@ $(document).ready(async function () {
 
             const tbody = $("#assignmentTableBody");
             const defaultDateStr = defaultDeliveryDate();
+            const batchAssignmentCount = nextBatchSubBatchNumber(poolItem.batchId) - 1;
 
             for (let i = 0; i < count; i++) {
                 const autoQty = autoQtys[i];
                 const splitGroupId = `${poolItem.id}-split-${i}`;
-                components.forEach(component => {
-                    const componentCount = cuttingData.filter(work => String(work.poolId) === String(poolItem.id) && String(work.componentId) === String(component.id)).length;
-                    const subBatch = peekNextSubBatchId(poolItem.batchId, poolItem.pieceItem, componentCount + i, component.legacy ? "" : component.name);
+                components.forEach((component, componentIndex) => {
+                    const subBatch = peekNextSubBatchId(poolItem.batchId, batchAssignmentCount + i + 1);
                     tbody.append(`
-                        <tr class="assignment-row" data-row-index="${i}" data-pool-id="${poolItem.id}" data-component-id="${escapeHtml(component.id)}" data-component-name="${escapeHtml(component.name)}" data-split-group-id="${escapeHtml(splitGroupId)}">
+                            <tr class="assignment-row" data-row-index="${i}" data-sub-batch="${escapeHtml(subBatch)}" data-pool-id="${poolItem.id}" data-component-id="${escapeHtml(component.id)}" data-component-name="${escapeHtml(component.name)}" data-split-group-id="${escapeHtml(splitGroupId)}">
                             <td><span class="sub-batch-label fw-semibold text-primary">${escapeHtml(subBatch)}</span><input type="hidden" class="sub-batch-input" value="${escapeHtml(subBatch)}"></td>
                             <td><strong>Piece ${escapeHtml(poolItem.pieceNumber)}</strong><div class="small text-muted">${escapeHtml(poolItem.pieceItem || "-")}</div></td>
                             <td><strong>${escapeHtml(component.name)}</strong></td>
@@ -1042,22 +1084,25 @@ $(document).ready(async function () {
         currentEditingId = Number(item.id);
         currentEditingPoolId = item.poolId;
         $("#progressModalLabel").text(`Update Progress — ${item.pieceType || `Piece ${item.pieceNumber}`}`);
-        $("#progressSubBatch").val(items.map(row => row.subBatch).join(" · "));
+        $("#progressSubBatch").val([...new Set(items.map(displayedSubBatch))].join(" · "));
         $("#progressPieceItem").val(items.map(row => row.itemName || "Item").join(", "));
         $("#progressWorker").val([...new Set(items.map(row => row.worker).filter(Boolean))].join(", "));
         $("#progressTypeSelect").val("completed");
         $("#progressQty").val(0);
+        $("#componentUpdateType").val("completed");
         const componentGroups = groupComponentAssignments(items);
         $("#progressComponentInputs").html(componentGroups.map(group => {
             const remaining = group.rows.reduce((sum, row) => sum + Production.calculateProductionMath(row).uncompletedQty, 0);
+            const damageable = group.rows.reduce((sum, row) => sum + Math.max(0, Number(row.inputQty || row.assignedQty || 0) - Number(row.damageQty || 0) - Number(row.passedQty || 0)), 0);
             const assigned = group.rows.reduce((sum, row) => sum + Number(row.assignedQty || 0), 0);
             const completed = group.rows.reduce((sum, row) => sum + Number(row.completedQty || 0), 0);
             return `<div class="progress-component-row" data-component-id="${escapeHtml(group.componentId)}">
-                <div><strong>${escapeHtml(group.name)}</strong><div class="small text-muted">${group.rows.map(row => `${escapeHtml(row.subBatch || "-")} · ${escapeHtml(row.worker || "No worker")}`).join("<br>")}</div>
+                <div><strong>${escapeHtml(group.name)}</strong><div class="small text-muted">${group.rows.map(row => `${escapeHtml(displayedSubBatch(row))} · ${escapeHtml(row.worker || "No worker")}`).join("<br>")}</div>
                     <div class="small text-muted">Assigned ${assigned} · Done ${completed} · Remaining ${remaining}</div></div>
-                <div><label class="form-label mb-1">Add completed qty</label><input type="number" class="form-control form-control-sm component-progress-qty" min="0" max="${remaining}" value="0" data-max="${remaining}"></div>
+                <div><label class="form-label mb-1">Add completed qty</label><input type="number" class="form-control form-control-sm component-progress-qty" min="0" max="${remaining}" value="0" data-max="${remaining}" data-max-completed="${remaining}" data-max-damage="${damageable}"></div>
             </div>`;
         }).join(""));
+        $("#componentUpdateControls").show();
         $(".progress-single-summary, .progress-single-controls").hide();
         refreshProgressModalNumbers(item);
 
@@ -1088,24 +1133,57 @@ $(document).ready(async function () {
         `);
     });
 
+    $(document).on("change", "#componentUpdateType", function () {
+        const type = $(this).val();
+        $("#progressComponentInputs .component-progress-qty").each(function () {
+            const $input = $(this);
+            const max = Number($input.attr(type === "damage" ? "data-max-damage" : "data-max-completed")) || 0;
+            $input.attr("max", max).data("max", max).closest(".progress-component-row").find("label").text(type === "damage" ? "Add damaged qty" : "Add completed qty");
+        });
+    });
+
     $("#updateProgressBtn").on("click", async function () {
         const componentInputs = $("#progressComponentInputs .component-progress-qty");
         if (componentInputs.length) {
             const updates = [];
+            const field = $("#componentUpdateType").val() === "damage" ? "addDamage" : "addCompleted";
+            let invalidInput = null;
             componentInputs.each(function () {
                 const $input = $(this);
-                let quantity = Math.min(Number($input.data("max")) || 0, Math.max(0, Number($input.val()) || 0));
+                const maxAttribute = field === "addDamage" ? "data-max-damage" : "data-max-completed";
+                const max = Number($input.attr(maxAttribute)) || 0;
+                const rawValue = String($input.val() ?? "").trim();
+                const quantity = rawValue === "" ? 0 : Number(rawValue);
+                if (!Number.isFinite(quantity) || quantity < 0 || quantity > max) {
+                    invalidInput = { input: this, max };
+                    return false;
+                }
+            });
+            if (invalidInput) {
+                const label = field === "addDamage" ? "Damage" : "Completed";
+                Swal.fire({ icon: "warning", title: "Quantity exceeds remaining", text: `${label} quantity cannot be more than ${invalidInput.max}. Enter a quantity within the remaining amount.` });
+                $(invalidInput.input).trigger("focus");
+                return;
+            }
+            componentInputs.each(function () {
+                const $input = $(this);
+                const maxAttribute = field === "addDamage" ? "data-max-damage" : "data-max-completed";
+                const max = Number($input.attr(maxAttribute)) || 0;
+                let quantity = Math.max(0, Number($input.val()) || 0);
                 const componentId = String($input.closest(".progress-component-row").data("component-id"));
                 const component = groupComponentAssignments(cuttingData.filter(row => String(row.poolId) === String(currentEditingPoolId) && String(row.componentId ?? "legacy") === componentId))[0];
                 if (!component) return;
                 component.rows.forEach(row => {
-                    const amount = Math.min(quantity, Production.calculateProductionMath(row).uncompletedQty);
-                    if (amount > 0) updates.push({ id: Number(row.id), addCompleted: amount });
+                    const rowCapacity = field === "addDamage"
+                        ? Math.max(0, Number(row.inputQty || row.assignedQty || 0) - Number(row.damageQty || 0) - Number(row.passedQty || 0))
+                        : Production.calculateProductionMath(row).uncompletedQty;
+                    const amount = Math.min(quantity, rowCapacity);
+                    if (amount > 0) updates.push({ id: Number(row.id), [field]: amount });
                     quantity -= amount;
                 });
             });
             if (!updates.length) {
-                Swal.fire({ icon: "info", title: "Enter a quantity", text: "Add a completed quantity for at least one item." });
+                Swal.fire({ icon: "info", title: "Enter a quantity", text: `Add a ${field === "addDamage" ? "damage" : "completed"} quantity for at least one item.` });
                 return;
             }
             await productionAction(() => Production.edit("cuttingData", updates), "#progressModal");
@@ -1136,7 +1214,7 @@ $(document).ready(async function () {
         $("#passPieceInputs").html(components.map((group, index) => {
             const max = capacities[index];
             return `<div class="pass-component-row" data-component-id="${escapeHtml(group.componentId)}">
-                <div><strong>${escapeHtml(group.name)}</strong><div class="small text-muted">${group.rows.map(row => escapeHtml(row.subBatch || "-")).join("<br>")}</div><div class="small text-muted">Ready to pass: ${max}</div></div>
+                <div><strong>${escapeHtml(group.name)}</strong><div class="small text-muted">${group.rows.map(row => escapeHtml(displayedSubBatch(row))).join("<br>")}</div><div class="small text-muted">Ready to pass: ${max}</div></div>
                 <div><label class="form-label mb-1">Pass quantity</label><input type="number" class="form-control form-control-sm pass-component-qty" min="0" max="${max}" value="${commonQty}" data-max="${max}"></div>
             </div>`;
         }).join(""));
@@ -1294,6 +1372,7 @@ $(document).ready(async function () {
         const $tbody = $(`.bulk-rows-tbody[data-batch-id="${batch.batchId}"]`);
         $tbody.empty();
         const defaultDateStr = defaultDeliveryDate();
+        let nextSubBatchNumber = nextBatchSubBatchNumber(batch.batchId);
 
         const maxSplit = Math.max(...batch.items.map(i => Number(bulkPieceSplits[i.id] || 1)), 1);
 
@@ -1309,9 +1388,8 @@ $(document).ready(async function () {
                 const autoQtys = splitQuantity(totalQty, splitCount);
                 const workerOpts = WORKERS.map(w => `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`).join("");
                 const splitGroupId = `${item.id}-split-${s}`;
+                const subBatch = peekNextSubBatchId(item.batchId, nextSubBatchNumber++);
                 components.forEach(component => {
-                    const componentCount = cuttingData.filter(work => String(work.poolId) === String(item.id) && String(work.componentId) === String(component.id)).length;
-                    const subBatch = peekNextSubBatchId(item.batchId, item.pieceItem, componentCount + s, component.legacy ? "" : component.name);
                     splitGroupRows.push({ item, component, splitIndex: s, splitGroupId, subBatch, autoQty: autoQtys[s] || 0, workerOpts, totalQty });
                 });
             });
@@ -1340,6 +1418,7 @@ $(document).ready(async function () {
                         data-component-id="${escapeHtml(row.component.id)}"
                         data-component-name="${escapeHtml(row.component.name)}"
                         data-split-group-id="${escapeHtml(row.splitGroupId)}"
+                        data-sub-batch="${escapeHtml(row.subBatch)}"
                         data-batch-id="${escapeHtml(item.batchId)}"
                         data-split-index="${row.splitIndex}"
                         data-piece-number="${item.pieceNumber}"

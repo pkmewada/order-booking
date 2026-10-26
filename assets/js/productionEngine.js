@@ -332,8 +332,15 @@
         }
         function views(key) {
             const s = readState(), stage = managers[key];
-            return { works: s[key], pool: s.approvedPool.filter(p => stageInput(p, stage) > 0).map(p => ({ ...p,
-                quantity: stageInput(p, stage), currentStage: p.route.find(r => r.stage === stage) })) };
+            const pool = s.approvedPool.filter(p => stageInput(p, stage) > 0).map(p => {
+                const view = { ...p, quantity: stageInput(p, stage), currentStage: p.route.find(r => r.stage === stage) };
+                // Component/item-list routing belongs to Cutting only. Later
+                // managers receive and display the paired garment quantity.
+                if (key !== "cuttingData") delete view.cuttingComponents;
+                return view;
+            });
+            const works = key === "cuttingData" ? s[key] : s[key].map(work => ({ ...work, itemName: "", componentId: null }));
+            return { works, pool };
         }
         function assignInState(s, key, requests) {
                 if (!requests.length) throw new Error("No assignment rows.");
@@ -370,18 +377,28 @@
                         throw new Error("This item is not configured for Cutting in this batch.");
                     validateAssignment(p, rows, stage, qty, undefined, request.componentId);
                     const id = Math.max(0, ...rows.map(w => Number(w.id) || 0)) + 1;
-                    const count = rows.filter(w => same(w.poolId, p.id) &&
-                        (key !== "cuttingData" || !Array.isArray(p.cuttingComponents) || same(w.componentId, request.componentId)) &&
-                        (w.type === "outsource") === (request.type === "outsource")).length + 1;
+                    const count = key === "cuttingData"
+                        ? rows.filter(w => same(w.batchId, p.batchId) && !w.componentId).length + 1
+                        : rows.filter(w => same(w.poolId, p.id) && (w.type === "outsource") === (request.type === "outsource")).length + 1;
                     const suffix = request.type === "outsource" ? "OS" : "C";
                     const piece = String(p.pieceItem || "Piece").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
                     const component = key === "cuttingData" ? p.cuttingComponents?.find(item => same(item.id, request.componentId)) : null;
                     const componentSlug = component ? `-${String(component.name).replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}` : "";
                     const work = aliases({ ...request, id, poolId: p.id, batchId: p.batchId,
                         brand: p.brand, designNumber: p.designNumber, color: p.color, pieceNumber: p.pieceNumber,
-                        pieceType: `Piece ${p.pieceNumber} (${p.pieceItem})`, itemName: component?.name || request.componentName || "", componentId: component?.id ?? null, photo: p.photo || "",
-                        subBatch: `${p.batchId}-${piece}${componentSlug}-${suffix}${count}`, stage, storageKey: key,
+                        pieceType: `Piece ${p.pieceNumber} (${p.pieceItem})`,
+                        itemName: key === "cuttingData" ? component?.name || request.componentName || "" : "",
+                        componentId: key === "cuttingData" ? component?.id ?? null : null, photo: p.photo || "",
+                        subBatch: key === "cuttingData" ? `${p.batchId}-C${count}` : `${p.batchId}-${piece}${componentSlug}-${suffix}${count}`, stage, storageKey: key,
                         inputQty: qty, assignedQty: qty, completedQty: 0, damageQty: 0, passedQty: 0, createdAt: time() });
+                    // One Cutting sub-batch represents one garment split; all its
+                    // fabric/component assignment rows share the same C number.
+                    if (key === "cuttingData" && request.subBatch) work.subBatch = String(request.subBatch);
+                    else if (key === "cuttingData" && request.splitGroupId) {
+                        const sibling = rows.find(row => same(row.poolId, p.id) && same(row.splitGroupId, request.splitGroupId));
+                        if (sibling?.subBatch) work.subBatch = sibling.subBatch;
+                    }
+                    work.splitGroupId = request.splitGroupId || work.splitGroupId;
                     rows.push(work); results.push(work);
                     audit(p, { stage, qty, action: "assigned", sourceWorkId: id, sourceKey: key });
                 }
@@ -406,12 +423,16 @@
                 if (request.damageQty !== undefined) work.damageQty = number(request.damageQty, "Damage quantity");
                 if (request.addCompleted !== undefined) work.completedQty += number(request.addCompleted, "Completed increment");
                 if (request.addDamage !== undefined) work.damageQty += number(request.addDamage, "Damage increment");
+                if (work.damageQty > old.damageQty && work.completedQty > work.inputQty - work.damageQty)
+                    work.completedQty = Math.max(work.passedQty, work.inputQty - work.damageQty);
                 validateDamage(work, work.damageQty);
                 // Decreasing damage requires an explicit recovery, never an ordinary edit.
                 if (work.damageQty < old.damageQty) throw new Error("Use explicit repair recovery to reduce recorded damage.");
                 aliases(work); syncRepair(s, p, work, key);
-                audit(p, { stage: work.stage, qty: key === 'packingData' && work.damageQty === old.damageQty ? work.completedQty - old.completedQty : work.damageQty - old.damageQty,
-                    action: work.damageQty !== old.damageQty ? "damage" : "edited", sourceWorkId: work.id,
+                const damageDelta = work.damageQty - old.damageQty;
+                const completedDelta = work.completedQty - old.completedQty;
+                audit(p, { stage: work.stage, qty: damageDelta !== 0 ? damageDelta : completedDelta,
+                    action: damageDelta !== 0 ? "damage" : completedDelta !== 0 ? "completed" : "edited", sourceWorkId: work.id,
                     before: old, after: copy(work) });
                 return work;
             }));

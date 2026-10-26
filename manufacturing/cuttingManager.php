@@ -92,14 +92,23 @@
     #cuttingAssignmentsTable .component-lines.compact { gap: 2px; }
     #cuttingAssignmentsTable .component-lines.compact .component-line { padding: 3px 0; }
     #cuttingAssignmentsTable .sub-batch-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 1.3; }
-    #cuttingAssignmentsTable .piece-cell .item-line { display: block; color: #7585a4; font-weight: 500; }
+    #cuttingAssignmentsTable .piece-cell .item-line { display: inline; color: #7585a4; font-weight: 500; margin-left: 5px; }
+    #cuttingAssignmentsTable .piece-cell .worker-line { color: #7585a4; font-size: 11px; margin-left: 5px; }
+    #cuttingAssignmentsTable .sub-batch-cell { padding: 1px 0 !important; }
     #cuttingAssignmentsTable .actions-cell .btn { padding: 4px 6px; }
     #rowsContainer .cutting-assignment-card { height: 100%; border: 1px solid #e2e7f1; border-radius: 10px; }
     #rowsContainer .cutting-assignment-card .card-header { background: #f8f9fc; font-weight: 700; }
     #rowsContainer .cutting-assignment-card .form-label { font-size: 12px; margin-bottom: 4px; }
     #assignModal .modal-dialog { max-width: min(1320px, calc(100vw - 32px)); }
+    #progressModal .modal-dialog { width: calc(100vw - 32px); max-width: min(1320px, calc(100vw - 32px)); }
+    #progressModal .modal-content { width: 100%; }
     #progressModal .progress-context { border: 1px solid #e2e7f1; border-radius: 8px; padding: 12px; background: #f8f9fc; }
-    #progressComponentInputs .progress-component-row { display: grid; grid-template-columns: minmax(0, 1fr) 160px; align-items: center; gap: 14px; padding: 10px 12px; border: 1px solid #e5eaf3; border-radius: 8px; margin-bottom: 8px; }
+    #progressComponentInputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    #progressComponentInputs .progress-component-row { display: grid; grid-template-columns: minmax(0, 1fr); align-content: space-between; gap: 10px; padding: 12px; border: 1px solid #e5eaf3; border-radius: 8px; margin-bottom: 0; min-width: 0; }
+    #progressComponentInputs .progress-component-row > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+    #progressComponentInputs .progress-component-row input { width: 100%; }
+    @media (max-width: 900px) { #progressComponentInputs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 600px) { #progressComponentInputs { grid-template-columns: 1fr; } #progressModal .modal-dialog { width: calc(100vw - 16px); } }
     #passPieceInputs .pass-component-row { display: grid; grid-template-columns: minmax(0, 1fr) 160px; align-items: center; gap: 14px; padding: 10px 12px; border: 1px solid #e5eaf3; border-radius: 8px; margin-bottom: 8px; }
 
     .color-text {
@@ -763,10 +772,10 @@
                         <div id="cuttingAssignmentsWrap">
                             <table id="cuttingAssignmentsTable" class="table table-bordered align-middle mb-0">
                                 <colgroup>
-                                    <col style="width:10%"><col style="width:12%"><col style="width:22%"><col style="width:11%">
-                                    <col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:10%"><col style="width:10%">
+                                    <col style="width:9%"><col style="width:10%"><col style="width:11%"><col style="width:27%"><col style="width:7%">
+                                    <col style="width:7%"><col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:6%">
                                 </colgroup>
-                                <thead><tr><th>Batch ID / Sub-Batch</th><th>Brand</th><th>Piece / Item / Worker</th><th>Qty</th><th>Damage</th><th>Remaining</th><th>Priority</th><th>Status</th><th>Action</th></tr></thead>
+                                <thead><tr><th>Batch ID</th><th>Sub-Batch</th><th>Brand</th><th>Piece / Item / Worker</th><th>Qty</th><th>Damage</th><th>Remaining</th><th>Priority</th><th>Status</th><th>Action</th></tr></thead>
                                 <tbody id="cuttingMastersList"></tbody>
                             </table>
                         </div>
@@ -850,7 +859,7 @@
 
 <!-- Update Progress Modal -->
 <div class="modal fade" id="progressModal" tabindex="-1" aria-labelledby="progressModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="progressModalLabel">Update Progress</h5>
@@ -863,6 +872,13 @@
                         <div class="col-md-4"><label class="form-label">Piece / Item</label><input type="text" class="form-control" id="progressPieceItem" readonly></div>
                         <div class="col-md-4"><label class="form-label">Worker</label><input type="text" class="form-control" id="progressWorker" readonly></div>
                     </div>
+                </div>
+                <div id="componentUpdateControls" class="mb-3">
+                    <label class="form-label">Update Type</label>
+                    <select class="form-select" id="componentUpdateType">
+                        <option value="completed" selected>Completed (+)</option>
+                        <option value="damage">Damage (+)</option>
+                    </select>
                 </div>
                 <div id="progressComponentInputs" class="mb-3"></div>
                 <div class="row progress-single-summary">
