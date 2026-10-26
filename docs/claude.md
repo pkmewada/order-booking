@@ -166,3 +166,6 @@ node tests/browser-production.cjs
 The engine suite covers each of the eight managers: single/multiple/bulk assignment, partial/full completion, damage, partial/full/duplicate pass, edit after pass, damage after partial pass, atomic bulk damage/pass, reload through a new engine instance, assignment editing, and stage transitions. It also tests packing protection, write-failure rollback, explicit repair recovery, requirements and legacy normalization.
 
 The browser test launches PHP and headless Edge using a temporary profile. It exercises existing page controls and reloads. It requires the local PHP/Edge paths in the test and access to the site's existing CDN dependencies. See `VERIFICATION.md` for the actual recorded results and remaining limitations.
+# Item type schema update
+
+`itemList.itemType` is nullable for legacy compatibility and valid values are `Cutting` and `Non-Cutting`. Do not infer it from item names. See `databaseReadme.md` for migration steps. `pieceItemList` remains the existing separate garment-piece catalog; photo storage has a nullable schema field but no upload endpoint/UI yet.

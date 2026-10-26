@@ -5,7 +5,7 @@ $(document).ready(function () {
 
     let MATERIALS = [], ITEMS = [], WORK_TYPES = [];
 
-    const DEFAULT_WORK_ROWS = 1;
+    const DEFAULT_WORK_ROWS = 0;
     const PATTERNS = [
         {name:'Frock', items:['Frock']},
         {name:'Pant Shirt 2 Piece', items:['Pant','Shirt']},
@@ -254,9 +254,7 @@ $(document).ready(function () {
                     >
                         ${optionList(WORK_TYPES, workType)}
                     </select>
-                    <select class="work-stage" data-piece="${pieceNumber}" aria-label="Additional work timing">
-                        ${optionList(["Before Cutting", "After Cutting", "After Stitching"], stage || (workType ? "After Cutting" : ""))}
-                    </select>
+                    <input type="hidden" class="work-stage" data-piece="${pieceNumber}" value="${escapeHtml(stage || (workType ? "After Cutting" : ""))}">
 
 
 
@@ -338,7 +336,7 @@ $(document).ready(function () {
 
                         <div class="item-list-box">
 
-                            <div class="item-list-title d-flex justify-content-between align-items-center"><span>Item List</span><button type="button" class="btn btn-sm btn-outline-secondary add-material-btn" data-piece="${i}" title="Add item"><i class="bx bx-plus"></i></button></div>
+                            <div class="item-list-title d-flex justify-content-between align-items-center"><span>Item List</span></div>
 
                             <div class="item-list-options">
 
@@ -354,7 +352,7 @@ $(document).ready(function () {
                 </section>
             `);
             const workContainer = tbody.find(`.piece-work-container[data-piece="${i}"]`);
-            (oldPiece.additionalWorks || []).forEach(work => workContainer.append(createWorkRowHtml(i, work.workType || '', work.stage || '', false)));
+            (oldPiece.additionalWorks || []).forEach(work => workContainer.append(createWorkRowHtml(i, work.workType || '', work.stage || 'After Cutting', false)));
         }
     }
 
@@ -365,23 +363,48 @@ $(document).ready(function () {
     $(document).on('click', '.flow-add-work-btn', function(){
         const pieceNumber = Number($(this).data('piece'));
         const stage = String($(this).data('stage'));
-        const taken = collectPieces().find(p => p.number === pieceNumber)?.additionalWorks || [];
-        const supportedWorks = ['Embroidery','Digital Print','Screen Print','Hand Work','Peco'];
-        const choices = supportedWorks.filter(name => WORK_TYPES.includes(name) && !taken.some(work => work.workType === name));
+        const selectedWorks = collectPieces().find(p => p.number === pieceNumber)?.additionalWorks || [];
+        const choices = WORK_TYPES.filter(name => !selectedWorks.some(work => work.workType === name && work.stage === stage));
         if (!choices.length) { alertMsg('All available additional work is already added for this piece.', 'info'); return; }
         const $button = $(this);
-        const $select = $('<select class="form-select form-select-sm flow-add-work-select" aria-label="Select production work"><option value="">Select work</option></select>');
-        choices.forEach(name => $select.append($('<option>').val(name).text(name)));
-        const $wrap = $('<span class="flow-add-work-wrap"></span>').attr({'data-piece':pieceNumber,'data-stage':stage}).append($select).append('<button type="button" class="btn btn-link btn-sm flow-cancel-work" title="Cancel"><i class="bx bx-x"></i></button>');
+        const multi = stage === 'After Cutting';
+        const $wrap = $('<span class="flow-add-work-wrap"></span>').attr({'data-piece':pieceNumber,'data-stage':stage,'data-multiple':multi ? 'true' : 'false'});
+        if (multi) {
+            const $checkList = $('<div class="flow-work-multi-choices border rounded p-2 bg-white"></div>');
+            choices.forEach((name, index) => {
+                const id = `flow-work-${pieceNumber}-${index}`;
+                const $row = $('<div class="form-check"></div>');
+                $('<input type="checkbox" class="form-check-input flow-work-multi-check">').attr({id, value:name}).appendTo($row);
+                $('<label class="form-check-label"></label>').attr('for', id).text(name).appendTo($row);
+                $checkList.append($row);
+            });
+            $wrap.append($checkList).append('<button type="button" class="btn btn-primary btn-sm flow-confirm-work">Add selected</button>');
+        } else {
+            const $select = $('<select class="form-select form-select-sm flow-add-work-select" aria-label="Select production work"><option value="">Select work</option></select>');
+            choices.forEach(name => $select.append($('<option>').val(name).text(name)));
+            $wrap.append($select);
+        }
+        $wrap.append('<button type="button" class="btn btn-link btn-sm flow-cancel-work" title="Cancel"><i class="bx bx-x"></i></button>');
         $button.replaceWith($wrap);
-        $select.trigger('focus');
+        $wrap.find('input, select').first().trigger('focus');
     });
     $(document).on('change', '.flow-add-work-select', function(){
+        if ($(this).prop('multiple')) return;
         const name = $(this).val();
         const $wrap = $(this).closest('.flow-add-work-wrap');
         if (!name) return;
         const pieceNumber = Number($wrap.data('piece'));
         $(`.piece-work-container[data-piece="${pieceNumber}"]`).append(createWorkRowHtml(pieceNumber, name, String($wrap.data('stage')), false));
+        renderBomFlowChart();
+    });
+    $(document).on('click', '.flow-confirm-work', function(){
+        const $wrap = $(this).closest('.flow-add-work-wrap');
+        const names = $wrap.find('.flow-work-multi-check:checked').map(function(){ return $(this).val(); }).get();
+        if (!names.length) { alertMsg('Select at least one additional work.', 'info'); return; }
+        const pieceNumber = Number($wrap.data('piece'));
+        const stage = String($wrap.data('stage'));
+        const $container = $(`.piece-work-container[data-piece="${pieceNumber}"]`);
+        names.forEach(name => $container.append(createWorkRowHtml(pieceNumber, name, stage, false)));
         renderBomFlowChart();
     });
     $(document).on('click', '.flow-cancel-work', function(){ renderBomFlowChart(); });
@@ -1289,9 +1312,10 @@ $(document).ready(function () {
                         <span class="bom-flow-extra"><strong>${escapeHtml(node.label)}</strong><button type="button" class="btn btn-link btn-sm flow-remove-work" data-piece="${piece.number}" data-index="${workIndex}" title="Remove work"><i class="bx bx-x"></i></button></span>
                     `;
                 }
-                if (node.type === 'fixed' && ['Cutting','Stitching','Ironing'].includes(node.label)) {
+                if (node.type === 'fixed' && ['Cutting', 'Stitching', 'Ironing'].includes(node.label)) {
                     const stage = node.label === 'Cutting' ? 'After Cutting' : node.label === 'Stitching' ? 'After Stitching' : 'After Ironing';
-                    html += `<button type="button" class="flow-add-work-btn" data-piece="${piece.number}" data-stage="${stage}" title="Add work after ${node.label}" aria-label="Add work after ${node.label}"><i class="bx bx-plus"></i></button>`;
+                    const singleStageOccupied = stage !== 'After Cutting' && works.some(work => work.stage === stage);
+                    if (!singleStageOccupied) html += `<button type="button" class="flow-add-work-btn" data-piece="${piece.number}" data-stage="${stage}" title="Add work after ${node.label}" aria-label="Add work after ${node.label}"><i class="bx bx-plus"></i></button>`;
                 }
             });
 

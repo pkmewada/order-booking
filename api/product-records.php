@@ -4,8 +4,15 @@ require_once __DIR__ . '/master-records.php';
 function productRows(PDO $db): array
 {
     $rows = $db->query('SELECT p.*, c.name AS color FROM productRecords p JOIN colourRecords c ON c.id = p.colourId ORDER BY p.id DESC')->fetchAll();
-    $items = $db->query('SELECT id, name FROM itemList')->fetchAll(PDO::FETCH_KEY_PAIR);
-    $pieceItems = $db->query('SELECT id, name FROM pieceItemList')->fetchAll(PDO::FETCH_KEY_PAIR);
+    $itemRows = $db->query('SELECT id, name, itemType FROM itemList')->fetchAll();
+    $items = []; $itemTypes = []; $itemDetails = [];
+    foreach ($itemRows as $itemRow) {
+        $items[$itemRow['id']] = $itemRow['name']; $itemTypes[$itemRow['id']] = $itemRow['itemType'];
+        $itemDetails[$itemRow['id']] = ['id' => (int) $itemRow['id'], 'name' => $itemRow['name'], 'itemType' => $itemRow['itemType']];
+    }
+    $pieceRows = $db->query('SELECT id, name, photo FROM pieceItemList')->fetchAll();
+    $pieceItems = []; $piecePhotos = [];
+    foreach ($pieceRows as $pieceRow) { $pieceItems[$pieceRow['id']] = $pieceRow['name']; $piecePhotos[$pieceRow['id']] = $pieceRow['photo']; }
     $works = $db->query('SELECT id, name FROM additionalWork')->fetchAll(PDO::FETCH_KEY_PAIR);
     $sizes = ['LITTLE DOLLY' => '18-26', 'AMARI' => 'S-L', 'NIVI BLOSSOM' => '28-34'];
     $prefixes = ['LITTLE DOLLY' => 'Ld', 'AMARI' => 'Am', 'NIVI BLOSSOM' => 'Nv'];
@@ -13,7 +20,10 @@ function productRows(PDO $db): array
         $row['pieces'] = json_decode($row['pieces'], true) ?: [];
         foreach ($row['pieces'] as &$piece) {
             $piece['item'] = $pieceItems[$piece['pieceItemId'] ?? 0] ?? $items[$piece['itemId'] ?? 0] ?? '';
+            $piece['itemType'] = $itemTypes[$piece['itemId'] ?? 0] ?? null;
+            $piece['piecePhoto'] = $piecePhotos[$piece['pieceItemId'] ?? 0] ?? null;
             $piece['materials'] = array_map(static function ($id) use ($items) { return $items[$id] ?? ''; }, $piece['materialIds']);
+            $piece['materialItems'] = array_values(array_filter(array_map(static function ($id) use ($itemDetails) { return $itemDetails[$id] ?? null; }, $piece['materialIds'])));
             foreach ($piece['additionalWorks'] as &$work) { $work['workType'] = $works[$work['workId']] ?? ''; }
             unset($work);
         }
@@ -110,7 +120,7 @@ function productRecords(string $mode): void
         $complete = $mode === 'bom' || ($old && $old['bomCompleted']);
         $pieces = $complete && $mode === 'product' ? json_decode($old['pieces'], true) : ($data['pieces'] ?? []);
         if (!is_array($pieces) || count($pieces) > 5 || ($mode === 'bom' && count($pieces) < 1)) { throw new InvalidArgumentException('Configure 1–5 pieces for BOM.'); }
-        $itemLookup = $db->prepare('SELECT id, name FROM itemList WHERE id = ?');
+        $itemLookup = $db->prepare('SELECT id, name, itemType FROM itemList WHERE id = ?');
         $pieceItemLookup = $db->prepare('SELECT id FROM pieceItemList WHERE id = ?');
         $workLookup = $db->prepare('SELECT id FROM additionalWork WHERE id = ?');
         $normalized = [];
@@ -136,7 +146,11 @@ function productRecords(string $mode): void
             $materials = $piece['materialIds'] ?? [];
             $works = $piece['additionalWorks'] ?? [];
             if (!is_array($materials) || !is_array($works) || count($materials) > 100 || count($works) > 100) { throw new InvalidArgumentException('Invalid piece details.'); }
-            foreach ($materials as $material) { $itemLookup->execute([$material]); if (!$itemLookup->fetch()) { throw new InvalidArgumentException('Invalid material selection.'); } }
+            foreach ($materials as $material) {
+                $itemLookup->execute([$material]); $materialRow = $itemLookup->fetch();
+                if (!$materialRow) { throw new InvalidArgumentException('Invalid material selection.'); }
+                if ($mode === 'bom' && !$materialRow['itemType']) { throw new InvalidArgumentException('Configure the item type in Item List before adding it to a new BOM.'); }
+            }
             $validWorks = [];
             foreach ($works as $work) {
                 $workLookup->execute([$work['workId'] ?? 0]);

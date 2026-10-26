@@ -653,9 +653,12 @@
                     </ol>
                 </nav>
             </div>
-            <button type="button" class="btn btn-primary" id="refreshApprovalBtn">
-                <i class="bx bx-refresh me-1"></i>
-            </button>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-dark" id="showPassedApprovalBatchesBtn">List</button>
+                <button type="button" class="btn btn-dark" id="refreshApprovalBtn" title="Refresh" aria-label="Refresh">
+                    <i class="bx bx-refresh"></i>
+                </button>
+            </div>
         </div>
 
         <div class="card custom-card">
@@ -703,6 +706,24 @@
                     </table>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="passedApprovalBatchesModal" tabindex="-1" aria-labelledby="passedApprovalBatchesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="passedApprovalBatchesModalLabel">Passed Batches</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body table-responsive">
+                <table class="table table-bordered text-nowrap align-middle w-100">
+                    <thead><tr><th>Batch ID</th><th>Brand</th><th>Design Number</th><th>Color</th><th>Pieces</th><th>Quantity</th><th>Passed At</th></tr></thead>
+                    <tbody id="passedApprovalBatchTableBody"></tbody>
+                </table>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button></div>
         </div>
     </div>
 </div>

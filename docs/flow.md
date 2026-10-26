@@ -101,3 +101,8 @@ Colour options come only from colourRecords. Piece item and material choices com
 Photo upload accepts JPEG/PNG/WebP, maximum 5 MB. Server generates a random filename under uploads/products; database stores its relative path. Replacing an image removes the old file after the save commits. Failed saves remove newly uploaded files. Deleting from either screen deletes the shared row and photo. Folder rules disable listing/script access.
 
 Browser localStorage receives a compatibility cache after catalog load for existing production/order consumers; catalog saves are authoritative in MySQL. Manufacturing production/order transactions remain otherwise unchanged. Verification: PHP/JS syntax checks; live database import/upload flow has not been executed here.
+# Item master configuration
+
+Item List entries have a user-selected `Cutting` or `Non-Cutting` type. Existing entries remain unconfigured until an operator edits them. New BOM material links require configured Item List records. Garment pieces continue to use the existing `pieceItemList` catalog and stable `pieceItemId` references; the item catalog and piece catalog are distinct in the current implementation.
+
+The BOM flow editor loads work names from the existing `additionalWork` table and places selected works between Cutting and Stitching. It does not create a second work catalog table.

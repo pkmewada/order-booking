@@ -11,7 +11,7 @@
         addWork_hand_work: "Hand Work", addWork_peco: "Peco",
         stitchingData: "Stitching", ironingData: "Ironing", packingData: "Packing"
     };
-    const additional = ["Embroidery", "Digital Print", "Screen Print", "Hand Work", "Peco"];
+    const preferredAdditionalOrder = ["Embroidery", "Digital Print", "Screen Print", "Hand Work", "Peco"];
     const historyKeys = Object.fromEntries(Object.keys(managers).map(k => [k, k === "cuttingData" ? "cuttingHistory" : `${k}_history`]));
     const keys = ["approvedPool", ...Object.keys(managers), ...Object.values(historyKeys), "repairData", "packingPool", "approvedBatchData", "batchData", "requirementData", "packingHolds", "bundlingData", "inventoryData"];
     const brandSizes = brand => ({'LITTLE DOLLY':['18','20','22','24','26'],'AMARI':['S','M','L'],'AMARU':['S','M','L'],'NIVI BLOSSOM':['28','30','32','34']}[String(brand || '').trim().toUpperCase()] || []);
@@ -78,13 +78,18 @@
         for (const work of piece.additionalWorks || []) {
             const raw = String(work.workType || work).trim();
             if (!raw) continue;
-            const name = additional.find(n => n.toLowerCase() === raw.toLowerCase());
-            if (!name) throw new Error(`Unknown additional work: ${raw}`);
+            const name = raw;
             const position = work.stage || "After Cutting";
             if (!positions.includes(position)) throw new Error(`Unknown additional work timing: ${position}`);
             if (!selected.has(name)) selected.set(name, position);
         }
-        const at = position => additional.filter(name => selected.get(name) === position)
+        const at = position => [...selected.keys()].sort((a, b) => {
+            const ai = preferredAdditionalOrder.indexOf(a), bi = preferredAdditionalOrder.indexOf(b);
+            if (ai >= 0 && bi >= 0) return ai - bi;
+            if (ai >= 0) return -1;
+            if (bi >= 0) return 1;
+            return [...selected.keys()].indexOf(a) - [...selected.keys()].indexOf(b);
+        }).filter(name => selected.get(name) === position)
             .map(name => ({ type: "additional_work", stage: name, works: [name] }));
         return [...at("Before Cutting"), { type: "cutting", stage: "Cutting" }, ...at("After Cutting"),
             { type: "stitching", stage: "Stitching" }, ...at("After Stitching"),
@@ -224,8 +229,17 @@
             return p;
         }
         function stageInput(p, stage) { return Number(p.stageBalances?.[stage]?.inputQty) || 0; }
-        function calculateAvailableQty(p, rows, stage, excludeId) {
-            const relevant = rows.filter(w => same(w.poolId, p.id) && !same(w.id, excludeId));
+        function calculateAvailableQty(p, rows, stage, excludeId, componentId) {
+            if (stage === "Cutting" && Array.isArray(p.cuttingComponents)) {
+                const availableComponents = p.cuttingComponents.filter(component => component.available);
+                if (!availableComponents.length) return 0;
+                if (componentId === undefined || componentId === null) {
+                    return Math.max(...availableComponents.map(component => calculateAvailableQty(p, rows, stage, excludeId, component.id)));
+                }
+                if (!availableComponents.some(component => same(component.id, componentId))) return 0;
+            }
+            const relevant = rows.filter(w => same(w.poolId, p.id) && !same(w.id, excludeId) &&
+                (stage !== "Cutting" || !Array.isArray(p.cuttingComponents) || componentId === undefined || componentId === null || same(w.componentId, componentId)));
             // Outstanding reservations + their damage + their passes = total assigned.
             // Subtracting damage/pass again from lifetime assigned would double-count them.
             const totals = relevant.reduce((t, w) => {
@@ -235,9 +249,9 @@
             }, { reserved: 0, damage: 0, passed: 0 });
             return Math.max(0, stageInput(p, stage) - totals.reserved - totals.damage - totals.passed);
         }
-        function validateAssignment(p, rows, stage, qty, excludeId) {
+        function validateAssignment(p, rows, stage, qty, excludeId, componentId) {
             number(qty, "Assignment quantity");
-            const available = calculateAvailableQty(p, rows, stage, excludeId);
+            const available = calculateAvailableQty(p, rows, stage, excludeId, componentId);
             if (qty <= 0 || qty > available) throw new Error(`Assignment exceeds available quantity for ${p.batchId} / ${stage}. Available: ${available}; requested: ${qty}.`);
         }
         function audit(p, entry) { (p.stageHistory ||= []).push({ ...entry, at: time() }); }
@@ -263,8 +277,15 @@
                     const rows = s[key].filter(w => same(w.poolId, p.id));
                     if (!rows.length) continue;
                     rows.forEach(validateWork);
-                    const assigned = rows.reduce((n, w) => n + w.assignedQty, 0);
-                    if (assigned > stageInput(p, stage)) throw new Error(`${p.batchId} / ${stage}: assigned ${assigned} exceeds stage input ${stageInput(p, stage)}.`);
+                    if (key === "cuttingData" && Array.isArray(p.cuttingComponents)) {
+                        for (const component of p.cuttingComponents) {
+                            const assigned = rows.filter(work => same(work.componentId, component.id)).reduce((n, work) => n + work.assignedQty, 0);
+                            if (assigned > stageInput(p, stage)) throw new Error(`${p.batchId} / ${stage} / ${component.name}: assigned ${assigned} exceeds component input ${stageInput(p, stage)}.`);
+                        }
+                    } else {
+                        const assigned = rows.reduce((n, w) => n + w.assignedQty, 0);
+                        if (assigned > stageInput(p, stage)) throw new Error(`${p.batchId} / ${stage}: assigned ${assigned} exceeds stage input ${stageInput(p, stage)}.`);
+                    }
                 }
             }
         }
@@ -317,20 +338,49 @@
         function assignInState(s, key, requests) {
                 if (!requests.length) throw new Error("No assignment rows.");
                 const stage = managers[key], rows = s[key], results = [];
+                if (key === "cuttingData") {
+                    const grouped = new Map();
+                    requests.forEach(request => {
+                        if (request.componentId === undefined || request.splitGroupId === undefined) return;
+                        const groupKey = `${request.poolId}:${request.splitGroupId}`;
+                        if (!grouped.has(groupKey)) grouped.set(groupKey, []);
+                        grouped.get(groupKey).push(request);
+                    });
+                    for (const group of grouped.values()) {
+                        const pool = getPool(s, group[0].poolId), components = pool.cuttingComponents;
+                        if (!Array.isArray(components)) continue; // Legacy pools retain their original single-piece assignment behavior.
+                        const assignable = components.filter(component => component.available && calculateAvailableQty(pool, rows, stage, undefined, component.id) > 0);
+                        if (!assignable.length) throw new Error("No available configured Cutting items remain for this assignment.");
+                        const unique = new Set(group.map(request => String(request.componentId)));
+                        if (unique.size !== assignable.length || assignable.some(component => !unique.has(String(component.id))))
+                            throw new Error("Assign every configured Cutting item together for the same quantity.");
+                        if (group.some(request => Number(request.quantity) !== Number(group[0].quantity)))
+                            throw new Error("All Cutting items in a component set must use the same quantity.");
+                    }
+                    const componentRequests = requests.filter(request => request.componentId !== undefined);
+                    if (componentRequests.length !== requests.length)
+                        throw new Error("Select all Cutting item rows before assigning.");
+                }
                 for (const request of requests) {
                     const p = getPool(s, request.poolId);
                     const qty = number(request.quantity, "Assignment quantity");
                     if (!(request.worker || request.firm) || !request.deliveryDate) throw new Error("Worker/firm and delivery date are required for every assignment.");
                     if (!p.route.some(r => r.stage === stage)) throw new Error(`${stage} is not in this pool's route.`);
-                    validateAssignment(p, rows, stage, qty);
+                    if (key === "cuttingData" && Array.isArray(p.cuttingComponents) && !p.cuttingComponents.some(component => component.available && same(component.id, request.componentId)))
+                        throw new Error("This item is not configured for Cutting in this batch.");
+                    validateAssignment(p, rows, stage, qty, undefined, request.componentId);
                     const id = Math.max(0, ...rows.map(w => Number(w.id) || 0)) + 1;
-                    const count = rows.filter(w => same(w.poolId, p.id) && (w.type === "outsource") === (request.type === "outsource")).length + 1;
+                    const count = rows.filter(w => same(w.poolId, p.id) &&
+                        (key !== "cuttingData" || !Array.isArray(p.cuttingComponents) || same(w.componentId, request.componentId)) &&
+                        (w.type === "outsource") === (request.type === "outsource")).length + 1;
                     const suffix = request.type === "outsource" ? "OS" : "C";
                     const piece = String(p.pieceItem || "Piece").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+                    const component = key === "cuttingData" ? p.cuttingComponents?.find(item => same(item.id, request.componentId)) : null;
+                    const componentSlug = component ? `-${String(component.name).replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}` : "";
                     const work = aliases({ ...request, id, poolId: p.id, batchId: p.batchId,
                         brand: p.brand, designNumber: p.designNumber, color: p.color, pieceNumber: p.pieceNumber,
-                        pieceType: `Piece ${p.pieceNumber} (${p.pieceItem})`, photo: p.photo || "",
-                        subBatch: `${p.batchId}-${piece}-${suffix}${count}`, stage, storageKey: key,
+                        pieceType: `Piece ${p.pieceNumber} (${p.pieceItem})`, itemName: component?.name || request.componentName || "", componentId: component?.id ?? null, photo: p.photo || "",
+                        subBatch: `${p.batchId}-${piece}${componentSlug}-${suffix}${count}`, stage, storageKey: key,
                         inputQty: qty, assignedQty: qty, completedQty: 0, damageQty: 0, passedQty: 0, createdAt: time() });
                     rows.push(work); results.push(work);
                     audit(p, { stage, qty, action: "assigned", sourceWorkId: id, sourceKey: key });
@@ -346,6 +396,8 @@
                 const p = getPool(s, work.poolId), old = copy(work);
                 if (key === 'packingData' && (work.packingClosed || (work.passedQty > 0 && work.passedQty === work.inputQty-work.damageQty))) throw new Error('Passed packing quantities are locked.');
                 if (key === 'packingData' && request.assignedQty !== undefined && request.assignedQty !== work.assignedQty) throw new Error('Packing lot quantity is fixed; update completion using Edit.');
+                if (key === "cuttingData" && Array.isArray(p.cuttingComponents) && request.assignedQty !== undefined && request.assignedQty !== work.assignedQty)
+                    throw new Error("Cutting component quantities are paired; create or update the complete component set together.");
                 if (request.assignedQty !== undefined) {
                     validateAssignment(p, s[key], work.stage, request.assignedQty, work.id);
                     work.inputQty = work.assignedQty = number(request.assignedQty, "Assignment quantity");
@@ -385,19 +437,75 @@
             if (!next) throw new Error("Packing is the terminal production stage.");
             const transitionId = `${p.id}:${key}:${work.id}:${work.passedQty}:${work.passedQty + qty}`;
             if ((p.stageHistory || []).some(h => h.transitionId === transitionId)) throw new Error("This transition is already recorded.");
-            work.passedQty += qty; aliases(work);
+            let receivedQty = qty;
+            if (key === "cuttingData" && Array.isArray(p.cuttingComponents) && p.cuttingComponents.length) {
+                const pairedComponents = p.cuttingComponents.filter(component => component.available);
+                const before = Math.min(...pairedComponents.map(component => s.cuttingData
+                    .filter(row => same(row.poolId, p.id) && same(row.componentId, component.id))
+                    .reduce((total, row) => total + Number(row.passedQty || 0), 0)));
+                work.passedQty += qty; aliases(work);
+                const after = Math.min(...pairedComponents.map(component => s.cuttingData
+                    .filter(row => same(row.poolId, p.id) && same(row.componentId, component.id))
+                    .reduce((total, row) => total + Number(row.passedQty || 0), 0)));
+                receivedQty = Math.max(0, after - before);
+            } else { work.passedQty += qty; aliases(work); }
             const balance = p.stageBalances[next.stage] ||= { inputQty: 0 };
-            balance.inputQty += qty; // Receipts are deltas; never overwrite an earlier unconsumed receipt.
+            balance.inputQty += receivedQty; // Receipts are deltas; never overwrite an earlier unconsumed receipt.
             const currentIndex = p.route.findIndex(r => r.stage === p.currentStage?.stage);
-            if (index + 1 >= currentIndex) { p.currentStage = copy(next); p.quantity = qty; }
+            if (receivedQty > 0 && index + 1 >= currentIndex) { p.currentStage = copy(next); p.quantity = receivedQty; }
             audit(p, { fromStage: from.stage, fromType: from.type, toStage: next.stage, toType: next.type,
-                qty, action: "passed", transitionId, sourceWorkId: work.id, sourceKey: key });
-            if (next.type === "packing") pushToPackingPool(s, p, work, qty, transitionId);
-            return { qty, transitionId, work };
+                qty: receivedQty, componentQty: qty, action: "passed", transitionId, sourceWorkId: work.id, sourceKey: key });
+            if (receivedQty > 0 && next.type === "packing") pushToPackingPool(s, p, work, receivedQty, transitionId);
+            return { qty: receivedQty, componentQty: qty, transitionId, work };
         }
         async function pass(key, ids) {
             if (key === 'packingData') throw new Error('Pass the complete packing lot using passPackingLot.');
             return transaction(s => [...new Set(ids.map(String))].map(id => pushToNextStage(s, key, id)));
+        }
+        async function passGroup(key, ids) {
+            if (key === 'packingData') throw new Error('Pass the complete packing lot using passPackingLot.');
+            return transaction(s => {
+                const works = [...new Set(ids.map(String))].map(id => s[key].find(work => same(work.id, id)));
+                if (!works.length || works.some(work => !work)) throw new Error('One or more assignments no longer exist.');
+                if (works.some(work => work.stopped)) throw new Error('Resume every item in this piece before passing.');
+                const commonQty = Math.min(...works.map(work => validateWork(work).passableQty));
+                if (commonQty <= 0) return works.map(() => ({ qty: 0 }));
+                return works.map(work => pushToNextStage(s, key, work.id, commonQty));
+            });
+        }
+        async function passComponents(key, poolId, requests) {
+            if (key === 'packingData') throw new Error('Pass the complete packing lot using passPackingLot.');
+            return transaction(s => {
+                const works = s[key].filter(work => same(work.poolId, poolId));
+                if (!works.length) throw new Error('Cutting assignments no longer exist.');
+                if (works.some(work => work.stopped)) throw new Error('Resume every item in this piece before passing.');
+                const groups = new Map();
+                works.forEach(work => {
+                    const componentId = String(work.componentId ?? 'legacy');
+                    if (!groups.has(componentId)) groups.set(componentId, []);
+                    groups.get(componentId).push(work);
+                });
+                const submitted = new Map(requests.map(request => [String(request.componentId), number(request.quantity, 'Pass quantity')]));
+                if (submitted.size !== groups.size || [...groups.keys()].some(id => !submitted.has(id)))
+                    throw new Error('Include a pass quantity for every cutting item in this piece.');
+                const quantities = [...submitted.values()];
+                if (quantities.some(quantity => quantity !== quantities[0]))
+                    throw new Error('Every cutting item must pass the same quantity to keep the piece paired.');
+                const requestedQty = quantities[0] || 0;
+                if (requestedQty <= 0) return [];
+                const allocations = [];
+                groups.forEach((componentWorks, componentId) => {
+                    const available = componentWorks.reduce((total, work) => total + validateWork(work).passableQty, 0);
+                    if (requestedQty > available) throw new Error(`Pass quantity for item ${componentId} exceeds its completed quantity.`);
+                    let left = requestedQty;
+                    componentWorks.sort((a, b) => String(a.subBatch || '').localeCompare(String(b.subBatch || ''))).forEach(work => {
+                        const amount = Math.min(left, validateWork(work).passableQty);
+                        if (amount > 0) allocations.push({ id: work.id, quantity: amount });
+                        left -= amount;
+                    });
+                });
+                return allocations.map(allocation => pushToNextStage(s, key, allocation.id, allocation.quantity));
+            });
         }
         async function stop(key, id) {
             return transaction(s => {
@@ -407,6 +515,19 @@
                 work.stopped = !work.stopped;
                 audit(p, { stage: work.stage, qty: 0, action: work.stopped ? "stopped" : "resumed", sourceWorkId: id });
                 return work;
+            });
+        }
+        async function stopGroup(key, ids) {
+            return transaction(s => {
+                const works = [...new Set(ids.map(String))].map(id => s[key].find(work => same(work.id, id)));
+                if (!works.length || works.some(work => !work)) throw new Error('One or more assignments no longer exist.');
+                const stopped = !works.some(work => work.stopped);
+                works.forEach(work => {
+                    const p = getPool(s, work.poolId); validateWork(work);
+                    work.stopped = stopped;
+                    audit(p, { stage: work.stage, qty: 0, action: stopped ? 'stopped' : 'resumed', sourceWorkId: work.id });
+                });
+                return works;
             });
         }
         async function recoverRepair(key, id, qty) {
@@ -495,6 +616,16 @@
             // Receipt of materials never re-enters Cutting or changes received production quantity.
             p.materials = materialList(piece); p.itemAvailability = copy(piece.approval.itemAvailability);
             p.availableItems = p.materials.filter(m => p.itemAvailability[m] === "yes");
+            const configuredCuttingItems = piece.materialItems;
+            if (p.cuttingComponents === undefined && Array.isArray(configuredCuttingItems) &&
+                !s.cuttingData.some(work => same(work.poolId, p.id))) {
+                p.cuttingComponents = configuredCuttingItems.filter(item => item.itemType === "Cutting")
+                    .map(item => ({ id: String(item.id), name: String(item.name), itemType: item.itemType,
+                        available: p.itemAvailability[item.name] !== "no" }));
+            }
+            if (Array.isArray(p.cuttingComponents)) p.cuttingComponents.forEach(component => {
+                if (p.itemAvailability[component.name] === "yes") component.available = true;
+            });
             p.requirementsPending = p.availableItems.length < p.materials.length;
             return p;
         }
@@ -573,6 +704,30 @@
                 // Confirm waits for all materials. Force-pass already has one pool; update its metadata only.
                 if (piece.approval.mode !== "confirm" || !missing.length) upsertPool(s, batch, piece);
                 syncBatch(s,batch); return req;
+            });
+        }
+        async function hydrateCuttingComponents(batchId, pieces) {
+            return transaction(s => {
+                const batches = [...s.approvedBatchData, ...s.batchData].filter(batch => same(batch.batchId, batchId));
+                batches.forEach(batch => (batch.pieces || []).forEach(piece => {
+                    const metadata = pieces.find((row, index) => same(row.number || index + 1, piece.number));
+                    if (metadata && Array.isArray(metadata.materialItems)) piece.materialItems = copy(metadata.materialItems);
+                }));
+                const batch = batches[0];
+                if (!batch) return false;
+                (batch.pieces || []).forEach(piece => {
+                    const pool = s.approvedPool.find(row => same(row.batchId, batchId) && same(row.pieceNumber, piece.number));
+                    const configuredCuttingItems = piece.materialItems;
+                    if (!pool || !Array.isArray(configuredCuttingItems)) return;
+                    const previous = new Map((pool.cuttingComponents || []).map(item => [String(item.id), item]));
+                    pool.cuttingComponents = configuredCuttingItems.filter(item => item.itemType === "Cutting")
+                        .map(item => {
+                            const old = previous.get(String(item.id));
+                            return { id: String(item.id), name: String(item.name), itemType: item.itemType,
+                                available: old ? Boolean(old.available) : pool.itemAvailability?.[item.name] !== "no" };
+                        });
+                });
+                return true;
             });
         }
 
@@ -727,9 +882,9 @@
                 return row;
             });
         }
-        return { views, assign, edit, pass, stop, recoverRepair, damageRepairs, reassignDamage, transaction, readState,
+        return { views, assign, edit, pass, passGroup, passComponents, stop, stopGroup, recoverRepair, damageRepairs, reassignDamage, transaction, readState,
             packingBatches, assignPacking, assignPackingBulk, assignBundlingBulk, setPackingHold, passPackingLot, packingLotMath, editPackingLot, bundlingReady, assignBundling, editBundling, passBundling, brandSizes,
-            approve, tickRequirement, receiveRequirement, setBatchStopped,
+            approve, tickRequirement, receiveRequirement, hydrateCuttingComponents, setBatchStopped,
             calculateAvailableQty, validateAssignment, pushToNextStage, pushToPackingPool,
             initialize, refresh, saveState };
     }

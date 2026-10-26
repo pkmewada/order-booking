@@ -79,6 +79,29 @@
     }
     #rowsContainer .table td { padding: 6px 8px; vertical-align: middle; }
 
+    #cuttingAssignmentsTable { table-layout: fixed; width: 100%; font-size: 12px; }
+    #cuttingAssignmentsTable th, #cuttingAssignmentsTable td { padding: 8px 6px; vertical-align: middle; white-space: normal; overflow-wrap: anywhere; }
+    #cuttingAssignmentsWrap { overflow-x: hidden; }
+    #cuttingAssignmentsTable .sub-batch-cell { color: #315cff; font-weight: 600; }
+    #cuttingAssignmentsTable .piece-cell { line-height: 1.35; }
+    #cuttingAssignmentsTable .piece-cell .small { display: block; }
+    #cuttingAssignmentsTable .batch-cell, #cuttingAssignmentsTable .sub-batch-cell { word-break: normal; overflow-wrap: anywhere; }
+    #cuttingAssignmentsTable .component-lines { display: grid; gap: 6px; }
+    #cuttingAssignmentsTable .component-line { padding-bottom: 6px; border-bottom: 1px solid #edf0f6; line-height: 1.35; }
+    #cuttingAssignmentsTable .component-line:last-child { padding-bottom: 0; border-bottom: 0; }
+    #cuttingAssignmentsTable .component-lines.compact { gap: 2px; }
+    #cuttingAssignmentsTable .component-lines.compact .component-line { padding: 3px 0; }
+    #cuttingAssignmentsTable .sub-batch-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 1.3; }
+    #cuttingAssignmentsTable .piece-cell .item-line { display: block; color: #7585a4; font-weight: 500; }
+    #cuttingAssignmentsTable .actions-cell .btn { padding: 4px 6px; }
+    #rowsContainer .cutting-assignment-card { height: 100%; border: 1px solid #e2e7f1; border-radius: 10px; }
+    #rowsContainer .cutting-assignment-card .card-header { background: #f8f9fc; font-weight: 700; }
+    #rowsContainer .cutting-assignment-card .form-label { font-size: 12px; margin-bottom: 4px; }
+    #assignModal .modal-dialog { max-width: min(1320px, calc(100vw - 32px)); }
+    #progressModal .progress-context { border: 1px solid #e2e7f1; border-radius: 8px; padding: 12px; background: #f8f9fc; }
+    #progressComponentInputs .progress-component-row { display: grid; grid-template-columns: minmax(0, 1fr) 160px; align-items: center; gap: 14px; padding: 10px 12px; border: 1px solid #e5eaf3; border-radius: 8px; margin-bottom: 8px; }
+    #passPieceInputs .pass-component-row { display: grid; grid-template-columns: minmax(0, 1fr) 160px; align-items: center; gap: 14px; padding: 10px 12px; border: 1px solid #e5eaf3; border-radius: 8px; margin-bottom: 8px; }
+
     .color-text {
         font-size: 13px;
         font-weight: 600;
@@ -241,13 +264,26 @@
         max-width: 100%;
     }
 
-    .split-row-table col.col-sub { width: 13%; }
-    .split-row-table col.col-piece { width: 11%; }
-    .split-row-table col.col-worker { width: 24%; }
-    .split-row-table col.col-qty { width: 10%; }
-    .split-row-table col.col-priority { width: 13%; }
-    .split-row-table col.col-date { width: 24%; }
-    .split-row-table col.col-copy { width: 5%; }
+    .split-row-table col.col-sub { width: 15%; }
+    .split-row-table col.col-piece { width: 12%; }
+    .split-row-table col.col-item { width: 10%; }
+    .split-row-table col.col-worker { width: 22%; }
+    .split-row-table col.col-qty { width: 9%; }
+    .split-row-table col.col-priority { width: 11%; }
+    .split-row-table col.col-date { width: 17%; }
+    .split-row-table col.col-copy { width: 4%; }
+    #rowsContainer .table-responsive { overflow-x: hidden; }
+    #rowsContainer .split-row-table { min-width: 0; }
+    #singleAssignmentTable { width: 100%; table-layout: fixed; }
+    #singleAssignmentTable col.sub-col { width: 22%; }
+    #singleAssignmentTable col.piece-col { width: 12%; }
+    #singleAssignmentTable col.item-col { width: 13%; }
+    #singleAssignmentTable col.worker-col { width: 21%; }
+    #singleAssignmentTable col.qty-col { width: 9%; }
+    #singleAssignmentTable col.priority-col { width: 10%; }
+    #singleAssignmentTable col.date-col { width: 13%; }
+    #singleAssignmentTable th, #singleAssignmentTable td { padding: 7px 6px; vertical-align: middle; overflow-wrap: anywhere; }
+    #singleAssignmentTable input, #singleAssignmentTable select { min-width: 0; width: 100%; font-size: 12px; padding: 4px 6px; }
 
     .split-row-table th.copy-header-cell {
         text-align: center;
@@ -724,26 +760,13 @@
                         <button class="btn btn-dark btn-sm" id="bulkPassCuttingBtn"><i class="bx bx-right-arrow-alt me-1"></i>Bulk Pass</button>
                     </div>
                     <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-bordered text-nowrap w-100">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Batch ID</th>
-                                        <th>Sub-Batch</th>
-                                        <th>Brand</th>
-                                        <th>Piece Type</th>
-                                        <th>Worker</th>
-                                        <th>Quantity</th>
-                                        <th>Progress</th>
-                                        <th>Damage</th>
-                                        <th>Remaining</th>
-                                        <th>Priority</th>
-                                        <th>Delivery Date</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
+                        <div id="cuttingAssignmentsWrap">
+                            <table id="cuttingAssignmentsTable" class="table table-bordered align-middle mb-0">
+                                <colgroup>
+                                    <col style="width:10%"><col style="width:12%"><col style="width:22%"><col style="width:11%">
+                                    <col style="width:8%"><col style="width:9%"><col style="width:8%"><col style="width:10%"><col style="width:10%">
+                                </colgroup>
+                                <thead><tr><th>Batch ID / Sub-Batch</th><th>Brand</th><th>Piece / Item / Worker</th><th>Qty</th><th>Damage</th><th>Remaining</th><th>Priority</th><th>Status</th><th>Action</th></tr></thead>
                                 <tbody id="cuttingMastersList"></tbody>
                             </table>
                         </div>
@@ -827,16 +850,22 @@
 
 <!-- Update Progress Modal -->
 <div class="modal fade" id="progressModal" tabindex="-1" aria-labelledby="progressModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="progressModalLabel">Update Progress</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-3"><label class="form-label">Sub-Batch</label><input type="text" class="form-control" id="progressSubBatch" readonly></div>
-                <div class="mb-3"><label class="form-label">Worker</label><input type="text" class="form-control" id="progressWorker" readonly></div>
-                <div class="row">
+                <div class="progress-context mb-3">
+                    <div class="row g-2">
+                        <div class="col-md-4"><label class="form-label">Sub-Batch</label><input type="text" class="form-control" id="progressSubBatch" readonly></div>
+                        <div class="col-md-4"><label class="form-label">Piece / Item</label><input type="text" class="form-control" id="progressPieceItem" readonly></div>
+                        <div class="col-md-4"><label class="form-label">Worker</label><input type="text" class="form-control" id="progressWorker" readonly></div>
+                    </div>
+                </div>
+                <div id="progressComponentInputs" class="mb-3"></div>
+                <div class="row progress-single-summary">
                     <div class="col-md-4 mb-3">
                         <label class="form-label">Total Assigned</label>
                         <input type="text" class="form-control" id="progressTotal" readonly>
@@ -851,7 +880,7 @@
                     </div>
                 </div>
 
-                <div class="row">
+                <div class="row progress-single-controls">
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Update Type</label>
                         <select class="form-select" id="progressTypeSelect">
@@ -867,7 +896,7 @@
                     </div>
                 </div>
 
-                <div class="alert alert-info mb-3" id="progressLivePreview" style="font-size:13px;"></div>
+                <div class="alert alert-info mb-3 progress-single-controls" id="progressLivePreview" style="font-size:13px;"></div>
 
                 <!-- âœ… NEW: PREVIOUS ASSIGNMENT HISTORY -->
                 <div class="progress-history-wrap">
@@ -885,6 +914,27 @@
                 <button type="button" class="btn btn-primary" id="updateProgressBtn">
                     <i class="bx bx-save"></i> Update
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pass a complete piece set -->
+<div class="modal fade" id="passPieceModal" tabindex="-1" aria-labelledby="passPieceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="passPieceModalLabel">Pass Cutting Piece</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border mb-3" id="passPieceSummary"></div>
+                <div id="passPieceInputs"></div>
+                <div class="small text-muted">Enter the same quantity for every item so the piece stays paired.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmPassPieceBtn"><i class="bx bx-right-arrow-alt"></i> Pass Piece</button>
             </div>
         </div>
     </div>

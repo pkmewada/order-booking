@@ -14,7 +14,7 @@ function manufacturingRecords(string $table): void
     }
     try {
         $db = database();
-        $columns = $employee ? 'id, name, category, employeeType' : 'id, name';
+        $columns = $employee ? 'id, name, category, employeeType' : ($table === 'itemList' ? 'id, name, itemType' : ($table === 'pieceItemList' ? 'id, name, photo' : 'id, name'));
         if ($method === 'GET') {
             $rows = $db->query("SELECT $columns FROM `$table` ORDER BY createdAt DESC, id DESC")->fetchAll();
             if (!$employee) {
@@ -58,6 +58,13 @@ function manufacturingRecords(string $table): void
             respond(422, ['success' => false, 'message' => 'Name is required (maximum 150 characters).']);
         }
         $fields = ['name' => trim($name)];
+        if ($table === 'itemList') {
+            $itemType = $data['itemType'] ?? '';
+            if (!in_array($itemType, ['Cutting', 'Non-Cutting'], true)) {
+                respond(422, ['success' => false, 'message' => 'Select Cutting or Non-Cutting for this item.']);
+            }
+            $fields['itemType'] = $itemType;
+        }
         if ($employee) {
             $category = $data['category'] ?? '';
             $type = $data['employeeType'] ?? '';

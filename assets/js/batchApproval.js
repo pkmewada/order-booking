@@ -23,6 +23,7 @@ $(document).ready(async function () {
 
     const approvalModalElement = document.getElementById("approvalModal");
     const approvalModal = new bootstrap.Modal(approvalModalElement);
+    const passedApprovalBatchesModal = new bootstrap.Modal(document.getElementById("passedApprovalBatchesModal"));
 
     /* ================= HELPERS ================= */
     function escapeHtml(value) {
@@ -83,6 +84,10 @@ $(document).ready(async function () {
     }
 
     function getPieceStatus(piece) { return piece?.approval?.status || "pending"; }
+    function isBatchFullyPassed(batch) {
+        const pieces = Array.isArray(batch?.pieces) ? batch.pieces : [];
+        return pieces.length > 0 && pieces.every(piece => getPieceStatus(piece) === "pass");
+    }
     function isPieceLocked(piece) { return !!(piece?.approval?.locked); }
     function isPieceStopped(piece) { return !!(piece?.approval?.stopped); }
     function isBatchStopped(batch) { return !!(batch?.stopped); }
@@ -154,7 +159,7 @@ $(document).ready(async function () {
         const statusFilter = normalize($("#approvalStatusFilter").val());
         const searchTerm = normalize($("#approvalSearchInput").val());
 
-        const filtered = batchData.filter(batch => {
+        const filtered = batchData.filter(batch => !isBatchFullyPassed(batch)).filter(batch => {
             const pieces = Array.isArray(batch.pieces) ? batch.pieces : [];
             const searchable = [
                 batch.batchId, batch.brand, batch.designNumber, batch.color, batch.quantity, batch.priority,
@@ -221,6 +226,38 @@ $(document).ready(async function () {
             `);
         });
     }
+
+    function renderPassedApprovalBatches() {
+        const tbody = $("#passedApprovalBatchTableBody").empty();
+        const passed = batchData.filter(isBatchFullyPassed).sort((a, b) => {
+            const latest = batch => Math.max(...batch.pieces.map(piece => Date.parse(piece.approval?.updatedAt || "") || 0));
+            return latest(b) - latest(a);
+        });
+        if (!passed.length) {
+            tbody.html('<tr><td colspan="7" class="text-center text-muted py-4">No fully passed batches yet.</td></tr>');
+            return;
+        }
+        passed.forEach(batch => {
+            const latest = Math.max(...batch.pieces.map(piece => Date.parse(piece.approval?.updatedAt || "") || 0));
+            const passedAt = latest ? new Date(latest).toLocaleString() : "-";
+            tbody.append(`<tr>
+                <td><strong>${escapeHtml(batch.batchId || "-")}</strong></td>
+                <td>${escapeHtml(batch.brand || "-")}</td>
+                <td>${escapeHtml(batch.designNumber || "-")}</td>
+                <td>${escapeHtml(batch.color || "-")}</td>
+                <td>${escapeHtml(batch.pieces.map((piece, index) => getPieceItem(piece) || `Piece ${getPieceNumber(piece, index)}`).join(", "))}</td>
+                <td>${escapeHtml(batch.quantity || 0)}</td>
+                <td>${escapeHtml(passedAt)}</td>
+            </tr>`);
+        });
+    }
+
+    $("#showPassedApprovalBatchesBtn").on("click", async function () {
+        try { await Production.refresh(); } catch (error) { console.warn("Could not refresh passed approval list:", error); }
+        loadData();
+        renderPassedApprovalBatches();
+        passedApprovalBatchesModal.show();
+    });
 
     function getCurrentBatch() {
         return batchData.find(b => String(b.id) === String(currentBatchId));

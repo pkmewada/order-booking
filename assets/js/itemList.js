@@ -9,6 +9,7 @@ $(document).ready(function() {
         $('.card-title').html('<i class="bx bx-list-ul text-primary me-2"></i> Piece Items');
         $('#addItemBtn').html('<i class="bx bx-plus align-middle"></i> Add Piece Item');
         $('#itemName').attr('placeholder', 'Enter a garment item (e.g., Shirt, Jeans, Jacket)');
+        $('.item-type-field, .item-type-column').hide();
     }
     async function request(method = 'GET', data) {
         const response = await fetch(`api/${endpoint}.php`, { method, cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: data ? JSON.stringify(data) : undefined });
@@ -23,7 +24,7 @@ $(document).ready(function() {
     function escapeHtml(value) { return $('<div>').text(String(value ?? '')).html(); }
     async function loadRecords() {
         $('#addItemBtn, #saveItemBtn, #confirmDeleteItemBtn').prop('disabled', true);
-        $('#itemTableBody').html('<tr><td colspan="3" class="text-center py-4">Loading...</td></tr>');
+        $('#itemTableBody').html('<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>');
         try {
             items = await request(); cacheRecords(); renderItemTable();
             $('#addItemBtn, #saveItemBtn, #confirmDeleteItemBtn').prop('disabled', false);
@@ -65,6 +66,7 @@ $(document).ready(function() {
                 <tr>
                     <td>${index + 1}</td>
                     <td><strong>${escapeHtml(item.name)}</strong></td>
+                    ${isPieceItem ? '' : `<td>${item.itemType ? escapeHtml(item.itemType) : '<span class="badge bg-warning text-dark">Legacy / unconfigured</span>'}</td>`}
                     <td class="text-center">
                         <button class="btn btn-sm btn-primary edit-item-btn me-1" 
                                 data-id="${item.id}" 
@@ -97,6 +99,7 @@ $(document).ready(function() {
     $('#addItemBtn').click(function() {
         $('#itemModalLabel').text(`Add ${itemLabel}`);
         $('#itemName').val('');
+        $('#itemType').val('');
         $('#editItemId').val('');
         $('#itemModal').modal('show');
     });
@@ -108,6 +111,7 @@ $(document).ready(function() {
 
         $('#itemModalLabel').text(`Edit ${itemLabel}`);
         $('#itemName').val(item.name);
+        $('#itemType').val(item.itemType || '');
         $('#editItemId').val(item.id);
         $('#itemModal').modal('show');
     }
@@ -160,7 +164,9 @@ $(document).ready(function() {
         button.prop('disabled', true);
         try {
             const id = editId ? Number(editId) : null;
-            const record = await request(id ? 'PUT' : 'POST', { id, name });
+            const itemType = $('#itemType').val();
+            if (!isPieceItem && !itemType) { Swal.fire('Required', 'Select an item type.', 'warning'); return; }
+            const record = await request(id ? 'PUT' : 'POST', { id, name, ...(isPieceItem ? {} : { itemType }) });
             if (id) { const index = items.findIndex(row => row.id === id); if (index !== -1) items[index] = record; }
             else { items.unshift(record); }
             cacheRecords(); renderItemTable(); $('#itemModal').modal('hide'); $('#itemForm')[0].reset();

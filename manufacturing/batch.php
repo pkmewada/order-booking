@@ -291,7 +291,9 @@
             </div>
 
             <div class="d-flex gap-2">
-                
+                <button type="button" class="btn btn-dark" id="showPassedBatchesBtn">
+                    List
+                </button>
                 <button type="button" class="btn btn-primary" id="createBatchBtn">
                     <i class="bx bx-plus me-1"></i>
                     Create Batch
@@ -568,6 +570,27 @@
                 </button>
             </div>
 
+        </div>
+    </div>
+</div>
+
+<!-- PASSED BATCHES LIST -->
+<div class="modal fade" id="passedBatchesModal" tabindex="-1" aria-labelledby="passedBatchesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="passedBatchesModalLabel">Passed Batches</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered text-nowrap align-middle w-100">
+                        <thead><tr><th>Batch ID</th><th>Brand</th><th>Design Number</th><th>Color</th><th>Quantity</th><th>Priority</th><th>Passed At</th></tr></thead>
+                        <tbody id="passedBatchTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button></div>
         </div>
     </div>
 </div>

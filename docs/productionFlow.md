@@ -6,7 +6,7 @@ This document describes the production engine in `assets/js/productionEngine.js`
 
 `Batch Approval → Cutting → Additional Works → Stitching → Ironing → Packing`
 
-Within each chosen timing, additional works use this order when selected: **Embroidery → Digital Print → Screen Print → Hand Work → Peco**. Each selected work is a separate route step. Duplicate selections are collapsed. With no additional work, Cutting goes directly to Stitching.
+In the BOM flow editor, additional works are selected from the database-backed Additional Work master and appear between Cutting and Stitching. Multiple distinct works can be added for a piece; known works retain their established ordering and other catalog entries follow selection order. With no additional work, Cutting goes directly to Stitching. Production managers still have fixed integrations for the five built-in work types; arbitrary catalog names currently display and save in the BOM route but do not yet have a dedicated production manager.
 
 `Production.buildRoute(piece)` is the only route builder. Each BOM work has four timing choices: Before Cutting, After Cutting, After Stitching, After Ironing. Legacy works without timing default to After Cutting. BOM and Batch Approval previews use the same builder. Approval credits the first selected route stage. Only active BOMs are selectable for batches.
 
@@ -183,3 +183,6 @@ Verification: node --test tests/production-engine.test.cjs tests/packing.test.cj
 Pattern and MRP are stored on BOM definitions and read directly only by Packing. Assignment shows total/available balances; reservation remains the minimum available across required pieces. Packing displays a single row per packingLotId. passPackingLot locks and re-reads all lot pieces, passes only the minimum completed-good delta across the lot and audits terminal completion without crediting another stage. Repeat Pass returns zero. Fully passed lots appear in List; stored records and reservations remain intact. Progress saves remain separate from Pass.
 
 QR Code opens the two-part, sample-style barcode label generator. Brand size options are Little Dolly 18/20/22/24/26, Amari S/M/L and Nivi Blossom 28/30/32/34. Labels download as a self-contained printable HTML sheet with a cut line and duplicated product details. Assignment attempts the download automatically using the selected label size; missing label metadata does not undo a committed production assignment.
+# Item type compatibility
+
+The MySQL Item List now stores nullable `itemType` (`Cutting` / `Non-Cutting`). NULL marks a legacy item and is never inferred from its name. The current production engine still stores pools, routes, stage balances, assignments and audit history in its existing manufacturing state architecture. Approved pools retain their stored route snapshots; editing a master item does not rewrite those routes. Quantity-aware multi-component Stitching readiness is not implemented by this change.

@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS `additionalWork` (
 CREATE TABLE IF NOT EXISTS `itemList` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     `name` VARCHAR(150) NOT NULL,
+    `itemType` ENUM('Cutting','Non-Cutting') NULL DEFAULT NULL,
     `createdAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY `uniqueName` (`name`)
@@ -105,6 +106,7 @@ CREATE TABLE IF NOT EXISTS `itemList` (
 CREATE TABLE IF NOT EXISTS `pieceItemList` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     `name` VARCHAR(150) NOT NULL,
+    `photo` VARCHAR(255) NULL,
     `createdAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY `uniqueName` (`name`)
@@ -170,3 +172,10 @@ CREATE TABLE IF NOT EXISTS productWorkLinks (
  FOREIGN KEY(productId) REFERENCES productRecords(id) ON DELETE CASCADE,
  FOREIGN KEY(workId) REFERENCES additionalWork(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Keep the single additive schema update here for existing installs re-importing this file.
+ALTER TABLE `itemList`
+    ADD COLUMN IF NOT EXISTS `itemType` ENUM('Cutting','Non-Cutting') NULL DEFAULT NULL AFTER `name`;
+
+ALTER TABLE `pieceItemList`
+    ADD COLUMN IF NOT EXISTS `photo` VARCHAR(255) NULL AFTER `name`;

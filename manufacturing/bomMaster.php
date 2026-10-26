@@ -121,6 +121,15 @@ include __DIR__ . "/../includes/header.php";
     .flow-add-work-btn:hover { background:#161617; color:#fff; }
     .flow-add-work-wrap { display:inline-flex; align-items:center; gap:4px; width:220px; }
     .flow-add-work-wrap .flow-add-work-select { min-width:0; }
+    .bom-flow-track { flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; white-space:nowrap; scrollbar-width:thin; padding:4px 0 8px; }
+    .bom-flow-track > * { flex:0 0 auto; }
+    .flow-add-work-wrap { width:max-content; flex:0 0 auto; gap:8px; }
+    .flow-work-multi-choices { display:inline-flex; flex:0 0 auto; align-items:center; gap:10px; padding:6px 10px !important; border-color:#dfe5f1 !important; border-radius:8px !important; box-shadow:0 2px 8px rgba(20,30,50,.06); }
+    .flow-work-multi-choices .form-check { display:inline-flex; align-items:center; gap:5px; flex:0 0 auto; min-height:0; margin:0; padding:0; white-space:nowrap; }
+    .flow-work-multi-choices .form-check-input { float:none; flex:0 0 auto; margin:0; }
+    .flow-work-multi-choices .form-check-label { white-space:nowrap; line-height:1.2; }
+    .flow-confirm-work { flex:0 0 auto; white-space:nowrap; border-radius:7px; }
+    .flow-add-work-wrap .flow-add-work-select { width:auto; min-width:150px; }
     .bom-flow-extra { display:inline-flex; align-items:center; gap:5px; padding:5px 8px; border:1px solid #dfe5f1; border-radius:7px; background:#f8f9fc; }
     .bom-flow-extra .flow-remove-work { padding:0; color:#dc3545; }
 
@@ -352,6 +361,26 @@ include __DIR__ . "/../includes/header.php";
 
     #bomModal .modal-body {
         overflow: visible;
+    }
+
+    .bom-basic-layout { align-items:stretch; }
+    .bom-basic-fields { display:flex; flex-direction:column; flex:0 0 70%; max-width:70%; min-height:0; }
+    .bom-photo-column { flex:0 0 30%; max-width:30%; margin-left:auto; }
+    .bom-photo-panel { display:flex; align-items:center; height:100%; min-height:0; padding:12px; border:1px solid #e2e8f0; border-radius:10px; background:#fbfcff; }
+    .bom-photo-panel #photoPreview { width:100%; min-height:400px; height:100%; display:flex; align-items:center; justify-content:center; margin-top:0 !important; padding:18px; border:1px dashed #cbd5e1; border-radius:8px; background:#fff; }
+    .bom-photo-panel #photoPreview:empty::before { content:"Photo preview"; color:#94a3b8; font-size:14px; }
+    .bom-photo-panel #photoPreview .bom-photo-thumb { width:min(100%, 320px) !important; height:380px !important; min-height:0; max-height:calc(100% - 24px); object-fit:contain !important; border:0 !important; border-radius:8px !important; }
+    @media (max-width: 991.98px) {
+        .bom-basic-fields { flex:0 0 50%; max-width:50%; }
+        .bom-photo-column { flex:0 0 50%; max-width:50%; }
+        .bom-photo-panel #photoPreview { min-height:360px; }
+        .bom-photo-panel #photoPreview .bom-photo-thumb { height:340px !important; max-height:calc(100% - 20px); }
+    }
+    @media (max-width: 767.98px) {
+        .bom-basic-fields { flex:0 0 100%; max-width:100%; min-height:0; }
+        .bom-photo-column { flex:0 0 100%; max-width:100%; }
+        .bom-photo-panel #photoPreview { min-height:320px; }
+        .bom-photo-panel #photoPreview .bom-photo-thumb { height:300px !important; max-height:calc(100% - 20px); }
     }
 
     .bom-piece-flow-header .badge.bg-primary {
@@ -719,57 +748,46 @@ include __DIR__ . "/../includes/header.php";
                         </button>
                     </div>
 
-                    <div class="row g-3">
-
-                        <div class="col-md-4">
-                            <label class="form-label">
-                                Brand Name <span class="text-danger">*</span>
-                            </label>
-
-                            <select id="brandSelect" class="form-select" required>
-                                <option value="">Select Brand</option>
-                                <option>NIVI BLOSSOM</option>
-                                <option>AMARI</option>
-                                <option>LITTLE DOLLY</option>
-                            </select>
+                    <div class="row g-4 bom-basic-layout">
+                        <div class="col-lg-7 bom-basic-fields">
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label" for="brandSelect">Brand Name <span class="text-danger">*</span></label>
+                                    <select id="brandSelect" class="form-select" required>
+                                        <option value="">Select Brand</option>
+                                        <option>NIVI BLOSSOM</option>
+                                        <option>AMARI</option>
+                                        <option>LITTLE DOLLY</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label" for="designNumber">Design Number <span class="text-danger">*</span></label>
+                                    <input type="text" id="designNumber" inputmode="numeric" pattern="[0-9]{1,18}" maxlength="18" class="form-control" placeholder="Enter design number" required>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label" for="colorSelect">Color <span class="text-danger">*</span></label>
+                                    <div class="input-group"><select id="colorSelect" class="form-select" required><option value="">Select Color</option></select><button type="button" class="btn btn-outline-secondary" id="addBomColorBtn" title="Add color"><i class="bx bx-plus"></i></button></div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label" for="mrp">MRP</label>
+                                    <input id="mrp" class="form-control" type="number" min="0" step="0.01">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label" for="photoUpload">Choose Photo</label>
+                                    <input type="file" id="photoUpload" class="form-control" accept="image/*">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label" for="pattern">Pattern <a href="pattern.php" target="_blank" class="small ms-2">Manage patterns</a></label>
+                                    <select id="pattern" class="form-select" required><option value="">Select Pattern</option></select>
+                                </div>
+                            </div>
                         </div>
-
-                        <div class="col-md-4">
-                            <label class="form-label">
-                                Design Number <span class="text-danger">*</span>
-                            </label>
-
-                            <input
-                                type="text"
-                                id="designNumber" inputmode="numeric" pattern="[0-9]{1,18}" maxlength="18"
-                                class="form-control"
-                                placeholder="Enter design number"
-                                required>
+                        <div class="bom-photo-column">
+                            <div class="bom-photo-panel">
+                                <div id="photoPreview"></div>
+                            </div>
                         </div>
-
-                        <div class="col-md-4">
-                            <label class="form-label">
-                                Color <span class="text-danger">*</span>
-                            </label>
-
-                            <div class="input-group"><select id="colorSelect" class="form-select" required><option value="">Select Color</option></select><button type="button" class="btn btn-outline-secondary" id="addBomColorBtn" title="Add color"><i class="bx bx-plus"></i></button></div>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label">Upload Photo</label>
-
-                            <input
-                                type="file"
-                                id="photoUpload"
-                                class="form-control"
-                                accept="image/*">
-
-                            <div id="photoPreview" class="mt-2"></div>
-                        </div>
-
                     </div>
-
-                    <div class="row g-3"><div class="col-md-6"><label class="form-label" for="pattern">Pattern <a href="pattern.php" target="_blank" class="small ms-2">Manage patterns</a></label><select id="pattern" class="form-select" required><option value="">Select Pattern</option></select></div><div class="col-md-6"><label class="form-label" for="mrp">MRP</label><input id="mrp" class="form-control" type="number" min="0" step="0.01"></div></div>
                     <hr class="my-4">
 
                     <!-- PIECE SELECTION -->

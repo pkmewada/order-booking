@@ -16,11 +16,6 @@
                     </nav>
                 </div>
             </div>
-            <div class="btn-list">
-                <button class="btn btn-primary btn-wave me-2" id="addItemBtn">
-                    <i class="bx bx-plus align-middle"></i> Add Item
-                </button>
-            </div>
         </div>
         <!-- Page Header Close -->
 
@@ -28,10 +23,13 @@
         <div class="row">
             <div class="col-xl-12">
                 <div class="card custom-card">
-                    <div class="card-header">
+                    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
                         <div class="card-title">
                             <i class="bx bx-list-ul text-primary me-2"></i> Item List
                         </div>
+                        <button type="button" class="btn btn-primary" id="addItemBtn">
+                            <i class="bx bx-plus align-middle me-1"></i> Add Item
+                        </button>
                     </div>
                     <div class="card-body">
                         <!-- Search -->
@@ -51,6 +49,7 @@
                                     <tr>
                                         <th>#</th>
                                         <th>Item Name</th>
+                                        <th class="item-type-column">Item Type</th>
                                         <th class="text-center">Actions</th>
                                     </tr>
                                 </thead>
@@ -80,6 +79,14 @@
                     <div class="mb-3">
                         <label class="form-label">Item Name</label>
                         <input type="text" class="form-control" id="itemName" name="itemName" required placeholder="Enter item name (e.g., Main Fabric, Cotton, Zip, Label, Elastic)">
+                    </div>
+                    <div class="mb-3 item-type-field">
+                        <label class="form-label" for="itemType">Item Type</label>
+                        <select class="form-select" id="itemType" name="itemType" required>
+                            <option value="">Select Item Type</option>
+                            <option value="Cutting">Cutting</option>
+                            <option value="Non-Cutting">Non-Cutting</option>
+                        </select>
                     </div>
                     <input type="hidden" id="editItemId" value="">
                 </form>

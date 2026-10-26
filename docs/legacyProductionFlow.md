@@ -745,3 +745,6 @@ pushToNextStage() updates currentStage pointer
 Ironing is final → auto-pushes to packingPool
 
 All data in localStorage with consistent key pattern
+# Compatibility note (2026-10-26)
+
+Legacy Item List records have `itemType = NULL` after migration. Configure them explicitly before selecting them in a new BOM. No production localStorage or MySQL manufacturing-state data is rewritten by the item-type migration. Multi-component Stitching readiness remains a known gap in the current engine.

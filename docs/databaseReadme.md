@@ -35,3 +35,8 @@ Customer create/update additionally accepts `shopName`, `agentId`, `transporterI
 Manufacturing schema: `employeeRecords`, `colourRecords`, `additionalWork`, `itemList` are included in the same SQL file. These four table definitions follow the current forms; their pages now load/save/delete through ../api/employee.php, ../api/colour.php, ../api/item-list.php and ../api/additional-work.php. Hardcoded samples have been removed. Tables start empty. See `flow.md` for fields and rules.
 
 BOM Master and Product Creation now share `productRecords` via ../api/bom.php and ../api/product.php. `productItemLinks` and `productWorkLinks` enforce item/work foreign keys. Import the updated single SQL to add these tables. Uploaded images are stored in `../uploads/products/`; PHP must be able to write to that directory. See flow.md for source flags, draft/completed/import behavior and validation.
+# Item configuration update (2026-10-26)
+
+`itemList.itemType` is nullable and accepts `Cutting` or `Non-Cutting`. NULL is the explicit legacy/unconfigured state; existing rows are not auto-classified. The Item List API requires a valid type for new writes, returns it in list rows, and new BOM material selections must reference configured items. Apply `database/migrations/20261026_item-types-piece-photos.sql` to an existing installation; it is additive and safe to retry on MySQL/MariaDB versions supporting `ADD COLUMN IF NOT EXISTS`. Fresh installs include both columns in `database/order-booking.sql`.
+
+`pieceItemList` is the existing separate garment-piece catalog used by BOM JSON (`pieceItemId`), so no duplicate piece master was added. `pieceItemList.photo` is reserved for secure piece imagery; uploading/editing those images is not yet exposed in the master UI/API.

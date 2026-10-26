@@ -20,6 +20,7 @@ $(document).ready(async function () {
     const photoZoomModal = new bootstrap.Modal(
         document.getElementById("photoZoomModal")
     );
+    const passedBatchesModal = new bootstrap.Modal(document.getElementById("passedBatchesModal"));
 
     // --------------------------------------------------
     // HELPERS
@@ -461,6 +462,7 @@ $(document).ready(async function () {
                 number: getPieceNumber(piece, index),
                 item: getPieceItem(piece),
                 materials: getMaterials(piece),
+                ...(Array.isArray(piece.materialItems) ? { materialItems: piece.materialItems.map(item => ({ id: Number(item.id), name: String(item.name || ''), itemType: item.itemType || null })) } : {}),
                 additionalWorks: getAdditionalWorks(piece)
             }))
         };
@@ -495,13 +497,14 @@ $(document).ready(async function () {
     function renderTable() {
         const tbody = $("#batchTableBody");
         tbody.empty();
+        const activeBatches = batchData.filter(batch => batch.status !== "approved");
 
         const brandFilter = normalize($("#brandFilter").val());
         const priorityFilter = normalize($("#priorityFilter").val());
         const colorFilter = normalize($("#colorFilter").val());
         const searchTerm = normalize($("#batchSearch").val());
 
-        const filteredBatches = batchData.filter(batch => {
+        const filteredBatches = activeBatches.filter(batch => {
             const searchableText = [
                 batch.batchId, batch.brand, batch.designNumber, batch.color,
                 batch.quantity, batch.priority,
@@ -570,6 +573,40 @@ $(document).ready(async function () {
             `);
         });
     }
+
+    function getPassedBatches() {
+        const passed = [...batchData.filter(batch => batch.status === "approved"),
+            ...readStorage(APPROVED_BATCH_STORAGE_KEY).filter(batch => batch.status === "approved")];
+        return [...new Map(passed.map(batch => [String(batch.id ?? batch.batchId), batch])).values()]
+            .sort((a, b) => String(b.passedAt || "").localeCompare(String(a.passedAt || "")));
+    }
+
+    function renderPassedBatches() {
+        const tbody = $("#passedBatchTableBody").empty();
+        const passed = getPassedBatches();
+        if (!passed.length) {
+            tbody.html('<tr><td colspan="7" class="text-center text-muted py-4">No passed batches yet.</td></tr>');
+            return;
+        }
+        passed.forEach(batch => {
+            const dateTime = formatPassedDateTime(batch.passedAt);
+            tbody.append(`<tr>
+                <td><strong>${escapeHtml(batch.batchId || "-")}</strong></td>
+                <td>${escapeHtml(batch.brand || "-")}</td>
+                <td>${escapeHtml(batch.designNumber || "-")}</td>
+                <td>${escapeHtml(batch.color || "-")}</td>
+                <td>${escapeHtml(batch.quantity || 0)}</td>
+                <td>${escapeHtml(batch.priority || "-")}</td>
+                <td>${escapeHtml(dateTime.date)} ${escapeHtml(dateTime.time)}</td>
+            </tr>`);
+        });
+    }
+
+    $("#showPassedBatchesBtn").on("click", async function () {
+        try { await loadData(); renderTable(); } catch (error) { console.warn("Could not refresh passed batch list:", error); }
+        renderPassedBatches();
+        passedBatchesModal.show();
+    });
 
     // --------------------------------------------------
     // PHOTO ZOOM
