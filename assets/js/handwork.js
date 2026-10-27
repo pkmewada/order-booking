@@ -300,7 +300,7 @@ $(document).ready(async function () {
                 const total = getPoolTotal(it);
                 const assigned = getPoolAssigned(it);
                 const remaining = getPoolRemaining(it);
-                const qtyHtml = `<span class="qty-pair"><span class="qty-total">${total}</span><span class="qty-sep">/</span><span class="qty-assigned ${assigned === 0 ? "zero" : ""}">${assigned}</span></span>`;
+                const qtyHtml = `<span class="qty-pair"><span class="qty-total">${it.branchQuantityLabel ? escapeHtml(it.branchQuantityLabel) : `${total}${it.branch ? ` ${escapeHtml(it.branch)}` : ""}`}</span><span class="qty-sep">/</span><span class="qty-assigned ${assigned === 0 ? "zero" : ""}">${assigned}</span></span>`;
                 const statusHtml = assigned === 0
                     ? `<span class="status-badge not_assigned">Not Assigned</span>`
                     : (remaining > 0 ? `<span class="status-badge assign_progress">In Progress</span>` : "");

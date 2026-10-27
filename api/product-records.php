@@ -152,11 +152,13 @@ function productRecords(string $mode): void
                 if ($mode === 'bom' && !$materialRow['itemType']) { throw new InvalidArgumentException('Configure the item type in Item List before adding it to a new BOM.'); }
             }
             $validWorks = [];
-            foreach ($works as $work) {
+            foreach ($works as $workOrder => $work) {
                 $workLookup->execute([$work['workId'] ?? 0]);
                 if (!$workLookup->fetch() || !in_array($work['stage'] ?? '', ['Before Cutting','After Cutting','After Stitching','After Ironing'], true)) { throw new InvalidArgumentException('Select valid additional work and timing.'); }
-                $validWorks[$work['workId'] . ':' . $work['stage']] = ['workId' => (int) $work['workId'], 'stage' => $work['stage']];
+                $validWorks[] = ['workId' => (int) $work['workId'], 'stage' => $work['stage'], 'workOrder' => (int) $workOrder + 1];
             }
+            $parallelCount = count(array_filter($validWorks, static function ($work) { return $work['stage'] === 'After Cutting'; }));
+            if ($parallelCount > 5) { throw new InvalidArgumentException('Select no more than 5 additional works between Cutting and Stitching.'); }
             $normalized[] = ['number' => $index + 1, 'pieceItemId' => $pieceItemId === null ? null : (int) $pieceItemId,
                 'legacyItemId' => $pieceItemId === null ? (int) ($legacyItemId ?? 0) : null,
                 'itemName' => isset($itemName) ? trim($itemName) : null,
@@ -205,12 +207,12 @@ function productRecords(string $mode): void
             $query = $db->prepare('INSERT INTO productRecords (brand,designNumber,colourId,pattern,mrp,photo,pieces,pieceCount,bomCompleted,createdFrom,inProductList) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
             $query->execute(array_merge($values, [$mode, $mode === 'product' ? 1 : 0])); $id = (int) $db->lastInsertId();
         }
-        foreach (['productItemLinks', 'productWorkLinks'] as $linkTable) { $query = $db->prepare("DELETE FROM $linkTable WHERE productId=?"); $query->execute([$id]); }
+        foreach (['productItemLinks', 'productWorkLinks', 'productWorkSteps'] as $linkTable) { $query = $db->prepare("DELETE FROM $linkTable WHERE productId=?"); $query->execute([$id]); }
         $itemInsert = $db->prepare('INSERT INTO productItemLinks (productId,pieceNumber,itemId,role) VALUES (?,?,?,?)');
-        $workInsert = $db->prepare('INSERT INTO productWorkLinks (productId,pieceNumber,workId,stage) VALUES (?,?,?,?)');
+        $workInsert = $db->prepare('INSERT INTO productWorkSteps (productId,pieceNumber,workOrder,workId,stage) VALUES (?,?,?,?,?)');
         foreach ($normalized as $piece) {
             foreach ($piece['materialIds'] as $material) { $itemInsert->execute([$id, $piece['number'], $material, 'material']); }
-            foreach ($piece['additionalWorks'] as $work) { $workInsert->execute([$id, $piece['number'], $work['workId'], $work['stage']]); }
+            foreach ($piece['additionalWorks'] as $work) { $workInsert->execute([$id, $piece['number'], $work['workOrder'], $work['workId'], $work['stage']]); }
         }
         $db->commit();
         if ($newPhoto && $old) { removeProductPhoto($old['photo']); }

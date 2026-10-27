@@ -265,7 +265,7 @@ $(document).ready(async function () {
 
     /* ================= FLOW CHART ================= */
     function buildFlowNodes(works) {
-        return Production.buildRoute({additionalWorks: works || []}).map((r,order) => ({type:r.type === "additional_work" ? "work" : "fixed",label:r.stage,order}));
+        return Production.buildRoute({additionalWorks: works || []}).map((r,order) => ({type:r.type === "additional_work" ? "work" : "fixed",label:r.stage,branch:r.branch || "",order}));
     }
 
     function renderFlowChart(batch) {
@@ -282,12 +282,20 @@ $(document).ready(async function () {
             const nodes = buildFlowNodes(works);
 
             let html = `<div class="mb-3"><div class="d-flex align-items-center gap-2 mb-2"><span class="badge bg-primary">Piece ${escapeHtml(pieceNumber)}</span>${itemName ? `<span class="fw-semibold">${escapeHtml(itemName)}</span>` : ""}</div><div class="batch-flow-track">`;
-            nodes.forEach(function (node, i) {
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+                if (node.branch) {
+                    const branches = [];
+                    while (i < nodes.length && nodes[i].branch) branches.push(nodes[i++]);
+                    i--;
+                    html += `<span class="batch-flow-connector" aria-hidden="true"></span><div class="border rounded bg-light p-2"><small class="d-block text-muted mb-1">Parallel work after Cutting</small><div class="d-flex flex-column gap-1">${branches.map(branch => `<span class="batch-flow-node"><strong>${escapeHtml(branch.label)} (${escapeHtml(branch.branch)})</strong></span>`).join("")}</div></div>`;
+                    continue;
+                }
                 if (i > 0) html += `<span class="batch-flow-connector" aria-hidden="true"></span>`;
                 html += node.type === "fixed"
                     ? `<span class="batch-flow-node batch-fixed-node"><strong>${escapeHtml(node.label)}</strong></span>`
                     : `<span class="batch-flow-node"><strong>${escapeHtml(node.label)}</strong></span>`;
-            });
+            }
             html += `</div></div>`;
             container.append(html);
         });

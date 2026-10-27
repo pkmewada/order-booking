@@ -255,8 +255,9 @@ $(document).ready(async function () {
         const tbody = $("#availableList");
         tbody.empty();
         const available = pool.filter(p => getPoolRemaining(p) > 0);
+        const waiting = pool.filter(p => p.stageEnabled === false);
 
-        if (!available.length) {
+        if (!available.length && !waiting.length) {
             tbody.html(`<tr><td colspan="11" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No available work for ${escapeHtml(WORK_TYPE)}.</td></tr>`);
             $("#availablePagination").empty();
             return;
@@ -319,6 +320,11 @@ $(document).ready(async function () {
                     </tr>
                 `);
             });
+        });
+
+        waiting.forEach(item => {
+            const branches = (item.waitingForAdditionalWorks || []).map(escapeHtml).join(', ');
+            tbody.append(`<tr class="table-warning"><td colspan="11"><strong>${escapeHtml(item.batchId)}</strong> · Piece ${escapeHtml(item.pieceNumber)} — Stitching locked; waiting for ${branches || 'all additional work branches'} to pass.</td></tr>`);
         });
 
         buildPager($("#availablePagination"), availablePage, totalPages, totalItems, ROWS_PER_PAGE,
@@ -429,7 +435,7 @@ $(document).ready(async function () {
         const select = $("#batchSelect");
         select.empty();
         select.append('<option value="">Choose Batch</option>');
-        pool.filter(p => getPoolRemaining(p) > 0).forEach(item => {
+        pool.filter(p => p.stageEnabled !== false && getPoolRemaining(p) > 0).forEach(item => {
             const rem = getPoolRemaining(item);
             select.append(`<option value="${item.id}">${escapeHtml(item.batchId)} - ${escapeHtml(item.brand)} - Piece ${item.pieceNumber} (${escapeHtml(item.pieceItem)}) - Rem ${rem}/${getPoolTotal(item)}</option>`);
         });

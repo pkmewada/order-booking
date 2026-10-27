@@ -6,9 +6,9 @@ This document describes the production engine in `assets/js/productionEngine.js`
 
 `Batch Approval → Cutting → Additional Works → Stitching → Ironing → Packing`
 
-In the BOM flow editor, additional works are selected from the database-backed Additional Work master and appear between Cutting and Stitching. Multiple distinct works can be added for a piece; known works retain their established ordering and other catalog entries follow selection order. With no additional work, Cutting goes directly to Stitching. Production managers still have fixed integrations for the five built-in work types; arbitrary catalog names currently display and save in the BOM route but do not yet have a dedicated production manager.
+In the BOM flow editor, up to five additional work instances can be selected between Cutting and Stitching. The same catalog work may be selected more than once; each selection is a separate ordered BOM work instance and branch letter. Those instances form parallel branches; with no selected work, Cutting goes directly to Stitching. Existing work timings before Cutting, after Stitching, and after Ironing retain their sequential behavior. Production managers still have fixed integrations for the five built-in work types; arbitrary catalog names currently display and save in the BOM route but do not yet have a dedicated production manager.
 
-`Production.buildRoute(piece)` is the only route builder. Each BOM work has four timing choices: Before Cutting, After Cutting, After Stitching, After Ironing. Legacy works without timing default to After Cutting. BOM and Batch Approval previews use the same builder. Approval credits the first selected route stage. Only active BOMs are selectable for batches.
+`Production.buildRoute(piece)` is the only route builder. Each BOM work instance has an order and one of four legacy timing values: Before Cutting, After Cutting, After Stitching, After Ironing. Legacy works without timing default to After Cutting. Up to five After Cutting instances receive a shared `parallelGroup` and stable A–E branch labels. BOM and Batch Approval previews use the same builder. Approval credits the first selected route stage. Only active BOMs are selectable for batches.
 
 The route is stored in `approvedPool` at approval. Managers read this stored route. A later BOM edit does not reroute existing production.
 
@@ -63,7 +63,7 @@ Existing next-ID keys remain readable by old code but the engine allocates assig
 }
 ```
 
-At work-record level, `inputQty` is that assignment's received share, not the whole pool repeated for each worker. The whole stage input is in `pool.stageBalances[stage].inputQty`.
+At work-record level, `inputQty` is that assignment's received share, not the whole pool repeated for each worker. The whole stage input is in `pool.stageBalances[stage].inputQty`. Parallel work assignments also retain `branch` and `branchLabel`; branch queue totals render as `100 A`, `100 B`, etc.
 
 Legacy `quantity`, `progress`, and `damage` are normalized into the canonical fields. Compatibility aliases are maintained for old display consumers. New mutations use canonical fields.
 
@@ -124,6 +124,8 @@ Stage inputs are cumulative actual receipts. Each pass credits exactly its delta
 
 `currentStage` indicates the furthest entered route step. A late upstream receipt never moves this pointer backward. Managers display projections of balances from the same pool; these projections are not extra stored pool records. History is audit-only, not the primary quantity source.
 
+For the Cutting-to-Stitching parallel group, every pass from Cutting adds the passed delta to every selected branch balance. Stitching has no received balance while any branch remains incomplete. It becomes available only after each branch's cumulative passed quantity reaches the full Cutting input quantity. The final branch pass writes the one-time `stitchingReleased` marker, credits Stitching once with the full batch quantity, and records a convergence audit entry. The assignment API also checks this gate, so a stale or forged UI request cannot assign Stitching early. Its availability view shows the missing branch names and A–E labels. A pool's route snapshot is preserved across BOM edits and legacy migration.
+
 ## Pass and edit
 
 Progress updates save progress; they no longer automatically pass. Pass is explicit.
@@ -178,6 +180,12 @@ Packing holds are recorded in packingHolds under the shared transaction lock. Ho
 
 Verification: node --test tests/production-engine.test.cjs tests/packing.test.cjs and node tests/browser-packing.cjs.
 
+## Parallel Cutting-to-Stitching state
+
+The SQL table `manufacturingState` continues to store each application collection as JSON in `stateData`; no parallel-path state table is required. The `approvedPool` JSON record carries the routing snapshot (`route[].parallelGroup`, `route[].branch`), stage receipts (`stageBalances`), and convergence marker (`stitchingReleased`). Branch assignment rows use the existing additional-work collection with `branch`, `branchLabel`, and a branch-qualified sub-batch identifier. BOM work instances are normalized in `productWorkSteps(productId, pieceNumber, workOrder, workId, stage)`, whose key allows the same catalog work to appear multiple times. State writes still use the existing `manufacturingStateMeta.revision` transaction check.
+
+The BOM API rejects more than five `After Cutting` work instances. The browser editor limits selection to five before save and permits adding the same work type again. Branches use their quantity delta from Cutting, so 100 passed pieces create 100 A, 100 B, and 100 C. Repeated instances of one work type share that manager's queue and require the combined branch quantity to pass. Partial branch completion cannot release Stitching; damage must be recovered and the branch quantity successfully passed until every selected instance reaches the full Cutting quantity.
+
 ## Packing labels and explicit lot pass
 
 Pattern and MRP are stored on BOM definitions and read directly only by Packing. Assignment shows total/available balances; reservation remains the minimum available across required pieces. Packing displays a single row per packingLotId. passPackingLot locks and re-reads all lot pieces, passes only the minimum completed-good delta across the lot and audits terminal completion without crediting another stage. Repeat Pass returns zero. Fully passed lots appear in List; stored records and reservations remain intact. Progress saves remain separate from Pass.
@@ -185,4 +193,4 @@ Pattern and MRP are stored on BOM definitions and read directly only by Packing.
 QR Code opens the two-part, sample-style barcode label generator. Brand size options are Little Dolly 18/20/22/24/26, Amari S/M/L and Nivi Blossom 28/30/32/34. Labels download as a self-contained printable HTML sheet with a cut line and duplicated product details. Assignment attempts the download automatically using the selected label size; missing label metadata does not undo a committed production assignment.
 # Item type compatibility
 
-The MySQL Item List now stores nullable `itemType` (`Cutting` / `Non-Cutting`). NULL marks a legacy item and is never inferred from its name. The current production engine still stores pools, routes, stage balances, assignments and audit history in its existing manufacturing state architecture. Approved pools retain their stored route snapshots; editing a master item does not rewrite those routes. Quantity-aware multi-component Stitching readiness is not implemented by this change.
+The MySQL Item List stores nullable `itemType` (`Cutting` / `Non-Cutting`). NULL marks a legacy item and is never inferred from its name. The production engine stores pools, route snapshots, stage balances, branch assignments and audit history in the existing manufacturing state JSON. Up to five After Cutting branches receive A–E quantity labels; Stitching stays locked until every selected branch has passed the full Cutting quantity. Approved pools retain their stored route snapshots; editing a master item does not rewrite those routes. Item-level Cutting components remain separate from branch convergence.

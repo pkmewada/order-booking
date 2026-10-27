@@ -124,7 +124,8 @@ include __DIR__ . "/../includes/header.php";
     .bom-flow-track { flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; white-space:nowrap; scrollbar-width:thin; padding:4px 0 8px; }
     .bom-flow-track > * { flex:0 0 auto; }
     .flow-add-work-wrap { width:max-content; flex:0 0 auto; gap:8px; }
-    .flow-work-multi-choices { display:inline-flex; flex:0 0 auto; align-items:center; gap:10px; padding:6px 10px !important; border-color:#dfe5f1 !important; border-radius:8px !important; box-shadow:0 2px 8px rgba(20,30,50,.06); }
+    .flow-work-multi-choices { display:none; min-width:220px; padding:8px 12px !important; border-color:#dfe5f1 !important; border-radius:8px !important; box-shadow:0 2px 8px rgba(20,30,50,.06); }
+    .flow-work-multi-choices.show { display:block; }
     .flow-work-multi-choices .form-check { display:inline-flex; align-items:center; gap:5px; flex:0 0 auto; min-height:0; margin:0; padding:0; white-space:nowrap; }
     .flow-work-multi-choices .form-check-input { float:none; flex:0 0 auto; margin:0; }
     .flow-work-multi-choices .form-check-label { white-space:nowrap; line-height:1.2; }

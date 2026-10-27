@@ -172,6 +172,18 @@ CREATE TABLE IF NOT EXISTS productWorkLinks (
  FOREIGN KEY(productId) REFERENCES productRecords(id) ON DELETE CASCADE,
  FOREIGN KEY(workId) REFERENCES additionalWork(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- Ordered work instances allow the same catalog work to occur more than once.
+CREATE TABLE IF NOT EXISTS productWorkSteps (
+ productId BIGINT UNSIGNED NOT NULL,
+ pieceNumber TINYINT UNSIGNED NOT NULL,
+ workOrder SMALLINT UNSIGNED NOT NULL,
+ workId INT UNSIGNED NOT NULL,
+ stage ENUM('Before Cutting','After Cutting','After Stitching','After Ironing') NOT NULL,
+ PRIMARY KEY(productId, pieceNumber, workOrder),
+ KEY productWorkStepsWorkIdx(workId),
+ FOREIGN KEY(productId) REFERENCES productRecords(id) ON DELETE CASCADE,
+ FOREIGN KEY(workId) REFERENCES additionalWork(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Keep the single additive schema update here for existing installs re-importing this file.
 ALTER TABLE `itemList`

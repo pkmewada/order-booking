@@ -364,13 +364,17 @@ $(document).ready(function () {
         const pieceNumber = Number($(this).data('piece'));
         const stage = String($(this).data('stage'));
         const selectedWorks = collectPieces().find(p => p.number === pieceNumber)?.additionalWorks || [];
-        const choices = WORK_TYPES.filter(name => !selectedWorks.some(work => work.workType === name && work.stage === stage));
+        const parallelCount = selectedWorks.filter(work => work.stage === 'After Cutting').length;
+        if (stage === 'After Cutting' && parallelCount >= 5) { alertMsg('You can select up to 5 additional works between Cutting and Stitching.', 'info'); return; }
+        const choices = WORK_TYPES;
         if (!choices.length) { alertMsg('All available additional work is already added for this piece.', 'info'); return; }
         const $button = $(this);
         const multi = stage === 'After Cutting';
         const $wrap = $('<span class="flow-add-work-wrap"></span>').attr({'data-piece':pieceNumber,'data-stage':stage,'data-multiple':multi ? 'true' : 'false'});
         if (multi) {
-            const $checkList = $('<div class="flow-work-multi-choices border rounded p-2 bg-white"></div>');
+            const $dropdown = $('<div class="dropdown d-inline-block"></div>');
+            const $toggle = $('<button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Select additional work</button>');
+            const $checkList = $('<div class="dropdown-menu p-2 flow-work-multi-choices" style="max-height:260px;overflow:auto;min-width:220px"></div>');
             choices.forEach((name, index) => {
                 const id = `flow-work-${pieceNumber}-${index}`;
                 const $row = $('<div class="form-check"></div>');
@@ -378,7 +382,12 @@ $(document).ready(function () {
                 $('<label class="form-check-label"></label>').attr('for', id).text(name).appendTo($row);
                 $checkList.append($row);
             });
-            $wrap.append($checkList).append('<button type="button" class="btn btn-primary btn-sm flow-confirm-work">Add selected</button>');
+            $checkList.find('input').on('change', function(){
+                const remaining = 5 - parallelCount;
+                if ($checkList.find('input:checked').length > remaining) { this.checked = false; alertMsg(`Select up to ${remaining} more additional work(s).`, 'info'); }
+            });
+            $dropdown.append($toggle, $checkList);
+            $wrap.append($dropdown).append('<button type="button" class="btn btn-primary btn-sm flow-confirm-work">Add selected</button>');
         } else {
             const $select = $('<select class="form-select form-select-sm flow-add-work-select" aria-label="Select production work"><option value="">Select work</option></select>');
             choices.forEach(name => $select.append($('<option>').val(name).text(name)));
@@ -1237,7 +1246,7 @@ $(document).ready(function () {
 
     function buildFlowNodes(works) {
         return Production.buildRoute({ additionalWorks: works || [] }).map((r, order) => ({
-            type: r.type === "additional_work" ? "work" : "fixed", label: r.stage, sub: "", order
+            type: r.type === "additional_work" ? "work" : "fixed", label: r.stage, branch: r.branch || "", workIndex: r.workIndex, sub: "", order
         }));
     }
 
@@ -1294,30 +1303,29 @@ $(document).ready(function () {
                     <div class="bom-flow-track">
             `;
 
-            nodes.forEach(function (node, index) {
-
-                if (index > 0) {
-                    html += `<span class="bom-flow-connector" aria-hidden="true"></span>`;
+            for (let index = 0; index < nodes.length; index++) {
+                const node = nodes[index];
+                if (node.branch) {
+                    const branchNodes = [];
+                    while (index < nodes.length && nodes[index].branch) branchNodes.push(nodes[index++]);
+                    index--;
+                    html += `<span class="bom-flow-connector" aria-hidden="true"></span><div class="bom-flow-branch-group border rounded bg-light p-2"><small class="d-block text-muted mb-1">Parallel work after Cutting</small><div class="d-flex flex-column gap-1">`;
+                    branchNodes.forEach(branch => {
+                        html += `<div class="bom-flow-extra"><strong>${escapeHtml(branch.label)} (${escapeHtml(branch.branch)})</strong><button type="button" class="btn btn-link btn-sm flow-remove-work" data-piece="${piece.number}" data-index="${branch.workIndex}" title="Remove work"><i class="bx bx-x"></i></button></div>`;
+                    });
+                    html += `</div></div>`;
+                    continue;
                 }
-
+                if (index > 0) html += `<span class="bom-flow-connector" aria-hidden="true"></span>`;
                 if (node.type === "fixed") {
-                    html += `
-                        <span class="bom-flow-node bom-fixed-node">
-                            <strong>${escapeHtml(node.label)}</strong>
-                        </span>
-                    `;
+                    html += `<span class="bom-flow-node bom-fixed-node"><strong>${escapeHtml(node.label)}</strong></span>`;
                 } else {
-                    const workIndex = piece.additionalWorks.findIndex(work => work.workType === node.label);
-                    html += `
-                        <span class="bom-flow-extra"><strong>${escapeHtml(node.label)}</strong><button type="button" class="btn btn-link btn-sm flow-remove-work" data-piece="${piece.number}" data-index="${workIndex}" title="Remove work"><i class="bx bx-x"></i></button></span>
-                    `;
+                    html += `<span class="bom-flow-extra"><strong>${escapeHtml(node.label)}</strong><button type="button" class="btn btn-link btn-sm flow-remove-work" data-piece="${piece.number}" data-index="${node.workIndex}" title="Remove work"><i class="bx bx-x"></i></button></span>`;
                 }
-                if (node.type === 'fixed' && ['Cutting', 'Stitching', 'Ironing'].includes(node.label)) {
-                    const stage = node.label === 'Cutting' ? 'After Cutting' : node.label === 'Stitching' ? 'After Stitching' : 'After Ironing';
-                    const singleStageOccupied = stage !== 'After Cutting' && works.some(work => work.stage === stage);
-                    if (!singleStageOccupied) html += `<button type="button" class="flow-add-work-btn" data-piece="${piece.number}" data-stage="${stage}" title="Add work after ${node.label}" aria-label="Add work after ${node.label}"><i class="bx bx-plus"></i></button>`;
+                if (node.type === 'fixed' && node.label === 'Cutting' && works.filter(work => work.stage === 'After Cutting').length < 5) {
+                    html += `<button type="button" class="flow-add-work-btn" data-piece="${piece.number}" data-stage="After Cutting" title="Add parallel work after Cutting" aria-label="Add parallel work after Cutting"><i class="bx bx-plus"></i></button>`;
                 }
-            });
+            }
 
             html += `
                     </div>

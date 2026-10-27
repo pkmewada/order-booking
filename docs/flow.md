@@ -88,9 +88,9 @@ Both screens use ONE main table, `productRecords`. `createdFrom` records whether
 | --- | --- |
 | productRecords | id, brand, numeric designNumber, colourId, pattern, mrp, photo, pieces, pieceCount, createdFrom, inProductList, bomCompleted, status, createdAt, updatedAt |
 | productItemLinks | Foreign keys to productRecords and itemList; pieceNumber and role (piece/material). |
-| productWorkLinks | Foreign keys to productRecords and additionalWork; pieceNumber and stage. |
+| productWorkSteps | Ordered work instances with foreign keys to productRecords and additionalWork; pieceNumber, workOrder and stage. Repeated work names are separate rows. |
 
-The two link tables enforce real foreign keys for multiple items/work entries; they are not separate BOM/product main tables. Colour has a direct foreign key to colourRecords. All table definitions are in the single database/order-booking.sql. Re-import the updated SQL to create these new tables without dropping existing master data.
+The item link table and ordered work-step table enforce real foreign keys for multiple items/work entries; they are not separate BOM/product main tables. The older `productWorkLinks` table remains for compatibility with existing installations. Colour has a direct foreign key to colourRecords. All table definitions are in the single database/order-booking.sql. Re-import the updated SQL to create the ordered work-step table without dropping existing master data.
 
 APIs: api/bom.php and api/product.php, shared implementation api/product-records.php. GET lists from SQL. POST saves, changes active/inactive status, or imports. DELETE removes the shared record, its item/work links and its uploaded photo. Import Selected enables Product List visibility on the same existing complete/active BOM rows; it does not duplicate records.
 

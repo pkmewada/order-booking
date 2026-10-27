@@ -11,7 +11,8 @@
         addWork_hand_work: "Hand Work", addWork_peco: "Peco",
         stitchingData: "Stitching", ironingData: "Ironing", packingData: "Packing"
     };
-    const preferredAdditionalOrder = ["Embroidery", "Digital Print", "Screen Print", "Hand Work", "Peco"];
+    const preferredAdditionalOrder = ["Embroidery", "Pico", "Digital Print", "Handwork", "Hand Work", "Screen Print", "Peco"];
+    const parallelLimit = 5;
     const historyKeys = Object.fromEntries(Object.keys(managers).map(k => [k, k === "cuttingData" ? "cuttingHistory" : `${k}_history`]));
     const keys = ["approvedPool", ...Object.keys(managers), ...Object.values(historyKeys), "repairData", "packingPool", "approvedBatchData", "batchData", "requirementData", "packingHolds", "bundlingData", "inventoryData"];
     const brandSizes = brand => ({'LITTLE DOLLY':['18','20','22','24','26'],'AMARI':['S','M','L'],'AMARU':['S','M','L'],'NIVI BLOSSOM':['28','30','32','34']}[String(brand || '').trim().toUpperCase()] || []);
@@ -19,6 +20,15 @@
     const copy = value => JSON.parse(JSON.stringify(value));
     const same = (a, b) => String(a) === String(b);
     const time = () => new Date().toISOString();
+    function canonicalStageName(value) {
+        const raw = String(value || "").trim();
+        const normalized = raw.toLocaleLowerCase().replace(/\s+/g, " ");
+        return Object.values(managers).find(stage => stage.toLocaleLowerCase() === normalized) || raw;
+    }
+    function managerKeyForStage(value) {
+        const stage = canonicalStageName(value);
+        return Object.keys(managers).find(key => managers[key] === stage);
+    }
     function number(value, label) {
         const n = Number(value);
         if (!Number.isSafeInteger(n) || n < 0) throw new Error(`${label} must be a non-negative whole number.`);
@@ -74,24 +84,26 @@
     }
     function buildRoute(piece) {
         const positions = ["Before Cutting", "After Cutting", "After Stitching", "After Ironing"];
-        const selected = new Map();
-        for (const work of piece.additionalWorks || []) {
+        const selected = [];
+        for (const [workIndex, work] of (piece.additionalWorks || []).entries()) {
             const raw = String(work.workType || work).trim();
             if (!raw) continue;
-            const name = raw;
+            const name = canonicalStageName(raw);
             const position = work.stage || "After Cutting";
             if (!positions.includes(position)) throw new Error(`Unknown additional work timing: ${position}`);
-            if (!selected.has(name)) selected.set(name, position);
+            selected.push({ name, position, workIndex });
         }
-        const at = position => [...selected.keys()].sort((a, b) => {
-            const ai = preferredAdditionalOrder.indexOf(a), bi = preferredAdditionalOrder.indexOf(b);
+        const at = position => selected.filter(work => work.position === position).sort((a, b) => {
+            const ai = preferredAdditionalOrder.indexOf(a.name), bi = preferredAdditionalOrder.indexOf(b.name);
             if (ai >= 0 && bi >= 0) return ai - bi;
             if (ai >= 0) return -1;
             if (bi >= 0) return 1;
-            return [...selected.keys()].indexOf(a) - [...selected.keys()].indexOf(b);
-        }).filter(name => selected.get(name) === position)
-            .map(name => ({ type: "additional_work", stage: name, works: [name] }));
-        return [...at("Before Cutting"), { type: "cutting", stage: "Cutting" }, ...at("After Cutting"),
+            return a.workIndex - b.workIndex;
+        }).map(work => ({ type: "additional_work", stage: work.name, works: [work.name], workIndex: work.workIndex }));
+        const parallel = at("After Cutting");
+        if (parallel.length > parallelLimit) throw new Error(`Select no more than ${parallelLimit} additional works between Cutting and Stitching.`);
+        if (parallel.length) parallel.forEach((route, index) => { route.parallelGroup = "cutting-to-stitching"; route.branch = String.fromCharCode(65 + index); });
+        return [...at("Before Cutting"), { type: "cutting", stage: "Cutting" }, ...parallel,
             { type: "stitching", stage: "Stitching" }, ...at("After Stitching"),
             { type: "ironing", stage: "Ironing" }, ...at("After Ironing"), { type: "packing", stage: "Packing" }];
     }
@@ -133,21 +145,47 @@
             const s = Object.fromEntries(keys.map(key => [key, read(key)]));
             for (const key of Object.keys(managers)) s[key] = s[key].map(w => aliases(normalizeWork(w, key)));
             for (const p of s.approvedPool) {
-                if (p.stageBalances) continue;
+                // Existing catalog names were historically case-sensitive even though
+                // the manager queues use canonical stage names. Repair pool snapshots
+                // and assignments together so their passed quantities still converge.
+                p.route = (p.route || []).map(route => ({ ...route,
+                    stage: route.type === "additional_work" ? canonicalStageName(route.stage) : route.stage,
+                    works: route.type === "additional_work" ? (route.works || [route.stage]).map(canonicalStageName) : route.works }));
+                for (const key of Object.keys(managers)) for (const work of s[key]) {
+                    if (same(work.poolId, p.id)) work.stage = canonicalStageName(work.stage || managers[key]);
+                }
+                if (p.currentStage?.type === "additional_work") {
+                    p.currentStage.stage = canonicalStageName(p.currentStage.stage || p.currentStage.works?.[0]);
+                    p.currentStage.works = (p.currentStage.works || [p.currentStage.stage]).map(canonicalStageName);
+                }
+                if (p.additionalWorks) p.additionalWorks = p.additionalWorks.map(work => ({ ...work, workType: canonicalStageName(work.workType) }));
+                if (p.stageBalances) {
+                    const balances = {};
+                    for (const [stage, balance] of Object.entries(p.stageBalances)) {
+                        const target = canonicalStageName(stage);
+                        balances[target] ||= { inputQty: 0 };
+                        balances[target].inputQty += Number(balance?.inputQty) || 0;
+                    }
+                    p.stageBalances = balances;
+                    reconcileConvergence(s, p);
+                    continue;
+                }
                 // Legacy snapshots remain intact until the first successful transaction.
                 p.legacyRoute = copy(p.route || []);
                 const works = p.additionalWorks?.length ? p.additionalWorks : (p.route || []).flatMap(r => (r.works || []).map(workType => ({ workType })));
-                p.route = buildRoute({ additionalWorks: works || [] });
+                // Approved pools keep the route snapshot they were created with.
+                // Only route-less legacy pools need a route rebuilt from BOM data.
+                p.route = Array.isArray(p.route) && p.route.length ? copy(p.route) : buildRoute({ additionalWorks: works || [] });
                 const current = p.currentStage?.type === "additional_work" ? p.currentStage.works?.[0] : p.currentStage?.stage;
                 const currentIndex = p.route.findIndex(r => r.stage === current);
                 p.stageBalances = {};
                 p.migrationIssues = [];
                 for (let i = 0; i < p.route.length; i++) {
                     const stage = p.route[i].stage;
-                    const key = Object.keys(managers).find(k => managers[k] === stage);
+                    const key = managerKeyForStage(stage);
                     const rows = (s[key] || []).filter(w => same(w.poolId, p.id));
                     const assigned = rows.reduce((n, w) => n + Number(w.assignedQty), 0);
-                    const previousKey = Object.keys(managers).find(k => managers[k] === p.route[i - 1]?.stage);
+                    const previousKey = managerKeyForStage(p.route[i - 1]?.stage);
                     const batch = [...s.approvedBatchData, ...s.batchData].find(b => same(b.batchId, p.batchId));
                     const received = i === 0 ? Math.max(Number(batch?.quantity) || 0, Number(p.quantity) || 0, assigned) :
                         (s[previousKey] || []).filter(w => same(w.poolId, p.id)).reduce((n, w) => n + Number(w.passedQty), 0);
@@ -160,7 +198,8 @@
                 const newOrder = p.route.map(r => r.stage).filter(n => n !== "Packing");
                 const active = Object.keys(managers).some(k => s[k].some(w => same(w.poolId, p.id)));
                 if (active && JSON.stringify(oldOrder) !== JSON.stringify(newOrder)) p.migrationIssues.push("Active legacy route differs from the central route; review required.");
-                p.schemaVersion = 2;
+                p.schemaVersion = 3;
+                reconcileConvergence(s, p);
             }
             return s;
         }
@@ -229,6 +268,28 @@
             return p;
         }
         function stageInput(p, stage) { return Number(p.stageBalances?.[stage]?.inputQty) || 0; }
+        function stitchReleased(s, p) {
+            const branches = (p.route || []).filter(route => route.parallelGroup === "cutting-to-stitching");
+            if (!branches.length) return true;
+            const cuttingQty = stageInput(p, "Cutting");
+            const branchStages = [...new Set(branches.map(route => route.stage))];
+            return branchStages.every(stage => {
+                const required = cuttingQty * branches.filter(route => route.stage === stage).length;
+                const key = managerKeyForStage(stage);
+                const passed = (s[key] || []).filter(work => same(work.poolId, p.id)).reduce((sum, work) => sum + Number(work.passedQty || 0), 0);
+                return stageInput(p, stage) >= required && passed >= required;
+            });
+        }
+        function reconcileConvergence(s, p) {
+            if (!stitchReleased(s, p)) return;
+            const quantity = stageInput(p, "Cutting");
+            const alreadyReleased = Boolean(p.stitchingReleased);
+            p.stageBalances.Stitching ||= { inputQty: 0 };
+            p.stageBalances.Stitching.inputQty = Math.max(stageInput(p, "Stitching"), quantity);
+            p.stitchingReleased = true;
+            if (!alreadyReleased) (p.stageHistory ||= []).push({ fromStage: "Additional Work", toStage: "Stitching",
+                toType: "stitching", qty: quantity, action: "converged_reconciled", at: time() });
+        }
         function calculateAvailableQty(p, rows, stage, excludeId, componentId) {
             if (stage === "Cutting" && Array.isArray(p.cuttingComponents)) {
                 const availableComponents = p.cuttingComponents.filter(component => component.available);
@@ -332,8 +393,20 @@
         }
         function views(key) {
             const s = readState(), stage = managers[key];
-            const pool = s.approvedPool.filter(p => stageInput(p, stage) > 0).map(p => {
-                const view = { ...p, quantity: stageInput(p, stage), currentStage: p.route.find(r => r.stage === stage) };
+            const pool = s.approvedPool.filter(p => stageInput(p, stage) > 0 || (key === "stitchingData" && p.route.some(route => route.parallelGroup === "cutting-to-stitching"))).map(p => {
+                const ready = key !== "stitchingData" || stitchReleased(s, p);
+                const stageBranches = p.route.filter(route => route.stage === stage && route.parallelGroup === "cutting-to-stitching");
+                const view = { ...p, quantity: stageInput(p, stage), currentStage: p.route.find(r => r.stage === stage), stageEnabled: ready,
+                    branch: stageBranches.map(route => route.branch).join("/") || null,
+                    branchQuantityLabel: stageBranches.map(route => `${stageInput(p, "Cutting")} ${route.branch}`).join(" + ") || null,
+                    waitingForAdditionalWorks: key === "stitchingData" && !ready ? [...new Set(p.route.filter(route => route.parallelGroup === "cutting-to-stitching").map(route => route.stage))].filter(branchStage => {
+                        const branchKey = managerKeyForStage(branchStage);
+                        const required = stageInput(p, "Cutting") * p.route.filter(route => route.parallelGroup === "cutting-to-stitching" && route.stage === branchStage).length;
+                        return (s[branchKey] || []).filter(work => same(work.poolId, p.id)).reduce((sum, work) => sum + Number(work.passedQty || 0), 0) < required;
+                    }).map(branchStage => {
+                        const branches = p.route.filter(route => route.parallelGroup === "cutting-to-stitching" && route.stage === branchStage);
+                        return `${branchStage} (${branches.map(route => `${stageInput(p, "Cutting")} ${route.branch}`).join(" + ")})`;
+                    }) : [] };
                 // Component/item-list routing belongs to Cutting only. Later
                 // managers receive and display the paired garment quantity.
                 if (key !== "cuttingData") delete view.cuttingComponents;
@@ -370,6 +443,7 @@
                 }
                 for (const request of requests) {
                     const p = getPool(s, request.poolId);
+                    if (key === "stitchingData" && !stitchReleased(s, p)) throw new Error("Stitching is locked until every selected additional work branch has passed the full batch quantity.");
                     const qty = number(request.quantity, "Assignment quantity");
                     if (!(request.worker || request.firm) || !request.deliveryDate) throw new Error("Worker/firm and delivery date are required for every assignment.");
                     if (!p.route.some(r => r.stage === stage)) throw new Error(`${stage} is not in this pool's route.`);
@@ -384,12 +458,16 @@
                     const piece = String(p.pieceItem || "Piece").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
                     const component = key === "cuttingData" ? p.cuttingComponents?.find(item => same(item.id, request.componentId)) : null;
                     const componentSlug = component ? `-${String(component.name).replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}` : "";
+                    const routeStep = p.route.find(route => route.stage === stage);
+                    const routeBranches = p.route.filter(route => route.stage === stage && route.parallelGroup === "cutting-to-stitching");
+                    const branchSuffix = routeBranches.length ? `-${routeBranches.map(route => route.branch).join("-")}` : "";
+                    const branchLabel = routeBranches.length ? routeBranches.map(route => `${stageInput(p, "Cutting")} ${route.branch}`).join(" + ") : null;
                     const work = aliases({ ...request, id, poolId: p.id, batchId: p.batchId,
                         brand: p.brand, designNumber: p.designNumber, color: p.color, pieceNumber: p.pieceNumber,
                         pieceType: `Piece ${p.pieceNumber} (${p.pieceItem})`,
                         itemName: key === "cuttingData" ? component?.name || request.componentName || "" : "",
                         componentId: key === "cuttingData" ? component?.id ?? null : null, photo: p.photo || "",
-                        subBatch: key === "cuttingData" ? `${p.batchId}-C${count}` : `${p.batchId}-${piece}${componentSlug}-${suffix}${count}`, stage, storageKey: key,
+                        subBatch: key === "cuttingData" ? `${p.batchId}-C${count}` : `${p.batchId}-${piece}${componentSlug}-${suffix}${count}${branchSuffix}`, stage, branch: routeBranches.map(route => route.branch).join("/") || null, branchLabel, storageKey: key,
                         inputQty: qty, assignedQty: qty, completedQty: 0, damageQty: 0, passedQty: 0, createdAt: time() });
                     // One Cutting sub-batch represents one garment split; all its
                     // fabric/component assignment rows share the same C number.
@@ -470,11 +548,38 @@
                     .reduce((total, row) => total + Number(row.passedQty || 0), 0)));
                 receivedQty = Math.max(0, after - before);
             } else { work.passedQty += qty; aliases(work); }
-            const balance = p.stageBalances[next.stage] ||= { inputQty: 0 };
-            balance.inputQty += receivedQty; // Receipts are deltas; never overwrite an earlier unconsumed receipt.
+            if (from.type === "cutting" && p.route.some(route => route.parallelGroup === "cutting-to-stitching")) {
+                p.route.filter(route => route.parallelGroup === "cutting-to-stitching").forEach(route => {
+                    const balance = p.stageBalances[route.stage] ||= { inputQty: 0 };
+                    balance.inputQty += receivedQty;
+                    audit(p, { fromStage: from.stage, fromType: from.type, toStage: route.stage, toType: route.type,
+                        qty: receivedQty, branch: route.branch, action: "branched", transitionId: `${transitionId}:${route.branch}`, sourceWorkId: work.id, sourceKey: key });
+                });
+            } else if (from.parallelGroup === "cutting-to-stitching") {
+                const branches = p.route.filter(route => route.parallelGroup === "cutting-to-stitching");
+                const branchStages = [...new Set(branches.map(route => route.stage))];
+                const completed = branchStages.every(stage => {
+                    const branchKey = managerKeyForStage(stage);
+                    const required = stageInput(p, "Cutting") * branches.filter(route => route.stage === stage).length;
+                    const passed = (s[branchKey] || []).filter(row => same(row.poolId, p.id)).reduce((sum, row) => sum + Number(row.passedQty || 0), 0);
+                    return stageInput(p, stage) >= required && passed >= required;
+                });
+                if (completed && !p.stitchingReleased) {
+                    p.stageBalances.Stitching = { inputQty: stageInput(p, "Cutting") };
+                    p.stitchingReleased = true;
+                    p.currentStage = copy(p.route.find(route => route.stage === "Stitching"));
+                    p.quantity = stageInput(p, "Cutting");
+                    audit(p, { fromStage: "Additional Work", toStage: "Stitching", toType: "stitching", qty: stageInput(p, "Cutting"), action: "converged" });
+                }
+                receivedQty = completed ? stageInput(p, "Cutting") : 0;
+            } else {
+                const balance = p.stageBalances[next.stage] ||= { inputQty: 0 };
+                balance.inputQty += receivedQty; // Receipts are deltas; never overwrite an earlier unconsumed receipt.
+            }
             const currentIndex = p.route.findIndex(r => r.stage === p.currentStage?.stage);
             if (receivedQty > 0 && index + 1 >= currentIndex) { p.currentStage = copy(next); p.quantity = receivedQty; }
-            audit(p, { fromStage: from.stage, fromType: from.type, toStage: next.stage, toType: next.type,
+            audit(p, { fromStage: from.stage, fromType: from.type, toStage: from.parallelGroup ? (p.stitchingReleased ? "Stitching" : null) : next.stage,
+                toType: from.parallelGroup ? (p.stitchingReleased ? "stitching" : "waiting_for_convergence") : next.type,
                 qty: receivedQty, componentQty: qty, action: "passed", transitionId, sourceWorkId: work.id, sourceKey: key });
             if (receivedQty > 0 && next.type === "packing") pushToPackingPool(s, p, work, receivedQty, transitionId);
             return { qty: receivedQty, componentQty: qty, transitionId, work };
@@ -630,7 +735,7 @@
                     color: batch.color, photo: batch.photo || "", pieceNumber: piece.number, pieceItem: piece.item,
                     quantity: qty, priority: batch.priority, additionalWorks: copy(piece.additionalWorks || []),
                     route, currentStage: route[0], stageBalances: { [route[0].stage]: { inputQty: qty } },
-                    stageHistory: [], schemaVersion: 2, createdAt: time() };
+                    stageHistory: [], schemaVersion: 3, createdAt: time() };
                 s.approvedPool.push(p);
                 audit(p, { stage: route[0].stage, qty, action: "entered" });
             }
