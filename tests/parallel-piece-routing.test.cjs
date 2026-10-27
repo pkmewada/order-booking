@@ -157,3 +157,88 @@ test('already-passed lowercase legacy branches restore the missing Stitching rec
     assert.equal(stitching[0].quantity, 100);
     assert.equal(stitching[0].stitchingReleased, true);
 });
+
+test('three pieces pass five Cutting branches, then one sequential work after Stitching and Ironing', async () => {
+    const itemNames = ['Pant', 'Shirt', 'Jacket'];
+    const workKeys = ['addWork_embroidery', 'addWork_digital_print', 'addWork_screen_print', 'addWork_hand_work', 'addWork_peco'];
+    const route = Production.buildRoute({ additionalWorks: [
+        ...['Embroidery', 'Digital Print', 'Screen Print', 'Hand Work', 'Peco'].map(workType => ({ workType, stage: 'After Cutting' })),
+        { workType: 'Peco', stage: 'After Stitching' },
+        { workType: 'Hand Work', stage: 'After Ironing' }
+    ] });
+    assert.equal(route.filter(step => step.parallelGroup === 'cutting-to-stitching').length, 5);
+    assert.equal(route.find(step => step.workIndex === 5).parallelGroup, undefined, 'Peco after Stitching is sequential');
+    assert.equal(route.find(step => step.workIndex === 6).parallelGroup, undefined, 'Hand Work after Ironing is sequential');
+    assert.throws(() => Production.buildRoute({ additionalWorks: [
+        { workType: 'Peco', stage: 'After Stitching' }, { workType: 'Hand Work', stage: 'After Stitching' }
+    ] }), /only one additional work after Stitching/i);
+    const pools = itemNames.map((pieceItem, index) => ({
+        id: index + 1, batchId: 'BATCH-THREE-PIECES', pieceNumber: index + 1, pieceItem,
+        quantity: 100, route: structuredClone(route), currentStage: { type: 'cutting', stage: 'Cutting' },
+        stageBalances: { Cutting: { inputQty: 100 } }, stageHistory: []
+    }));
+    const cuttingRows = pools.map(pool => ({
+        id: pool.id, poolId: pool.id, batchId: pool.batchId, pieceNumber: pool.pieceNumber,
+        stage: 'Cutting', inputQty: 100, assignedQty: 100, completedQty: 100, damageQty: 0, passedQty: 0,
+        worker: 'Cutting worker', deliveryDate: '2026-10-27'
+    }));
+    const storage = new MemoryStorage({
+        approvedPool: pools,
+        approvedBatchData: [{ batchId: 'BATCH-THREE-PIECES', pieces: itemNames.map((item, index) => ({ number: index + 1, item })) }],
+        cuttingData: cuttingRows
+    });
+    const engine = Production.createEngine(storage, { request: (_name, _opts, action) => action() });
+    await engine.pass('cuttingData', cuttingRows.map(row => row.id));
+    assert.equal(engine.views('ironingData').pool.length, 0, 'Ironing has no input before the Stitching work passes');
+
+    for (const key of workKeys) {
+        const poolViews = engine.views(key).pool;
+        assert.equal(poolViews.length, 3, `${key} has one queue per garment piece`);
+        assert.deepEqual(poolViews.map(pool => pool.quantity), [100, 100, 100], `${key} exposes only the active route occurrence quantity`);
+        const assignments = await engine.assign(key, poolViews.map(pool => ({
+            poolId: pool.id, quantity: 100, worker: `${key} worker`, deliveryDate: '2026-10-27'
+        })));
+        await engine.edit(key, assignments.map(work => ({ id: work.id, completedQty: 100 })));
+        await engine.pass(key, assignments.map(work => work.id));
+    }
+
+    let stitching = engine.views('stitchingData').pool;
+    assert.deepEqual(stitching.map(pool => pool.stageEnabled), [true, true, true]);
+    const stitchingRows = await engine.assign('stitchingData', stitching.map(pool => ({
+        poolId: pool.id, quantity: 100, worker: 'Stitching worker', deliveryDate: '2026-10-27'
+    })));
+    await engine.edit('stitchingData', stitchingRows.map(work => ({ id: work.id, completedQty: 100 })));
+    await engine.pass('stitchingData', stitchingRows.map(work => work.id));
+
+    let peco = engine.views('addWork_peco').pool;
+    assert.deepEqual(peco.map(pool => pool.quantity), [100, 100, 100]);
+    const pecoRows = await engine.assign('addWork_peco', peco.map(pool => ({
+        poolId: pool.id, quantity: 100, worker: 'Peco after Stitching', deliveryDate: '2026-10-27'
+    })));
+    assert.deepEqual(pecoRows.map(work => work.parallelGroup), [null, null, null]);
+    await engine.edit('addWork_peco', pecoRows.map(work => ({ id: work.id, completedQty: 100 })));
+    await engine.pass('addWork_peco', pecoRows.map(work => work.id));
+
+    const ironing = engine.views('ironingData').pool;
+    assert.deepEqual(ironing.map(pool => pool.quantity), [100, 100, 100]);
+    const ironingRows = await engine.assign('ironingData', ironing.map(pool => ({
+        poolId: pool.id, quantity: 100, worker: 'Ironing worker', deliveryDate: '2026-10-27'
+    })));
+    await engine.edit('ironingData', ironingRows.map(work => ({ id: work.id, completedQty: 100 })));
+    await engine.pass('ironingData', ironingRows.map(work => work.id));
+
+    const handWork = engine.views('addWork_hand_work').pool;
+    const handRows = await engine.assign('addWork_hand_work', handWork.map(pool => ({
+        poolId: pool.id, quantity: 100, worker: 'Hand Work after Ironing', deliveryDate: '2026-10-27'
+    })));
+    assert.deepEqual(handRows.map(work => work.parallelGroup), [null, null, null]);
+    await engine.edit('addWork_hand_work', handRows.map(work => ({ id: work.id, completedQty: 100 })));
+    await engine.pass('addWork_hand_work', handRows.slice(0, 2).map(work => work.id));
+    assert.equal(engine.readState().packingPool.length, 2, 'Packing receives only pieces whose final branches passed');
+    await engine.pass('addWork_hand_work', [handRows[2].id]);
+
+    const packingReceipts = engine.readState().packingPool;
+    assert.equal(packingReceipts.length, 3);
+    assert.deepEqual(packingReceipts.map(row => row.pieceNumber), [1, 2, 3]);
+    assert.deepEqual(packingReceipts.map(row => row.inputQty), [100, 100, 100]);
+});

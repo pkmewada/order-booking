@@ -364,8 +364,9 @@ $(document).ready(function () {
         const pieceNumber = Number($(this).data('piece'));
         const stage = String($(this).data('stage'));
         const selectedWorks = collectPieces().find(p => p.number === pieceNumber)?.additionalWorks || [];
-        const parallelCount = selectedWorks.filter(work => work.stage === 'After Cutting').length;
-        if (stage === 'After Cutting' && parallelCount >= 5) { alertMsg('You can select up to 5 additional works between Cutting and Stitching.', 'info'); return; }
+        const maxWorks = stage === 'After Cutting' ? 5 : 1;
+        const parallelCount = selectedWorks.filter(work => work.stage === stage).length;
+        if (parallelCount >= maxWorks) { alertMsg(`You can select ${stage === 'After Cutting' ? 'up to 5' : 'only 1'} additional work at ${stage}.`, 'info'); return; }
         const choices = WORK_TYPES;
         if (!choices.length) { alertMsg('All available additional work is already added for this piece.', 'info'); return; }
         const $button = $(this);
@@ -383,7 +384,7 @@ $(document).ready(function () {
                 $checkList.append($row);
             });
             $checkList.find('input').on('change', function(){
-                const remaining = 5 - parallelCount;
+                const remaining = maxWorks - parallelCount;
                 if ($checkList.find('input:checked').length > remaining) { this.checked = false; alertMsg(`Select up to ${remaining} more additional work(s).`, 'info'); }
             });
             $dropdown.append($toggle, $checkList);
@@ -1246,7 +1247,7 @@ $(document).ready(function () {
 
     function buildFlowNodes(works) {
         return Production.buildRoute({ additionalWorks: works || [] }).map((r, order) => ({
-            type: r.type === "additional_work" ? "work" : "fixed", label: r.stage, branch: r.branch || "", workIndex: r.workIndex, sub: "", order
+            type: r.type === "additional_work" ? "work" : "fixed", label: r.stage, branch: r.branch || "", parallelGroup: r.parallelGroup || "", workIndex: r.workIndex, sub: "", order
         }));
     }
 
@@ -1307,9 +1308,11 @@ $(document).ready(function () {
                 const node = nodes[index];
                 if (node.branch) {
                     const branchNodes = [];
-                    while (index < nodes.length && nodes[index].branch) branchNodes.push(nodes[index++]);
+                    const group = node.parallelGroup;
+                    while (index < nodes.length && nodes[index].parallelGroup === group) branchNodes.push(nodes[index++]);
                     index--;
-                    html += `<span class="bom-flow-connector" aria-hidden="true"></span><div class="bom-flow-branch-group border rounded bg-light p-2"><small class="d-block text-muted mb-1">Parallel work after Cutting</small><div class="d-flex flex-column gap-1">`;
+                    const branchGate = branchNodes[0].parallelGroup === 'stitching-to-ironing' ? 'Stitching' : branchNodes[0].parallelGroup === 'ironing-to-packing' ? 'Ironing' : 'Cutting';
+                    html += `<span class="bom-flow-connector" aria-hidden="true"></span><div class="bom-flow-branch-group border rounded bg-light p-2"><small class="d-block text-muted mb-1">Parallel work after ${branchGate}</small><div class="d-flex flex-column gap-1">`;
                     branchNodes.forEach(branch => {
                         html += `<div class="bom-flow-extra"><strong>${escapeHtml(branch.label)} (${escapeHtml(branch.branch)})</strong><button type="button" class="btn btn-link btn-sm flow-remove-work" data-piece="${piece.number}" data-index="${branch.workIndex}" title="Remove work"><i class="bx bx-x"></i></button></div>`;
                     });
@@ -1322,8 +1325,11 @@ $(document).ready(function () {
                 } else {
                     html += `<span class="bom-flow-extra"><strong>${escapeHtml(node.label)}</strong><button type="button" class="btn btn-link btn-sm flow-remove-work" data-piece="${piece.number}" data-index="${node.workIndex}" title="Remove work"><i class="bx bx-x"></i></button></span>`;
                 }
-                if (node.type === 'fixed' && node.label === 'Cutting' && works.filter(work => work.stage === 'After Cutting').length < 5) {
-                    html += `<button type="button" class="flow-add-work-btn" data-piece="${piece.number}" data-stage="After Cutting" title="Add parallel work after Cutting" aria-label="Add parallel work after Cutting"><i class="bx bx-plus"></i></button>`;
+                const addAfter = { Cutting: 'After Cutting', Stitching: 'After Stitching', Ironing: 'After Ironing' }[node.label];
+                const maxWorks = addAfter === 'After Cutting' ? 5 : 1;
+                if (node.type === 'fixed' && addAfter && works.filter(work => work.stage === addAfter).length < maxWorks) {
+                    const mode = addAfter === 'After Cutting' ? 'parallel' : 'sequential';
+                    html += `<button type="button" class="flow-add-work-btn" data-piece="${piece.number}" data-stage="${addAfter}" title="Add ${mode} work after ${node.label}" aria-label="Add ${mode} work after ${node.label}"><i class="bx bx-plus"></i></button>`;
                 }
             }
 

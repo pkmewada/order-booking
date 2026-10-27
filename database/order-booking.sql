@@ -172,7 +172,9 @@ CREATE TABLE IF NOT EXISTS productWorkLinks (
  FOREIGN KEY(productId) REFERENCES productRecords(id) ON DELETE CASCADE,
  FOREIGN KEY(workId) REFERENCES additionalWork(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
--- Ordered work instances allow the same catalog work to occur more than once.
+-- Ordered work instances define the BOM route. After Cutting can have up to five
+-- parallel branches that converge at Stitching. After Stitching and After Ironing
+-- each allow one sequential work step. Repeated catalog work IDs remain distinct.
 CREATE TABLE IF NOT EXISTS productWorkSteps (
  productId BIGINT UNSIGNED NOT NULL,
  pieceNumber TINYINT UNSIGNED NOT NULL,
@@ -181,13 +183,17 @@ CREATE TABLE IF NOT EXISTS productWorkSteps (
  stage ENUM('Before Cutting','After Cutting','After Stitching','After Ironing') NOT NULL,
  PRIMARY KEY(productId, pieceNumber, workOrder),
  KEY productWorkStepsWorkIdx(workId),
+ KEY productWorkStepsStageOrderIdx(productId, pieceNumber, stage, workOrder),
  FOREIGN KEY(productId) REFERENCES productRecords(id) ON DELETE CASCADE,
  FOREIGN KEY(workId) REFERENCES additionalWork(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Keep the single additive schema update here for existing installs re-importing this file.
+-- Additive schema updates for existing installs re-importing this file.
 ALTER TABLE `itemList`
     ADD COLUMN IF NOT EXISTS `itemType` ENUM('Cutting','Non-Cutting') NULL DEFAULT NULL AFTER `name`;
 
 ALTER TABLE `pieceItemList`
     ADD COLUMN IF NOT EXISTS `photo` VARCHAR(255) NULL AFTER `name`;
+
+ALTER TABLE `productWorkSteps`
+    ADD INDEX IF NOT EXISTS `productWorkStepsStageOrderIdx` (`productId`, `pieceNumber`, `stage`, `workOrder`);

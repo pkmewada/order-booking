@@ -105,4 +105,4 @@ Browser localStorage receives a compatibility cache after catalog load for exist
 
 Item List entries have a user-selected `Cutting` or `Non-Cutting` type. Existing entries remain unconfigured until an operator edits them. New BOM material links require configured Item List records. Garment pieces continue to use the existing `pieceItemList` catalog and stable `pieceItemId` references; the item catalog and piece catalog are distinct in the current implementation.
 
-The BOM flow editor loads work names from the existing `additionalWork` table and places selected works between Cutting and Stitching. It does not create a second work catalog table.
+The BOM flow editor loads work names from `additionalWork`. It allows up to five parallel works after Cutting and one sequential work after Stitching and after Ironing; each selected position is stored on its ordered `productWorkSteps` row.

@@ -265,7 +265,7 @@ $(document).ready(async function () {
 
     /* ================= FLOW CHART ================= */
     function buildFlowNodes(works) {
-        return Production.buildRoute({additionalWorks: works || []}).map((r,order) => ({type:r.type === "additional_work" ? "work" : "fixed",label:r.stage,branch:r.branch || "",order}));
+        return Production.buildRoute({additionalWorks: works || []}).map((r,order) => ({type:r.type === "additional_work" ? "work" : "fixed",label:r.stage,branch:r.branch || "",parallelGroup:r.parallelGroup || "",order}));
     }
 
     function renderFlowChart(batch) {
@@ -286,9 +286,11 @@ $(document).ready(async function () {
                 const node = nodes[i];
                 if (node.branch) {
                     const branches = [];
-                    while (i < nodes.length && nodes[i].branch) branches.push(nodes[i++]);
+                    const group = node.parallelGroup;
+                    while (i < nodes.length && nodes[i].parallelGroup === group) branches.push(nodes[i++]);
                     i--;
-                    html += `<span class="batch-flow-connector" aria-hidden="true"></span><div class="border rounded bg-light p-2"><small class="d-block text-muted mb-1">Parallel work after Cutting</small><div class="d-flex flex-column gap-1">${branches.map(branch => `<span class="batch-flow-node"><strong>${escapeHtml(branch.label)} (${escapeHtml(branch.branch)})</strong></span>`).join("")}</div></div>`;
+                    const branchGate = group === 'stitching-to-ironing' ? 'Stitching' : group === 'ironing-to-packing' ? 'Ironing' : 'Cutting';
+                    html += `<span class="batch-flow-connector" aria-hidden="true"></span><div class="border rounded bg-light p-2"><small class="d-block text-muted mb-1">Parallel work after ${branchGate}</small><div class="d-flex flex-column gap-1">${branches.map(branch => `<span class="batch-flow-node"><strong>${escapeHtml(branch.label)} (${escapeHtml(branch.branch)})</strong></span>`).join("")}</div></div>`;
                     continue;
                 }
                 if (i > 0) html += `<span class="batch-flow-connector" aria-hidden="true"></span>`;

@@ -157,8 +157,12 @@ function productRecords(string $mode): void
                 if (!$workLookup->fetch() || !in_array($work['stage'] ?? '', ['Before Cutting','After Cutting','After Stitching','After Ironing'], true)) { throw new InvalidArgumentException('Select valid additional work and timing.'); }
                 $validWorks[] = ['workId' => (int) $work['workId'], 'stage' => $work['stage'], 'workOrder' => (int) $workOrder + 1];
             }
-            $parallelCount = count(array_filter($validWorks, static function ($work) { return $work['stage'] === 'After Cutting'; }));
-            if ($parallelCount > 5) { throw new InvalidArgumentException('Select no more than 5 additional works between Cutting and Stitching.'); }
+            $afterCuttingCount = count(array_filter($validWorks, static function ($work) { return $work['stage'] === 'After Cutting'; }));
+            if ($afterCuttingCount > 5) { throw new InvalidArgumentException('Select no more than 5 additional works between Cutting and Stitching.'); }
+            foreach (['After Stitching', 'After Ironing'] as $sequentialStage) {
+                $count = count(array_filter($validWorks, static function ($work) use ($sequentialStage) { return $work['stage'] === $sequentialStage; }));
+                if ($count > 1) { throw new InvalidArgumentException('Select only one additional work at ' . $sequentialStage . '.'); }
+            }
             $normalized[] = ['number' => $index + 1, 'pieceItemId' => $pieceItemId === null ? null : (int) $pieceItemId,
                 'legacyItemId' => $pieceItemId === null ? (int) ($legacyItemId ?? 0) : null,
                 'itemName' => isset($itemName) ? trim($itemName) : null,
