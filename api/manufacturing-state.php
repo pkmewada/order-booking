@@ -13,7 +13,8 @@ function manufacturingStateRespond(int $status, array $body): void
 function manufacturingStateKeys(): array
 {
     return [
-        'approvedPool', 'cuttingData', 'addWork_embroidery', 'addWork_digital_print',
+        'approvedPool', 'cuttingData', 'additionalWorkData', 'additionalWorkHistory',
+        'addWork_embroidery', 'addWork_digital_print',
         'addWork_screen_print', 'addWork_hand_work', 'addWork_peco', 'stitchingData',
         'ironingData', 'packingData', 'cuttingHistory', 'addWork_embroidery_history',
         'addWork_digital_print_history', 'addWork_screen_print_history',

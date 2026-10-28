@@ -6,7 +6,7 @@ This document describes the production engine in `assets/js/productionEngine.js`
 
 `Batch Approval => Cutting => [parallel work] => Stitching => [parallel work] => Ironing => [parallel work] => Packing`
 
-In the BOM flow editor, up to five additional work instances can be selected between Cutting and Stitching; these fan out in parallel and converge before Stitching unlocks. After Stitching and after Ironing, the editor allows one additional work each, and those work steps run sequentially. The same catalog work may be selected more than once or at different checkpoints; each selection is stored as a separate ordered BOM work instance. With no selected work, the standard stages connect directly. Work before Cutting remains sequential. Production managers still have fixed integrations for the five built-in work types; arbitrary catalog names currently display and save in the BOM route but do not yet have a dedicated production manager.
+In the BOM flow editor, up to five additional work instances can be selected between Cutting and Stitching; these fan out in parallel and converge before Stitching unlocks. After Stitching and after Ironing, the editor allows one additional work each, and those work steps run sequentially. The same catalog work may be selected more than once or at different checkpoints; each selection is stored as a separate ordered BOM work instance. With no selected work, the standard stages connect directly. Work before Cutting remains sequential. All catalog-defined additional work types use the shared Additional Work Manager, including types added later without a new page or script.
 
 `Production.buildRoute(piece)` is the only route builder. Each BOM work instance has an order and one of four legacy timing values: Before Cutting, After Cutting, After Stitching, After Ironing. Legacy works without timing default to After Cutting. Only After Cutting routes get a `parallelGroup` and A-E branch labels. After Stitching and After Ironing routes are single sequential steps. BOM and Batch Approval previews use the same builder. Approval credits the first selected route stage. Only active BOMs are selectable for batches.
 
@@ -36,11 +36,8 @@ Approval, requirement, work, pool, repair and packing changes use a shared trans
 | `requirementData` | Missing/received materials |
 | `approvedPool` | Production identity, route, current stage, stage balances and audit history |
 | `cuttingData` / `cuttingHistory` | Cutting work and display history |
-| `addWork_embroidery` / `_history` | Embroidery |
-| `addWork_digital_print` / `_history` | Digital Print |
-| `addWork_screen_print` / `_history` | Screen Print |
-| `addWork_hand_work` / `_history` | Hand Work |
-| `addWork_peco` / `_history` | Peco |
+| `additionalWorkData` | Assignments for every additional work type; each record includes `workType` and route occurrence |
+| `additionalWorkHistory` | Shared assignment and progress history for additional work |
 | `stitchingData` / `stitchingData_history` | In-house and outsourced stitching |
 | `ironingData` / `ironingData_history` | Ironing |
 | `packingPool` | Exactly-once receipts from Ironing |
@@ -54,7 +51,7 @@ Existing next-ID keys remain readable by old code but the engine allocates assig
 
 ```js
 {
-  id, poolId, batchId, pieceNumber, stage, storageKey,
+  id, poolId, batchId, pieceNumber, stage, workType, routeOrder, storageKey,
   inputQty,       // quantity reserved for this assignment
   assignedQty,    // assignment reservation, including its passed/damaged pieces
   completedQty,   // successfully processed good pieces
@@ -66,6 +63,8 @@ Existing next-ID keys remain readable by old code but the engine allocates assig
 At work-record level, `inputQty` is that assignment's received share, not the whole pool repeated for each worker. The whole stage input is in `pool.stageBalances[stage].inputQty`. Parallel work assignments also retain `branch` and `branchLabel`; branch queue totals render as `100 A`, `100 B`, etc.
 
 Legacy `quantity`, `progress`, and `damage` are normalized into the canonical fields. Compatibility aliases are maintained for old display consumers. New mutations use canonical fields.
+
+Existing work records and histories in the five legacy per-type collections are migrated into the shared collections when the production engine initializes. Their stored route and parallel-branch assignments are retained; the legacy browser collections are removed after the migrated state is saved.
 
 The shared calculator returns:
 

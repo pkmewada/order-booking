@@ -1,8 +1,8 @@
 <?php require_once __DIR__ . '/../includes/header.php'; ?>
 
 <style>
-    #refreshEmbroideryBtn { background-color: #161617 !important; border-color: #161617 !important; color: #fff !important; }
-    #refreshEmbroideryBtn:hover { background-color: #2b2b2d !important; border-color: #2b2b2d !important; }
+    #refreshAdditionalWorkBtn { background-color: #161617 !important; border-color: #161617 !important; color: #fff !important; }
+    #refreshAdditionalWorkBtn:hover { background-color: #2b2b2d !important; border-color: #2b2b2d !important; }
 
     #listAllBtn, #bulkAssignBtn {
         background-color: #161617 !important; border-color: #161617 !important;
@@ -167,11 +167,11 @@
 
         <div class="my-4 page-header-breadcrumb d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div>
-                <h1 class="page-title fw-medium fs-18 mb-2">Embroidery Manager</h1>
+                <h1 class="page-title fw-medium fs-18 mb-2">Additional Work Manager</h1>
                 <nav>
                     <ol class="breadcrumb mb-0">
                         <li class="breadcrumb-item"><a href="javascript:void(0);">Additional Work</a></li>
-                        <li class="breadcrumb-item active">Embroidery</li>
+                        <li class="breadcrumb-item active">All Work Types</li>
                     </ol>
                 </nav>
             </div>
@@ -180,9 +180,9 @@
                     <i class="bx bx-list-ul align-middle me-1"></i> List
                 </button>
                 <button class="btn" id="bulkAssignBtn">
-                    <i class="bx bx-layer-plus align-middle me-1"></i> Bulk Assign Embroidery
+                    <i class="bx bx-layer-plus align-middle me-1"></i> Bulk Assign
                 </button>
-                <button class="btn" id="refreshEmbroideryBtn">
+                <button class="btn" id="refreshAdditionalWorkBtn">
                     <i class="bx bx-refresh align-middle"></i>
                 </button>
             </div>
@@ -194,7 +194,7 @@
                     <div class="card-header">
                         <div class="card-title">
                             <i class="bx bx-check-circle text-success me-2"></i>
-                            Approved Items â€” Ready for Embroidery
+                            Approved Items — Ready for Additional Work
                         </div>
                     </div>
                     <div class="card-body">
@@ -203,7 +203,7 @@
                                 <thead>
                                     <tr>
                                         <th>Batch ID</th><th>Photo</th><th>Brand</th><th>Design</th><th>Color</th>
-                                        <th>Piece</th><th>Item</th><th>Quantity</th><th>Priority</th><th>Status</th><th>Action</th>
+                                        <th>Piece</th><th>Item</th><th>Work Type</th><th>Quantity</th><th>Priority</th><th>Status</th><th>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody id="availableList"></tbody>
@@ -221,9 +221,15 @@
                     <div class="card-header d-flex align-items-center justify-content-between">
                         <div class="card-title">
                             <i class="bx bx-cut text-primary me-2"></i>
-                            Embroidery Assignments
+                            Additional Work Assignments
                         </div>
-                        <button class="btn btn-dark btn-sm" id="bulkPassEmbroideryBtn"><i class="bx bx-right-arrow-alt me-1"></i>Bulk Pass</button>
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="form-label mb-0" for="workTypeFilter">Work Type</label>
+                            <select class="form-select form-select-sm" id="workTypeFilter" style="width:auto; min-width:180px;">
+                                <option value="">All Work Types</option>
+                            </select>
+                            <button class="btn btn-dark btn-sm" id="bulkPassAdditionalWorkBtn"><i class="bx bx-right-arrow-alt me-1"></i>Bulk Pass</button>
+                        </div>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -232,7 +238,7 @@
                                     <tr>
                                         <th>#</th><th>Batch ID</th><th>Sub-Batch</th><th>Brand</th><th>Piece Type</th><th>Worker</th>
                                         <th>Quantity</th><th>Progress</th><th>Damage</th><th>Remaining</th>
-                                        <th>Priority</th><th>Delivery Date</th><th>Status</th><th>Actions</th>
+                                        <th>Work Type</th><th>Priority</th><th>Delivery Date</th><th>Status</th><th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="assignedList"></tbody>
@@ -251,7 +257,7 @@
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Assign Embroidery Worker</h5>
+                <h5 class="modal-title">Assign Additional Work</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -280,7 +286,7 @@
     <div class="modal-dialog modal-dialog-centered" style="max-width:100%; width:100%; height:100%; margin:0;">
         <div class="modal-content" style="height:100vh; border-radius:0; border:none;">
             <div class="modal-header py-2">
-                <h5 class="modal-title"><i class="bx bx-layer-plus me-1"></i> Bulk Assign Embroidery</h5>
+                <h5 class="modal-title"><i class="bx bx-layer-plus me-1"></i> Bulk Assign Additional Work</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" style="overflow-y:auto; padding:12px 20px;">
@@ -381,7 +387,7 @@
     <div class="modal-dialog modal-dialog-centered" style="max-width:99vw; width:99vw;">
         <div class="modal-content" style="height:96vh;">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bx bx-list-ul me-1"></i> All Passed Embroidery Assignments</h5>
+                <h5 class="modal-title"><i class="bx bx-list-ul me-1"></i> All Passed Additional Work Assignments</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="listAllBody" style="overflow-y:auto;"></div>
@@ -412,6 +418,6 @@
 <link rel="stylesheet" href="assets/css/assignmentDetails.css?v=<?= filemtime(__DIR__ . "/../assets/css/assignmentDetails.css") ?>">
 <script src="assets/js/assignmentDetails.js?v=<?= filemtime(__DIR__ . "/../assets/js/assignmentDetails.js") ?>"></script>
 <script src="assets/js/batchHistoryPdf.js?v=<?= filemtime(__DIR__ . "/../assets/js/batchHistoryPdf.js") ?>"></script>
-<script src="assets/js/embroidery.js?v=<?= filemtime(__DIR__ . "/../assets/js/embroidery.js") ?>"></script>
+<script src="assets/js/additionalWorkManager.js?v=<?= filemtime(__DIR__ . "/../assets/js/additionalWorkManager.js") ?>"></script>
 </body>
 </html>

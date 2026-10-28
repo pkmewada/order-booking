@@ -5,7 +5,7 @@
     else { root.NavbarCounts = api; api.start(); }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     'use strict';
-    const routes = {'cutting-manager':'cuttingData',embroidery:'addWork_embroidery','digital-print':'addWork_digital_print','screen-print':'addWork_screen_print',handwork:'addWork_hand_work',peco:'addWork_peco','stitching-manager':'stitchingData',ironing:'ironingData'};
+    const routes = {'cutting-manager':'cuttingData','additional-work-manager':'additionalWorkData','stitching-manager':'stitchingData',ironing:'ironingData'};
     const unique = (rows, key) => new Set(rows.map(key)).size;
     const inventoryKey = r => String(r.designNumber ?? '').trim().toLowerCase() || `batch:${r.batchId}`;
     const lotId = r => r.packingLotId || `legacy-${r.id}`;
@@ -14,6 +14,14 @@
         const s = P.readState(), result = {};
         for (const [route,key] of Object.entries(routes)) {
             const stage = P.managers[key], rows = s[key];
+            if (key === 'additionalWorkData') {
+                const available = P.views(key).pool.filter(pool =>
+                    P.calculateAvailableQty(pool, rows, pool.workType, undefined, undefined,
+                        pool.currentStage.routeIndex, pool.quantity) > 0).length;
+                const assigned = rows.filter(work => P.status(work) !== 'passed').length;
+                result[route] = {available, assigned, total: available + assigned};
+                continue;
+            }
             const available = s.approvedPool.filter(p => P.calculateAvailableQty(p, rows, stage) > 0).length;
             const assigned = rows.filter(w => P.status(w) !== 'passed').length;
             result[route] = {available, assigned, total: available + assigned};

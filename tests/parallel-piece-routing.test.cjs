@@ -187,6 +187,7 @@ test('three pieces pass five Cutting branches, then one sequential work after St
         approvedBatchData: [{ batchId: 'BATCH-THREE-PIECES', pieces: itemNames.map((item, index) => ({ number: index + 1, item })) }],
         cuttingData: cuttingRows
     });
+
     const engine = Production.createEngine(storage, { request: (_name, _opts, action) => action() });
     await engine.pass('cuttingData', cuttingRows.map(row => row.id));
     assert.equal(engine.views('ironingData').pool.length, 0, 'Ironing has no input before the Stitching work passes');
@@ -241,4 +242,71 @@ test('three pieces pass five Cutting branches, then one sequential work after St
     assert.equal(packingReceipts.length, 3);
     assert.deepEqual(packingReceipts.map(row => row.pieceNumber), [1, 2, 3]);
     assert.deepEqual(packingReceipts.map(row => row.inputQty), [100, 100, 100]);
+});
+
+test('the unified additional-work manager migrates legacy assignments and routes new catalog types', async () => {
+    const embroideryRoute = [
+        { type: 'cutting', stage: 'Cutting' },
+        { type: 'additional_work', stage: 'Embroidery', works: ['Embroidery'] },
+        { type: 'stitching', stage: 'Stitching' },
+        { type: 'ironing', stage: 'Ironing' },
+        { type: 'packing', stage: 'Packing' }
+    ];
+    const foilRoute = [
+        { type: 'cutting', stage: 'Cutting' },
+        { type: 'additional_work', stage: 'Foil Printing', works: ['Foil Printing'] },
+        { type: 'stitching', stage: 'Stitching' },
+        { type: 'ironing', stage: 'Ironing' },
+        { type: 'packing', stage: 'Packing' }
+    ];
+    const storage = new MemoryStorage({
+        approvedPool: [
+            { id: 1, batchId: 'LEGACY', pieceNumber: 1, pieceItem: 'Shirt', quantity: 100, route: embroideryRoute,
+                currentStage: { ...embroideryRoute[1], routeIndex: 1 }, stageBalances: { Cutting: { inputQty: 100 }, Embroidery: { inputQty: 100 } }, stageHistory: [] },
+            { id: 2, batchId: 'DYNAMIC', pieceNumber: 1, pieceItem: 'Shirt', quantity: 100, route: foilRoute,
+                currentStage: { ...foilRoute[1], routeIndex: 1 }, stageBalances: { Cutting: { inputQty: 100 }, 'Foil Printing': { inputQty: 100 } }, stageHistory: [] }
+        ],
+        approvedBatchData: [{ batchId: 'LEGACY', pieces: [{ number: 1 }] }, { batchId: 'DYNAMIC', pieces: [{ number: 1 }] }],
+        addWork_embroidery: [{
+            id: 7, poolId: 1, batchId: 'LEGACY', pieceNumber: 1, stage: 'Embroidery', routeOrder: 1,
+            inputQty: 100, assignedQty: 100, completedQty: 0, damageQty: 0, passedQty: 0,
+            worker: 'Embroidery worker', deliveryDate: '2026-10-28'
+        }],
+        addWork_embroidery_history: [{ id: 1, workId: 7, action: 'assigned', at: '2026-10-28, 10:00:00' }]
+    });
+    const remoteState = Object.fromEntries([...storage.data].map(([key, value]) => [key, JSON.parse(value)]));
+    let remoteRevision = 1;
+    const repository = {
+        async load() { return { state: structuredClone(remoteState), revision: remoteRevision, initialized: true }; },
+        async save(changes, revision) {
+            assert.equal(revision, remoteRevision);
+            Object.assign(remoteState, structuredClone(changes));
+            return ++remoteRevision;
+        }
+    };
+    const engine = Production.createEngine(storage, undefined, repository);
+    await engine.initialize();
+
+    const legacy = engine.readState();
+    assert.equal(legacy.additionalWorkData.length, 1);
+    assert.equal(legacy.additionalWorkData[0].workType, 'Embroidery');
+    assert.equal(legacy.addWork_embroidery.length, 0);
+    assert.equal(legacy.additionalWorkHistory[0].workId, legacy.additionalWorkData[0].id);
+    assert.deepEqual(remoteState.addWork_embroidery, []);
+    assert.equal(storage.getItem('addWork_embroidery'), null);
+    assert.equal(storage.getItem('addWork_embroidery_history'), null);
+    assert.deepEqual(engine.views('additionalWorkData').pool.map(pool => pool.workType), ['Embroidery', 'Foil Printing']);
+
+    const [availableFoil] = engine.views('additionalWorkData').pool.filter(pool => pool.workType === 'Foil Printing');
+    const [assignment] = await engine.assign('additionalWorkData', [{
+        poolId: availableFoil.id, workType: availableFoil.workType, routeOrder: availableFoil.currentStage.routeIndex,
+        quantity: 100, worker: 'Foil worker', deliveryDate: '2026-10-28'
+    }]);
+    assert.equal(assignment.workType, 'Foil Printing');
+    await engine.edit('additionalWorkData', [{ id: assignment.id, completedQty: 100 }]);
+    await engine.pass('additionalWorkData', [assignment.id]);
+
+    const state = engine.readState();
+    assert.equal(state.additionalWorkData.find(work => work.id === assignment.id).passedQty, 100);
+    assert.equal(state.approvedPool.find(pool => pool.id === availableFoil.id).stageBalances.Stitching.inputQty, 100);
 });

@@ -1018,96 +1018,18 @@
                                     </a>
                                 </li>
 
-                               
-
-                                <li class="slide has-sub">
-                                    <a href="javascript:void(0);" class="side-menu__item">
-                                        <i class="ri-arrow-down-s-line side-menu__angle"></i>
+                                <li class="slide">
+                                    <a href="additional-work-manager" class="side-menu__item">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
                                             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                             stroke-linejoin="round">
                                             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
                                         </svg>
-                                        <span class="side-menu__label">AD Work</span>
+                                        <span class="side-menu__label">Add Work</span>
                                     </a>
-
-                                    <ul class="slide-menu child2">
-                                        <li class="slide side-menu__label1">
-                                            <a href="javascript:void(0)">AD Work</a>
-                                        </li>
-
-                                        <li class="slide">
-                                            <a href="Embroidery" class="side-menu__item">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                    stroke-linejoin="round">
-                                                    <circle cx="12" cy="12" r="9"></circle>
-                                                    <path d="M12 3v18"></path>
-                                                    <path d="M3 12h18"></path>
-                                                    <circle cx="12" cy="12" r="4"></circle>
-                                                </svg>
-                                                <span class="side-menu__label">Embroidery</span>
-                                            </a>
-                                        </li>
-
-                                        <li class="slide">
-                                            <a href="Digital-Print" class="side-menu__item">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                    stroke-linejoin="round">
-                                                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                                                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                                                    <rect x="6" y="14" width="12" height="8"></rect>
-                                                </svg>
-                                                <span class="side-menu__label">D Print</span>
-                                            </a>
-                                        </li>
-
-                                        <li class="slide">
-                                            <a href="Screen-Print" class="side-menu__item">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                    stroke-linejoin="round">
-                                                    <circle cx="13.5" cy="6.5" r=".5"></circle>
-                                                    <circle cx="17.5" cy="10.5" r=".5"></circle>
-                                                    <circle cx="8.5" cy="7.5" r=".5"></circle>
-                                                    <circle cx="6.5" cy="12.5" r=".5"></circle>
-                                                    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"></path>
-                                                </svg>
-                                                <span class="side-menu__label">S Print</span>
-                                            </a>
-                                        </li>
-
-                                        <li class="slide">
-                                            <a href="Handwork" class="side-menu__item">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                    stroke-linejoin="round">
-                                                    <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path>
-                                                    <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"></path>
-                                                    <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"></path>
-                                                    <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path>
-                                                </svg>
-                                                <span class="side-menu__label">Hand Work</span>
-                                            </a>
-                                        </li>
-
-                                        <li class="slide">
-                                            <a href="Peco" class="side-menu__item">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                    stroke-linejoin="round">
-                                                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-                                                    <line x1="7" y1="7" x2="7.01" y2="7"></line>
-                                                </svg>
-                                                <span class="side-menu__label">Peco</span>
-                                            </a>
-                                        </li>
-                                    </ul>
                                 </li>
 
-                                
-
+                
                                 <li class="slide">
                                     <a href="cutting-manager" class="side-menu__item">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"

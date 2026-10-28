@@ -6,11 +6,18 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
     "use strict";
     const managers = {
-        cuttingData: "Cutting", addWork_embroidery: "Embroidery",
-        addWork_digital_print: "Digital Print", addWork_screen_print: "Screen Print",
-        addWork_hand_work: "Hand Work", addWork_peco: "Peco",
+        cuttingData: "Cutting", additionalWorkData: "Additional Work",
         stitchingData: "Stitching", ironingData: "Ironing", packingData: "Packing"
     };
+    const legacyAdditionalWorkKeys = {
+        addWork_embroidery: "Embroidery", addWork_digital_print: "Digital Print",
+        addWork_screen_print: "Screen Print", addWork_hand_work: "Hand Work", addWork_peco: "Peco"
+    };
+    const legacyAdditionalHistoryKeys = Object.keys(legacyAdditionalWorkKeys).map(key => `${key}_history`);
+    const legacyAdditionalNextIdKeys = Object.keys(legacyAdditionalWorkKeys).map(key => `${key}_nextId`);
+    const legacyAdditionalStorageKeys = new Set([
+        ...Object.keys(legacyAdditionalWorkKeys), ...legacyAdditionalHistoryKeys, ...legacyAdditionalNextIdKeys
+    ]);
     const preferredAdditionalOrder = ["Embroidery", "Pico", "Digital Print", "Handwork", "Hand Work", "Screen Print", "Peco"];
     const parallelLimit = 5;
     // Keep legacy group IDs readable so already-approved batches can finish their saved route.
@@ -19,8 +26,11 @@
         "After Stitching": { id: "stitching-to-ironing", from: "Stitching", to: "Ironing" },
         "After Ironing": { id: "ironing-to-packing", from: "Ironing", to: "Packing" }
     };
-    const historyKeys = Object.fromEntries(Object.keys(managers).map(k => [k, k === "cuttingData" ? "cuttingHistory" : `${k}_history`]));
-    const keys = ["approvedPool", ...Object.keys(managers), ...Object.values(historyKeys), "repairData", "packingPool", "approvedBatchData", "batchData", "requirementData", "packingHolds", "bundlingData", "inventoryData"];
+    const historyKeys = Object.fromEntries(Object.keys(managers).map(k => [k,
+        k === "cuttingData" ? "cuttingHistory" : k === "additionalWorkData" ? "additionalWorkHistory" : `${k}_history`]));
+    const keys = ["approvedPool", ...Object.keys(managers), ...Object.values(historyKeys),
+        ...Object.keys(legacyAdditionalWorkKeys), ...legacyAdditionalHistoryKeys,
+        "repairData", "packingPool", "approvedBatchData", "batchData", "requirementData", "packingHolds", "bundlingData", "inventoryData"];
     const brandSizes = brand => ({'LITTLE DOLLY':['18','20','22','24','26'],'AMARI':['S','M','L'],'AMARU':['S','M','L'],'NIVI BLOSSOM':['28','30','32','34']}[String(brand || '').trim().toUpperCase()] || []);
     const journalKey = "productionTransaction";
     const copy = value => JSON.parse(JSON.stringify(value));
@@ -29,11 +39,22 @@
     function canonicalStageName(value) {
         const raw = String(value || "").trim();
         const normalized = raw.toLocaleLowerCase().replace(/\s+/g, " ");
-        return Object.values(managers).find(stage => stage.toLocaleLowerCase() === normalized) || raw;
+        return [...Object.values(managers), ...Object.values(legacyAdditionalWorkKeys)]
+            .find(stage => stage.toLocaleLowerCase() === normalized) || raw;
+    }
+    function sameStage(a, b) {
+        return canonicalStageName(a).toLocaleLowerCase() === canonicalStageName(b).toLocaleLowerCase();
     }
     function managerKeyForStage(value) {
         const stage = canonicalStageName(value);
-        return Object.keys(managers).find(key => managers[key] === stage);
+        return Object.keys(managers).find(key => key !== "additionalWorkData" && managers[key] === stage) || "additionalWorkData";
+    }
+    function managerStage(key, work) {
+        return key === "additionalWorkData" ? canonicalStageName(work?.workType || work?.stage) :
+            legacyAdditionalWorkKeys[key] || managers[key];
+    }
+    function normalizeManagerKey(key) {
+        return legacyAdditionalWorkKeys[key] ? "additionalWorkData" : key;
     }
     function number(value, label) {
         const n = Number(value);
@@ -57,7 +78,9 @@
             assignedQty: Number(work.assignedQty ?? work.quantity ?? 0),
             completedQty: Number(work.completedQty ?? work.progress ?? 0),
             damageQty: Number(work.damageQty ?? work.damage ?? 0), passedQty: Number(work.passedQty ?? 0),
-            stage: work.stage || managers[key], storageKey: key };
+            stage: work.stage || managerStage(key, work),
+            ...(key === "additionalWorkData" ? { workType: canonicalStageName(work.workType || work.stage) } : {}),
+            storageKey: key };
     }
     function validateWork(work) {
         for (const field of ["inputQty", "assignedQty", "completedQty", "damageQty", "passedQty"]) number(work[field], field);
@@ -138,12 +161,19 @@
         }
         function commit(state) {
             const changes = Object.fromEntries(Object.entries(state).filter(([key, value]) => storage.getItem(key) !== JSON.stringify(value)));
-            if (!Object.keys(changes).length) return;
+            if (!Object.keys(changes).length) {
+                for (const key of legacyAdditionalStorageKeys) storage.removeItem(key);
+                return;
+            }
             const before = Object.fromEntries(Object.keys(changes).map(key => [key, storage.getItem(key)]));
             storage.setItem(journalKey, JSON.stringify({ before }));
             try {
-                for (const [key, value] of Object.entries(changes)) storage.setItem(key, JSON.stringify(value));
+                for (const [key, value] of Object.entries(changes)) {
+                    if (legacyAdditionalStorageKeys.has(key) && value.length === 0) storage.removeItem(key);
+                    else storage.setItem(key, JSON.stringify(value));
+                }
                 storage.removeItem(journalKey);
+                for (const key of legacyAdditionalNextIdKeys) storage.removeItem(key);
             } catch (error) {
                 recover();
                 throw new Error(`Production save failed; transaction rolled back. ${error.message}`);
@@ -152,6 +182,39 @@
         function readState() {
             if (storage.getItem(journalKey)) throw new Error("Production recovery is pending. Reload this page before continuing.");
             const s = Object.fromEntries(keys.map(key => [key, read(key)]));
+            let nextAdditionalWorkId = Math.max(0, ...s.additionalWorkData.map(work => Number(work.id) || 0));
+            const migratedIds = new Map();
+            for (const [legacyKey, workType] of Object.entries(legacyAdditionalWorkKeys)) {
+                for (const legacyWork of s[legacyKey]) {
+                    const migrated = { ...legacyWork, id: ++nextAdditionalWorkId, workType,
+                        stage: canonicalStageName(legacyWork.stage || workType), storageKey: "additionalWorkData" };
+                    s.additionalWorkData.push(migrated);
+                    migratedIds.set(`${legacyKey}:${legacyWork.id}`, migrated.id);
+                }
+                s[legacyKey] = [];
+                const historyKey = `${legacyKey}_history`;
+                for (const event of s[historyKey]) {
+                    const mappedId = migratedIds.get(`${legacyKey}:${event.workId}`);
+                    if (mappedId !== undefined) event.workId = mappedId;
+                    event.workType = workType;
+                    s.additionalWorkHistory.push(event);
+                }
+                s[historyKey] = [];
+            }
+            for (const repair of s.repairData) {
+                if (!legacyAdditionalWorkKeys[repair.sourceKey]) continue;
+                const oldKey = repair.sourceKey;
+                repair.sourceKey = "additionalWorkData";
+                repair.sourceWorkId = migratedIds.get(`${oldKey}:${repair.sourceWorkId}`) ?? repair.sourceWorkId;
+            }
+            for (const pool of s.approvedPool) for (const event of pool.stageHistory || []) {
+                const sourceKey = event.sourceKey || event.after?.storageKey;
+                if (!legacyAdditionalWorkKeys[sourceKey]) continue;
+                const mappedId = migratedIds.get(`${sourceKey}:${event.sourceWorkId}`);
+                if (mappedId !== undefined) event.sourceWorkId = mappedId;
+                event.sourceKey = "additionalWorkData";
+                if (event.after) event.after.storageKey = "additionalWorkData";
+            }
             for (const key of Object.keys(managers)) s[key] = s[key].map(w => aliases(normalizeWork(w, key)));
             for (const p of s.approvedPool) {
                 // Existing catalog names were historically case-sensitive even though
@@ -161,7 +224,14 @@
                     stage: route.type === "additional_work" ? canonicalStageName(route.stage) : route.stage,
                     works: route.type === "additional_work" ? (route.works || [route.stage]).map(canonicalStageName) : route.works }));
                 for (const key of Object.keys(managers)) for (const work of s[key]) {
-                    if (same(work.poolId, p.id)) work.stage = canonicalStageName(work.stage || managers[key]);
+                    if (same(work.poolId, p.id)) {
+                        work.stage = canonicalStageName(work.stage || managers[key]);
+                        if (key === "additionalWorkData" && !Number.isInteger(work.routeOrder)) {
+                            const routeOrder = p.route.findIndex(route => sameStage(route.stage, work.stage) &&
+                                (!work.branch || route.branch === work.branch));
+                            if (routeOrder >= 0) work.routeOrder = routeOrder;
+                        }
+                    }
                 }
                 if (p.currentStage?.type === "additional_work") {
                     p.currentStage.stage = canonicalStageName(p.currentStage.stage || p.currentStage.works?.[0]);
@@ -186,7 +256,7 @@
                 // Only route-less legacy pools need a route rebuilt from BOM data.
                 p.route = Array.isArray(p.route) && p.route.length ? copy(p.route) : buildRoute({ additionalWorks: works || [] });
                 const current = p.currentStage?.type === "additional_work" ? p.currentStage.works?.[0] : p.currentStage?.stage;
-                const currentIndex = p.route.findIndex(r => r.stage === current);
+                const currentIndex = p.route.findIndex(r => sameStage(r.stage, current));
                 p.stageBalances = {};
                 p.migrationIssues = [];
                 for (let i = 0; i < p.route.length; i++) {
@@ -214,8 +284,11 @@
         }
         function applyRemoteState(state) {
             for (const key of keys) {
-                storage.setItem(key, JSON.stringify(state[key] || []));
+                const value = state[key] || [];
+                if (legacyAdditionalStorageKeys.has(key) && value.length === 0) storage.removeItem(key);
+                else storage.setItem(key, JSON.stringify(value));
             }
+            for (const key of legacyAdditionalNextIdKeys) storage.removeItem(key);
         }
         async function loadRemoteState() {
             const result = await repository.load();
@@ -223,14 +296,30 @@
             initialized = result.initialized;
             return result;
         }
+        async function persistNormalizedState() {
+            const state = readState();
+            const changes = Object.fromEntries(keys.filter(key => JSON.stringify(state[key]) !== JSON.stringify(read(key)))
+                .map(key => [key, state[key]]));
+            if (repository && Object.keys(changes).length) {
+                revision = await repository.save(changes, revision);
+                initialized = true;
+            }
+            commit(state);
+        }
         async function initialize() {
             if (!repository) {
-                if (locks?.request) await locks.request("garment-production", { mode: "exclusive" }, recover);
+                if (locks?.request) {
+                    await locks.request("garment-production", { mode: "exclusive" }, () => {
+                        recover();
+                        commit(readState());
+                    });
+                }
                 return;
             }
             const result = await loadRemoteState();
             if (result.initialized) {
                 applyRemoteState(result.state);
+                await persistNormalizedState();
                 return;
             }
             const legacy = Object.fromEntries(keys.map(key => [key, read(key)]));
@@ -238,10 +327,12 @@
                 revision = await repository.initialize(legacy, revision);
                 initialized = true;
                 applyRemoteState(legacy);
+                await persistNormalizedState();
             } catch (error) {
                 const latest = await loadRemoteState();
                 if (!latest.initialized) throw error;
                 applyRemoteState(latest.state);
+                await persistNormalizedState();
             }
         }
         async function saveState(updates) {
@@ -277,16 +368,23 @@
             return p;
         }
         function stageInput(p, stage) { return Number(p.stageBalances?.[stage]?.inputQty) || 0; }
+        function routeInput(p, route, index = p.route.indexOf(route)) {
+            if (route.parallelGroup) {
+                const group = Object.values(parallelGroups).find(item => item.id === route.parallelGroup);
+                return group ? stageInput(p, group.from) : stageInput(p, route.stage);
+            }
+            return index > 0 ? stageInput(p, p.route[index - 1].stage) : stageInput(p, route.stage);
+        }
         function setCurrentStage(p, route) {
             p.currentStage = { ...copy(route), routeIndex: p.route.indexOf(route) };
         }
         function activeRouteStep(p, stage) {
             const current = Number.isInteger(p.currentStage?.routeIndex) ? p.currentStage.routeIndex :
-                p.route.findIndex(route => route.stage === p.currentStage?.stage &&
+                p.route.findIndex(route => sameStage(route.stage, p.currentStage?.stage) &&
                     (!p.currentStage?.parallelGroup || route.parallelGroup === p.currentStage.parallelGroup) &&
                     (p.currentStage?.workIndex === undefined || route.workIndex === p.currentStage.workIndex));
             const start = Math.max(0, current);
-            return p.route.find((route, index) => index >= start && route.stage === stage) || p.route.find(route => route.stage === stage);
+            return p.route.find((route, index) => index >= start && sameStage(route.stage, stage)) || p.route.find(route => sameStage(route.stage, stage));
         }
         function branchesReleased(s, p, groupId) {
             const branches = (p.route || []).filter(route => route.parallelGroup === groupId);
@@ -301,6 +399,7 @@
                 const storedInput = p.branchBalances?.[groupId]?.[stage]?.inputQty;
                 const groupInput = storedInput === undefined ? (groupId === "cutting-to-stitching" ? stageInput(p, stage) : 0) : Number(storedInput);
                 const rows = (s[key] || []).filter(work => same(work.poolId, p.id) &&
+                    (key !== "additionalWorkData" || sameStage(work.stage, stage)) &&
                     (work.parallelGroup === groupId || (groupId === "cutting-to-stitching" && !work.parallelGroup)));
                 const passed = rows.reduce((sum, work) => sum + Number(work.passedQty || 0), 0);
                 return (Number.isFinite(groupInput) ? groupInput : 0) >= required && passed >= required;
@@ -323,7 +422,7 @@
                     toType: group.to.toLowerCase(), qty: quantity, action: "converged_reconciled", at: time() });
             }
         }
-        function calculateAvailableQty(p, rows, stage, excludeId, componentId) {
+        function calculateAvailableQty(p, rows, stage, excludeId, componentId, routeOrder, inputQty) {
             if (stage === "Cutting" && Array.isArray(p.cuttingComponents)) {
                 const availableComponents = p.cuttingComponents.filter(component => component.available);
                 if (!availableComponents.length) return 0;
@@ -333,6 +432,9 @@
                 if (!availableComponents.some(component => same(component.id, componentId))) return 0;
             }
             const relevant = rows.filter(w => same(w.poolId, p.id) && !same(w.id, excludeId) &&
+                (managerKeyForStage(stage) !== "additionalWorkData" || sameStage(w.stage, stage)) &&
+                (routeOrder === undefined || (Number.isInteger(w.routeOrder) ? w.routeOrder :
+                    p.route.findIndex(route => sameStage(route.stage, w.stage) && (!w.branch || route.branch === w.branch))) === Number(routeOrder)) &&
                 (stage !== "Cutting" || !Array.isArray(p.cuttingComponents) || componentId === undefined || componentId === null || same(w.componentId, componentId)));
             // Outstanding reservations + their damage + their passes = total assigned.
             // Subtracting damage/pass again from lifetime assigned would double-count them.
@@ -341,11 +443,11 @@
                 t.reserved += m.assignedQty - m.damageQty - m.passedQty;
                 t.damage += m.damageQty; t.passed += m.passedQty; return t;
             }, { reserved: 0, damage: 0, passed: 0 });
-            return Math.max(0, stageInput(p, stage) - totals.reserved - totals.damage - totals.passed);
+            return Math.max(0, (inputQty === undefined ? stageInput(p, stage) : Number(inputQty)) - totals.reserved - totals.damage - totals.passed);
         }
-        function validateAssignment(p, rows, stage, qty, excludeId, componentId) {
+        function validateAssignment(p, rows, stage, qty, excludeId, componentId, routeOrder, inputQty) {
             number(qty, "Assignment quantity");
-            const available = calculateAvailableQty(p, rows, stage, excludeId, componentId);
+            const available = calculateAvailableQty(p, rows, stage, excludeId, componentId, routeOrder, inputQty);
             if (qty <= 0 || qty > available) throw new Error(`Assignment exceeds available quantity for ${p.batchId} / ${stage}. Available: ${available}; requested: ${qty}.`);
         }
         function audit(p, entry) { (p.stageHistory ||= []).push({ ...entry, at: time() }); }
@@ -368,6 +470,24 @@
         function validateState(s) {
             for (const p of s.approvedPool) {
                 for (const [key, stage] of Object.entries(managers)) {
+                    if (key === "additionalWorkData") {
+                        const stages = [...new Set(s[key].filter(work => same(work.poolId, p.id)).map(work => work.stage))];
+                        for (const workStage of stages) {
+                            const routeOrders = [...new Set(s[key].filter(work => same(work.poolId, p.id) && sameStage(work.stage, workStage))
+                                .map(work => Number.isInteger(work.routeOrder) ? work.routeOrder : p.route.findIndex(route => sameStage(route.stage, workStage))))];
+                            for (const routeOrder of routeOrders) {
+                                const route = p.route[routeOrder];
+                                const rows = s[key].filter(work => same(work.poolId, p.id) &&
+                                    sameStage(work.stage, workStage) &&
+                                    (Number.isInteger(work.routeOrder) ? work.routeOrder : p.route.findIndex(step => sameStage(step.stage, workStage))) === routeOrder);
+                                rows.forEach(validateWork);
+                                const assigned = rows.reduce((n, work) => n + work.assignedQty, 0);
+                                const inputQty = route ? routeInput(p, route, routeOrder) : stageInput(p, workStage);
+                                if (assigned > inputQty) throw new Error(`${p.batchId} / ${workStage}: assigned ${assigned} exceeds stage input ${inputQty}.`);
+                            }
+                        }
+                        continue;
+                    }
                     const rows = s[key].filter(w => same(w.poolId, p.id));
                     if (!rows.length) continue;
                     rows.forEach(validateWork);
@@ -425,7 +545,39 @@
             return execute();
         }
         function views(key) {
+            if (legacyAdditionalWorkKeys[key]) {
+                const stage = legacyAdditionalWorkKeys[key];
+                const unified = views("additionalWorkData");
+                return {
+                    works: unified.works.filter(work => sameStage(work.workType, stage)),
+                    pool: unified.pool.filter(item => sameStage(item.workType, stage))
+                };
+            }
             const s = readState(), stage = managers[key];
+            if (key === "additionalWorkData") {
+                const pool = s.approvedPool.flatMap(p => {
+                    const currentIndex = Number.isInteger(p.currentStage?.routeIndex) ? p.currentStage.routeIndex :
+                        p.route.findIndex(route => sameStage(route.stage, p.currentStage?.stage) &&
+                            (!p.currentStage?.parallelGroup || route.parallelGroup === p.currentStage.parallelGroup));
+                    const currentStep = p.route[currentIndex];
+                    return (p.route || [])
+                    .filter(route => route.type === "additional_work" &&
+                        (route.parallelGroup
+                            ? route.parallelGroup === currentStep?.parallelGroup
+                            : p.route.indexOf(route) === currentIndex))
+                    .filter(route => stageEnabled(s, p, route.stage))
+                    .map(route => {
+                        const routeIndex = p.route.indexOf(route);
+                        const received = routeInput(p, route, routeIndex);
+                        if (received <= 0) return null;
+                        return { ...p, quantity: received, currentStage: { ...copy(route), routeIndex },
+                            stageEnabled: true, workType: route.stage,
+                            branch: route.branch || null,
+                            branchQuantityLabel: route.branch ? `${received} ${route.branch}` : null };
+                    }).filter(Boolean);
+                });
+                return { works: s[key].map(work => ({ ...work, itemName: "", componentId: null })), pool };
+            }
             const pool = s.approvedPool.filter(p => stageInput(p, stage) > 0 || p.route.some(route =>
                 Object.values(parallelGroups).some(group => group.id === route.parallelGroup && group.to === stage))).map(p => {
                 const ready = stageEnabled(s, p, stage);
@@ -443,6 +595,7 @@
                         const branchKey = managerKeyForStage(branchStage);
                         const required = stageInput(p, targetGroup.from) * waitingBranches.filter(route => route.stage === branchStage).length;
                         return (s[branchKey] || []).filter(work => same(work.poolId, p.id) &&
+                            (branchKey !== "additionalWorkData" || canonicalStageName(work.stage) === canonicalStageName(branchStage)) &&
                             (work.parallelGroup === targetGroup.id || (targetGroup.id === "cutting-to-stitching" && !work.parallelGroup)))
                             .reduce((sum, work) => sum + Number(work.passedQty || 0), 0) < required;
                     }).map(branchStage => {
@@ -484,14 +637,36 @@
                         throw new Error("Select all Cutting item rows before assigning.");
                 }
                 for (const request of requests) {
+                    let workStage = key === "additionalWorkData" ? canonicalStageName(request.workType) : stage;
+                    if (!workStage || (key === "additionalWorkData" && !request.workType)) throw new Error("Select an additional work type for every assignment.");
                     const p = getPool(s, request.poolId);
-                    if (!stageEnabled(s, p, stage)) throw new Error(`${stage} is locked until every selected additional work branch has passed the full piece quantity.`);
+                    if (!stageEnabled(s, p, workStage)) throw new Error(`${workStage} is locked until every selected additional work branch has passed the full piece quantity.`);
                     const qty = number(request.quantity, "Assignment quantity");
                     if (!(request.worker || request.firm) || !request.deliveryDate) throw new Error("Worker/firm and delivery date are required for every assignment.");
-                    if (!p.route.some(r => r.stage === stage)) throw new Error(`${stage} is not in this pool's route.`);
+                    const currentIndex = Number.isInteger(p.currentStage?.routeIndex) ? p.currentStage.routeIndex :
+                        p.route.findIndex(route => sameStage(route.stage, p.currentStage?.stage) &&
+                            (!p.currentStage?.parallelGroup || route.parallelGroup === p.currentStage.parallelGroup));
+                    const currentRoute = p.route[currentIndex];
+                    const routeStep = Number.isInteger(Number(request.routeOrder))
+                        ? p.route[Number(request.routeOrder)]
+                        : key === "additionalWorkData" && currentRoute?.parallelGroup
+                            ? p.route.find(route => route.parallelGroup === currentRoute.parallelGroup &&
+                                sameStage(route.stage, workStage) && route.type === "additional_work")
+                            : currentRoute?.type === "additional_work" && sameStage(currentRoute.stage, workStage)
+                                ? currentRoute
+                                : p.route.find(route => sameStage(route.stage, workStage) &&
+                                    route.type === (key === "additionalWorkData" ? "additional_work" : route.type));
+                    if (!routeStep || !sameStage(routeStep.stage, workStage) ||
+                        (key === "additionalWorkData" && routeStep.type !== "additional_work"))
+                        throw new Error(`${workStage} is not in this pool's active route.`);
+                    workStage = routeStep.stage;
+                    const routeOrder = p.route.indexOf(routeStep), routeQty = routeInput(p, routeStep, routeOrder);
                     if (key === "cuttingData" && Array.isArray(p.cuttingComponents) && !p.cuttingComponents.some(component => component.available && same(component.id, request.componentId)))
                         throw new Error("This item is not configured for Cutting in this batch.");
-                    validateAssignment(p, rows, stage, qty, undefined, request.componentId);
+                    const stageRowsForRequest = key === "additionalWorkData" ? rows.filter(work =>
+                        sameStage(work.stage, workStage) &&
+                        (Number.isInteger(work.routeOrder) ? work.routeOrder : p.route.findIndex(route => sameStage(route.stage, workStage))) === routeOrder) : rows;
+                    validateAssignment(p, stageRowsForRequest, workStage, qty, undefined, request.componentId, routeOrder, routeQty);
                     const id = Math.max(0, ...rows.map(w => Number(w.id) || 0)) + 1;
                     const count = key === "cuttingData"
                         ? rows.filter(w => same(w.batchId, p.batchId) && !w.componentId).length + 1
@@ -500,8 +675,7 @@
                     const piece = String(p.pieceItem || "Piece").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
                     const component = key === "cuttingData" ? p.cuttingComponents?.find(item => same(item.id, request.componentId)) : null;
                     const componentSlug = component ? `-${String(component.name).replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}` : "";
-                    const routeStep = activeRouteStep(p, stage);
-                    const routeBranches = routeStep?.parallelGroup ? p.route.filter(route => route.stage === stage && route.parallelGroup === routeStep.parallelGroup) : [];
+                    const routeBranches = routeStep?.parallelGroup ? [routeStep] : [];
                     const branchSource = routeBranches.length ? Object.values(parallelGroups).find(group => group.id === routeBranches[0].parallelGroup)?.from : null;
                     const branchSuffix = routeBranches.length ? `-${routeBranches.map(route => route.branch).join("-")}` : "";
                     const branchLabel = routeBranches.length ? routeBranches.map(route => `${stageInput(p, branchSource)} ${route.branch}`).join(" + ") : null;
@@ -510,7 +684,9 @@
                         pieceType: `Piece ${p.pieceNumber} (${p.pieceItem})`,
                         itemName: key === "cuttingData" ? component?.name || request.componentName || "" : "",
                         componentId: key === "cuttingData" ? component?.id ?? null : null, photo: p.photo || "",
-                        subBatch: key === "cuttingData" ? `${p.batchId}-C${count}` : `${p.batchId}-${piece}${componentSlug}-${suffix}${count}${branchSuffix}`, stage, branch: routeBranches.map(route => route.branch).join("/") || null, branchLabel, parallelGroup: routeBranches[0]?.parallelGroup || null, routeOrder: routeStep ? p.route.indexOf(routeStep) : null, storageKey: key,
+                        subBatch: key === "cuttingData" ? `${p.batchId}-C${count}` : `${p.batchId}-${piece}${componentSlug}-${suffix}${count}${branchSuffix}`, stage: workStage,
+                        ...(key === "additionalWorkData" ? { workType: workStage } : {}),
+                        branch: routeBranches.map(route => route.branch).join("/") || null, branchLabel, parallelGroup: routeBranches[0]?.parallelGroup || null, routeOrder, storageKey: key,
                         inputQty: qty, assignedQty: qty, completedQty: 0, damageQty: 0, passedQty: 0, createdAt: time() });
                     // One Cutting sub-batch represents one garment split; all its
                     // fabric/component assignment rows share the same C number.
@@ -521,12 +697,18 @@
                     }
                     work.splitGroupId = request.splitGroupId || work.splitGroupId;
                     rows.push(work); results.push(work);
-                    audit(p, { stage, qty, action: "assigned", sourceWorkId: id, sourceKey: key });
+                    audit(p, { stage: workStage, qty, action: "assigned", sourceWorkId: id, sourceKey: key });
                 }
                 return results;
         }
-        async function assign(key, requests) { return transaction(s => assignInState(s, key, requests)); }
+        async function assign(key, requests) {
+            const legacyStage = legacyAdditionalWorkKeys[key];
+            key = normalizeManagerKey(key);
+            if (legacyStage) requests = requests.map(request => ({ ...request, workType: request.workType || legacyStage }));
+            return transaction(s => assignInState(s, key, requests));
+        }
         async function edit(key, requests) {
+            key = normalizeManagerKey(key);
             if (new Set(requests.map(r => String(r.id))).size !== requests.length) throw new Error("Each assignment may appear only once in a bulk edit.");
             return transaction(s => requests.map(request => {
                 const work = s[key].find(w => same(w.id, request.id));
@@ -537,7 +719,13 @@
                 if (key === "cuttingData" && Array.isArray(p.cuttingComponents) && request.assignedQty !== undefined && request.assignedQty !== work.assignedQty)
                     throw new Error("Cutting component quantities are paired; create or update the complete component set together.");
                 if (request.assignedQty !== undefined) {
-                    validateAssignment(p, s[key], work.stage, request.assignedQty, work.id);
+                    const routeOrder = Number.isInteger(work.routeOrder) ? work.routeOrder : p.route.findIndex(route => route.stage === work.stage);
+                    const route = p.route[routeOrder];
+                    const rows = key === "additionalWorkData" ? s[key].filter(item =>
+                        sameStage(item.stage, work.stage) &&
+                        (Number.isInteger(item.routeOrder) ? item.routeOrder : p.route.findIndex(step => sameStage(step.stage, item.stage))) === routeOrder) : s[key];
+                    validateAssignment(p, rows, work.stage, request.assignedQty, work.id, undefined, routeOrder,
+                        route ? routeInput(p, route, routeOrder) : undefined);
                     work.inputQty = work.assignedQty = number(request.assignedQty, "Assignment quantity");
                 }
                 if (request.completedQty !== undefined) work.completedQty = number(request.completedQty, "Completed quantity");
@@ -569,13 +757,13 @@
             if (!work) throw new Error("Assignment no longer exists.");
             if (work.stopped) throw new Error("Resume the assignment before passing.");
             const p = getPool(s, work.poolId), m = validateWork(work);
-            if (work.stage !== managers[key]) throw new Error("Assignment stage does not match its manager.");
+            if (work.stage !== managerStage(key, work)) throw new Error("Assignment stage does not match its manager.");
             const qty = requestedQty ?? m.passableQty;
             if (qty === 0) return { qty: 0 };
             validatePass(work, qty);
-            const index = Number.isInteger(work.routeOrder) ? work.routeOrder : p.route.findIndex(r => r.stage === work.stage);
+            const index = Number.isInteger(work.routeOrder) ? work.routeOrder : p.route.findIndex(r => sameStage(r.stage, work.stage));
             if (index < 0 || !p.stageBalances[work.stage]) throw new Error("Source stage is not valid for this pool.");
-            const from = work.parallelGroup ? p.route.find(route => route.stage === work.stage && route.parallelGroup === work.parallelGroup) : p.route[index];
+            const from = p.route[index];
             const fromIndex = p.route.indexOf(from), next = p.route[fromIndex + 1];
             if (!next) throw new Error("Packing is the terminal production stage.");
             const transitionId = `${p.id}:${key}:${work.id}:${work.passedQty}:${work.passedQty + qty}`;
@@ -636,10 +824,12 @@
             return { qty: receivedQty, componentQty: qty, transitionId, work };
         }
         async function pass(key, ids) {
+            key = normalizeManagerKey(key);
             if (key === 'packingData') throw new Error('Pass the complete packing lot using passPackingLot.');
             return transaction(s => [...new Set(ids.map(String))].map(id => pushToNextStage(s, key, id)));
         }
         async function passGroup(key, ids) {
+            key = normalizeManagerKey(key);
             if (key === 'packingData') throw new Error('Pass the complete packing lot using passPackingLot.');
             return transaction(s => {
                 const works = [...new Set(ids.map(String))].map(id => s[key].find(work => same(work.id, id)));
@@ -685,6 +875,7 @@
             });
         }
         async function stop(key, id) {
+            key = normalizeManagerKey(key);
             return transaction(s => {
                 const work = s[key].find(w => same(w.id, id));
                 if (!work) throw new Error("Assignment no longer exists.");
@@ -695,6 +886,7 @@
             });
         }
         async function stopGroup(key, ids) {
+            key = normalizeManagerKey(key);
             return transaction(s => {
                 const works = [...new Set(ids.map(String))].map(id => s[key].find(work => same(work.id, id)));
                 if (!works.length || works.some(work => !work)) throw new Error('One or more assignments no longer exist.');
@@ -708,6 +900,7 @@
             });
         }
         async function recoverRepair(key, id, qty) {
+            key = normalizeManagerKey(key);
             return transaction(s => {
                 number(qty, "Recovered quantity");
                 const work = s[key].find(w => same(w.id, id));
@@ -726,7 +919,8 @@
         }
         function damageRepairs() {
             const s = readState(), result = [];
-            for (const [key, stage] of Object.entries(managers)) for (const w of s[key]) {
+            for (const [key, managerLabel] of Object.entries(managers)) for (const w of s[key]) {
+                const stage = managerStage(key, w) || managerLabel;
                 if (w.damageQty <= 0) continue;
                 const lotId = w.packingLotId || `legacy-${w.id}`;
                 if (key === 'packingData' && result.some(r => r.sourceKey === key && r.packingLotId === lotId)) continue;
@@ -739,6 +933,7 @@
             return result;
         }
         async function reassignDamage(key, id) {
+            key = normalizeManagerKey(key);
             if (!managers[key]) throw new Error('Unknown damage stage.');
             return transaction(s => {
                 const source = s[key].find(w => same(w.id,id));

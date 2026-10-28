@@ -2,13 +2,9 @@ $(document).ready(async function () {
     "use strict";
     try { await Production.initialize(); } catch (error) { Swal.fire({icon: "error", title: "Recovery required", text: error.message}); return; }
 
-    const APPROVED_POOL_KEY = "approvedPool";
-    const WORK_STORAGE_KEY = "addWork_peco";
-    const WORK_NEXT_ID_KEY = "addWork_peco_nextId";
-    const WORK_HISTORY_KEY = "addWork_peco_history";
-
-    const WORK_TYPE = "Peco";
-    const SUB_BATCH_SUFFIX = "C";   // ✅ -C1 (matches Cutting Manager)
+    const WORK_STORAGE_KEY = "additionalWorkData";
+    const WORK_HISTORY_KEY = "additionalWorkHistory";
+    const SUB_BATCH_SUFFIX = "C";
 
     const ROWS_PER_PAGE = 10;
 
@@ -29,8 +25,9 @@ $(document).ready(async function () {
 
     let pool = [];
     let workData = [];
-    let nextId = 1;
+    let historyData = [];
     let currentEditingId = null;
+    let currentViewingId = null;
 
     let availablePage = 1;
     let assignedPage = 1;
@@ -53,7 +50,11 @@ $(document).ready(async function () {
     function collectAssignments(selector, bulk) {
         return $(selector).toArray().map(element => {
             const row = $(element), type = row.find(".type-select").val() || "inhouse";
-            return { poolId: bulk ? Number(row.data("pool-id")) : Number($("#batchSelect").val()),
+            const selection = bulk ? null : $("#batchSelect").val();
+            const [selectedPoolId, selectedWorkType] = selection ? selection.split("::") : [];
+            return { poolId: bulk ? Number(row.data("pool-id")) : Number(selectedPoolId),
+                workType: bulk ? row.data("work-type") : decodeURIComponent(selectedWorkType || ""),
+                routeOrder: Number(bulk ? row.data("route-order") : $("#batchSelect option:selected").data("route-order")),
                 type, worker: type === "outsource" ? "" : row.find(".worker-select").val(),
                 firm: type === "outsource" ? row.find(".firm-select").val() : "",
                 quantity: Number(row.find(".quantity-input").val()), priority: row.find(".priority-select").val(),
@@ -66,25 +67,20 @@ $(document).ready(async function () {
         return String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
             .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     }
-    function readStorage(k) {
-        try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : []; }
-        catch { return []; }
-    }
     function normalize(v) { return String(v ?? "").trim().toLowerCase(); }
+    function queueKey(item) { return `${item.id}::${item.workType}`; }
 
-    function isThisStage(p) {
-        return !!(
-            p.currentStage &&
-            p.currentStage.type === "additional_work" &&
-            Array.isArray(p.currentStage.works) &&
-            p.currentStage.works.map(normalize).includes(normalize(WORK_TYPE))
-        );
-    }
     function loadData() {
-        const view = Production.views("addWork_peco");
+        const view = Production.views(WORK_STORAGE_KEY);
         pool = view.pool;
         workData = view.works;
-        nextId = Math.max(0, ...workData.map(w => Number(w.id) || 0)) + 1;
+        historyData = Production.readState()[WORK_HISTORY_KEY];
+        const types = [...new Set([...pool.map(item => item.workType), ...workData.map(item => item.workType)].filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b));
+        const filter = $("#workTypeFilter"), selected = filter.val() || "";
+        filter.html('<option value="">All Work Types</option>' + types.map(type =>
+            `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join(""));
+        filter.val(types.includes(selected) ? selected : "");
     }
     function saveData() { throw new Error("Use the shared production transaction API."); }
 
@@ -92,11 +88,11 @@ $(document).ready(async function () {
         const m = String(str).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2}):(\d{2})/);
         if (!m) return Date.parse(str) || 0;
         const [, d, mo, y, h, mi, se] = m;
-        return new Date(`${y}-${mo.padStart(2,"0")}-${d.padStart(2,"0")}T${h.padStart(2,"0")}:${mi}:${se}`).getTime();
+        return new Date(`${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}T${h.padStart(2, "0")}:${mi}:${se}`).getTime();
     }
 
     function getHistoryFor(id) {
-        return readStorage(WORK_HISTORY_KEY)
+        return historyData
             .filter(h => Number(h.workId) === Number(id))
             .sort((a, b) => parseHistoryTime(a.at) - parseHistoryTime(b.at));
     }
@@ -116,13 +112,13 @@ $(document).ready(async function () {
         if (!ds) return "Not Set";
         const d = new Date(ds);
         if (isNaN(d.getTime())) return "Not Set";
-        const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
     }
     function getDeliveryClass(ds) {
         if (!ds) return "delivery-badge-secondary";
-        const t = new Date(); t.setHours(0,0,0,0);
-        const d = new Date(ds); d.setHours(0,0,0,0);
+        const t = new Date(); t.setHours(0, 0, 0, 0);
+        const d = new Date(ds); d.setHours(0, 0, 0, 0);
         const diff = Math.ceil((d - t) / 86400000);
         if (diff < 0) return "delivery-overdue";
         if (diff === 0) return "delivery-due-today";
@@ -180,11 +176,16 @@ $(document).ready(async function () {
         $c.append($p);
     }
 
-    function getPoolTotal(p) { return Number(p.stageBalances?.[Production.managers["addWork_peco"]]?.inputQty) || 0; }
+    function getPoolTotal(p) { return Number(p.quantity) || 0; }
     function getPoolAssigned(p) {
-        return workData.filter(w => String(w.poolId) === String(p.id)).reduce((n,w) => n + w.assignedQty, 0);
+        return workData.filter(w => String(w.poolId) === String(p.id) && normalize(w.workType) === normalize(p.workType) &&
+            Number(w.routeOrder) === Number(p.currentStage.routeIndex))
+            .reduce((n,w) => n + w.assignedQty, 0);
     }
-    function getPoolRemaining(p) { return Production.calculateAvailableQty(p, workData, Production.managers["addWork_peco"]); }
+    function getPoolRemaining(p) {
+        return Production.calculateAvailableQty(p, workData, p.workType, undefined, undefined,
+            p.currentStage.routeIndex, p.quantity);
+    }
     function getBusyWorkersExcluding(poolId) {
         const busy = new Set();
         workData.forEach(row => {
@@ -245,10 +246,12 @@ $(document).ready(async function () {
     function renderAvailableTable() {
         const tbody = $("#availableList");
         tbody.empty();
-        const available = pool.filter(p => getPoolRemaining(p) > 0);
+        const selectedType = normalize($("#workTypeFilter").val());
+        const available = pool.filter(p => p.currentStage?.type === "additional_work" &&
+            (!selectedType || normalize(p.workType) === selectedType) && getPoolRemaining(p) > 0);
 
         if (!available.length) {
-            tbody.html(`<tr><td colspan="11" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No available work for ${escapeHtml(WORK_TYPE)}.</td></tr>`);
+            tbody.html('<tr><td colspan="12" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No additional work is currently available.</td></tr>');
             $("#availablePagination").empty();
             return;
         }
@@ -295,7 +298,7 @@ $(document).ready(async function () {
                     ? `<span class="status-badge not_assigned">Not Assigned</span>`
                     : (remaining > 0 ? `<span class="status-badge assign_progress">In Progress</span>` : "");
                 const actionHtml = remaining > 0
-                    ? `<button class="btn btn-sm btn-primary assign-single-btn" data-pool-id="${it.id}"><i class="bx bx-plus"></i> Assign</button>`
+                    ? `<button class="btn btn-sm btn-primary assign-single-btn" data-pool-id="${it.id}" data-work-type="${escapeHtml(it.workType)}"><i class="bx bx-plus"></i> Assign</button>`
                     : "";
 
                 tbody.append(`
@@ -303,6 +306,7 @@ $(document).ready(async function () {
                         ${idx === 0 ? batchCols : ""}
                         <td><div class="piece-line"><span class="piece-num">${escapeHtml(it.pieceNumber)} Piece</span></div></td>
                         <td><div class="piece-line">${escapeHtml(it.pieceItem || "-")}</div></td>
+                        <td>${escapeHtml(it.workType || "-")}</td>
                         <td>${qtyHtml}</td>
                         <td><span class="priority-badge ${pc}">${escapeHtml(it.priority || "-")}</span></td>
                         <td>${statusHtml}</td>
@@ -322,10 +326,11 @@ $(document).ready(async function () {
     function renderAssignedTable() {
         const tbody = $("#assignedList");
         tbody.empty();
-        const visible = workData.filter(w => !isFullyPassed(w));
+        const selectedType = normalize($("#workTypeFilter").val());
+        const visible = workData.filter(w => !isFullyPassed(w) && (!selectedType || normalize(w.workType) === selectedType));
 
         if (!visible.length) {
-            tbody.html(`<tr><td colspan="14" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No ${escapeHtml(WORK_TYPE)} assignments yet.</td></tr>`);
+            tbody.html('<tr><td colspan="15" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No additional work assignments match this filter.</td></tr>');
             $("#assignedPagination").empty();
             return;
         }
@@ -384,6 +389,7 @@ $(document).ready(async function () {
                         <td><div class="d-flex align-items-center gap-2"><span>${progress}</span><div class="progress-bar-container"><div class="progress-bar-fill" style="width:${pct}%;"></div></div></div></td>
                         <td>${damageHtml}</td>
                         <td>${remaining}</td>
+                        <td>${escapeHtml(item.workType || item.stage || "-")}</td>
                         <td><span class="priority-badge ${pc}">${escapeHtml(item.priority || "-")}</span></td>
                         <td>${deliveryHtml}</td>
                         <td>${statusHtml}</td>
@@ -411,9 +417,10 @@ $(document).ready(async function () {
         const select = $("#batchSelect");
         select.empty();
         select.append('<option value="">Choose Batch</option>');
-        pool.filter(p => getPoolRemaining(p) > 0).forEach(item => {
+        pool.filter(p => p.currentStage?.type === "additional_work" && getPoolRemaining(p) > 0).forEach(item => {
             const rem = getPoolRemaining(item);
-            select.append(`<option value="${item.id}">${escapeHtml(item.batchId)} - ${escapeHtml(item.brand)} - Piece ${item.pieceNumber} (${escapeHtml(item.pieceItem)}) - Rem ${rem}/${getPoolTotal(item)}</option>`);
+            const value = `${item.id}::${encodeURIComponent(item.workType)}`;
+            select.append(`<option value="${value}" data-route-order="${item.currentStage.routeIndex}">${escapeHtml(item.batchId)} - ${escapeHtml(item.brand)} - Piece ${item.pieceNumber} (${escapeHtml(item.pieceItem)}) - ${escapeHtml(item.workType)} - Rem ${rem}/${getPoolTotal(item)}</option>`);
         });
     }
 
@@ -484,7 +491,7 @@ $(document).ready(async function () {
             for (let i = 0; i < count; i++) {
                 const subBatch = peekSubBatchId(poolItem.batchId, poolItem.pieceItem, i);
                 tbody.append(`
-                    <tr class="assignment-row" data-row-index="${i}">
+                    <tr class="assignment-row" data-row-index="${i}" data-route-order="${poolItem.currentStage.routeIndex}">
                         <td><span class="sub-batch-label fw-semibold text-primary">${escapeHtml(subBatch)}</span><input type="hidden" class="sub-batch-input" value="${escapeHtml(subBatch)}"></td>
                         <td><select class="form-select form-select-sm worker-select"><option value="">Select Worker</option>${workerOpts}</select></td>
                         <td><input type="number" class="form-control form-control-sm quantity-input" value="${autoQtys[i]}" min="1" max="${remaining}" data-max="${remaining}"></td>
@@ -502,7 +509,7 @@ $(document).ready(async function () {
 
             if (defaultWorker) tbody.find(".worker-select").val(defaultWorker);
 
-            // Manual qty edit → redistribute remaining rows
+            // ✅ Manual qty edit → redistribute remaining rows
             tbody.off("input", ".quantity-input").on("input", ".quantity-input", function () {
                 const $input = $(this);
                 const $row = $input.closest(".assignment-row");
@@ -533,23 +540,26 @@ $(document).ready(async function () {
 
     $(document).on("click", ".assign-single-btn", function () {
         const poolId = Number($(this).data("pool-id"));
-        const item = pool.find(p => Number(p.id) === poolId);
+        const workType = String($(this).data("work-type"));
+        const item = pool.find(p => Number(p.id) === poolId && p.workType === workType);
         if (!item) return;
         populateBatchSelect();
-        $("#batchSelect").val(item.id).trigger("change");
+        $("#batchSelect").val(`${item.id}::${encodeURIComponent(item.workType)}`).trigger("change");
         $("#assignModal").modal("show");
     });
 
     $("#batchSelect").on("change", function () {
-        const poolId = Number($(this).val());
-        if (!poolId) { $("#assignRowsContainer").empty(); return; }
-        const item = pool.find(p => Number(p.id) === poolId);
+        const [poolIdText, encodedType] = String($(this).val() || "").split("::");
+        const poolId = Number(poolIdText);
+        if (!poolId || !encodedType) { $("#assignRowsContainer").empty(); return; }
+        const workType = decodeURIComponent(encodedType);
+        const item = pool.find(p => Number(p.id) === poolId && p.workType === workType);
         if (!item) return;
         generateAssignRows(item, getPoolRemaining(item));
     });
 
     $("#saveAssignBtn").on("click", async function () {
-        await productionAction(() => Production.assign("addWork_peco", collectAssignments(".assignment-row", false)), "#assignModal");
+        await productionAction(() => Production.assign(WORK_STORAGE_KEY, collectAssignments(".assignment-row", false)), "#assignModal");
     });
 
     /* ============================================================
@@ -567,7 +577,7 @@ $(document).ready(async function () {
     function renderMultiSelectOptions() {
         const container = $("#multiSelectDropdown");
         container.empty();
-        const available = pool.filter(p => getPoolRemaining(p) > 0);
+        const available = pool.filter(p => p.currentStage?.type === "additional_work" && getPoolRemaining(p) > 0);
         const byBatch = {};
         available.forEach(item => {
             const k = String(item.batchId);
@@ -611,7 +621,7 @@ $(document).ready(async function () {
             return;
         }
 
-        const available = pool.filter(p => getPoolRemaining(p) > 0);
+        const available = pool.filter(p => p.currentStage?.type === "additional_work" && getPoolRemaining(p) > 0);
         const selectedBatches = Array.from(bulkSelectedBatchIds).map(batchId => {
             const items = available.filter(p => String(p.batchId) === String(batchId))
                 .sort((a, b) => Number(a.pieceNumber) - Number(b.pieceNumber));
@@ -674,13 +684,13 @@ $(document).ready(async function () {
         $tbody.empty();
         const defDate = defaultDate();
 
-        const maxSplit = Math.max(...batch.items.map(i => Number(bulkPieceSplits[i.id] || 1)), 1);
+        const maxSplit = Math.max(...batch.items.map(i => Number(bulkPieceSplits[queueKey(i)] || 1)), 1);
 
         for (let s = 0; s < maxSplit; s++) {
             const splitGroupRows = [];
 
             batch.items.forEach(item => {
-                const splitCount = Number(bulkPieceSplits[item.id] || 1);
+                const splitCount = Number(bulkPieceSplits[queueKey(item)] || 1);
                 if (s >= splitCount) return;
                 const totalQty = getPoolRemaining(item);
                 const autoQtys = splitQuantity(totalQty, splitCount);
@@ -710,6 +720,8 @@ $(document).ready(async function () {
                 $tbody.append(`
                     <tr class="bulk-assignment-row"
                         data-pool-id="${item.id}"
+                        data-work-type="${escapeHtml(item.workType)}"
+                        data-route-order="${item.currentStage.routeIndex}"
                         data-batch-id="${escapeHtml(item.batchId)}"
                         data-split-index="${row.splitIndex}"
                         data-piece-number="${item.pieceNumber}"
@@ -733,11 +745,12 @@ $(document).ready(async function () {
             });
         }
 
-        // Manual qty edit → redistribute remaining rows within same piece group
+        // ✅ Manual qty edit → redistribute remaining rows within same piece group
         $tbody.off("input", ".quantity-input").on("input", ".quantity-input", function () {
             const $input = $(this);
             const $row = $input.closest(".bulk-assignment-row");
             const poolId = Number($row.data("pool-id"));
+            const workType = String($row.data("work-type"));
             const pieceTotal = Number($row.data("piece-total")) || 0;
 
             let manualVal = parseInt($input.val()) || 0;
@@ -749,7 +762,9 @@ $(document).ready(async function () {
 
             $input.addClass("manually-edited");
 
-            const $samePieceRows = $tbody.find(`.bulk-assignment-row[data-pool-id="${poolId}"]`);
+            const $samePieceRows = $tbody.find(".bulk-assignment-row").filter(function () {
+                return Number($(this).data("pool-id")) === poolId && String($(this).data("work-type")) === workType;
+            });
             if ($samePieceRows.length <= 1) return;
 
             const $otherRows = $samePieceRows.not($row);
@@ -786,18 +801,18 @@ $(document).ready(async function () {
     }
 
     $("#bulkAssignBtn").on("click", openBulkModal);
-    $("#bulkPassPecoBtn").on("click", function () {
+    $("#bulkPassAdditionalWorkBtn").on("click", function () {
         const key = WORK_STORAGE_KEY;
         const rows = Production.readState()[key]
             .filter(item => !item.stopped && Production.status(item) !== "passed")
             .map(item => ({
-                id: item.id, batchId: item.batchId, label: item.subBatch,
+                id: item.id, batchId: item.batchId, label: `${item.subBatch} — ${item.workType}`,
                 brand: item.brand, piece: item.pieceType,
                 worker: item.type === "outsource" ? item.firm : item.worker,
                 quantity: item.inputQty ?? item.assignedQty, completed: item.completedQty, damage: item.damageQty
             }));
         BulkPass.open({
-            title: `Bulk Pass ${WORK_TYPE} Assignments`,
+            title: "Bulk Pass Additional Work Assignments",
             rows,
             onSave: async changes => {
                 const requests = changes.map(change => ({
@@ -852,10 +867,10 @@ $(document).ready(async function () {
         const batchId = String($(this).data("batch-id"));
         const count = parseInt($(`.bulk-global-split[data-batch-id="${batchId}"]`).val()) || 1;
         if (count < 1) { $(`.bulk-global-split[data-batch-id="${batchId}"]`).val(1); return; }
-        const available = pool.filter(p => getPoolRemaining(p) > 0);
+        const available = pool.filter(p => p.currentStage?.type === "additional_work" && getPoolRemaining(p) > 0);
         const batchItems = available.filter(p => String(p.batchId) === String(batchId))
             .sort((a, b) => Number(a.pieceNumber) - Number(b.pieceNumber));
-        batchItems.forEach(item => { bulkPieceSplits[item.id] = count; });
+        batchItems.forEach(item => { bulkPieceSplits[queueKey(item)] = count; });
         generateBatchRows({ batchId, items: batchItems });
         Swal.fire({ icon: "success", title: "Split Applied", text: `Each piece split into ${count} rows.`, timer: 1200, showConfirmButton: false });
     });
@@ -894,7 +909,7 @@ $(document).ready(async function () {
     });
 
     $("#saveBulkAssignBtn").on("click", async function () {
-        await productionAction(() => Production.assign("addWork_peco", collectAssignments(".bulk-assignment-row", true)), "#bulkAssignModal");
+        await productionAction(() => Production.assign(WORK_STORAGE_KEY, collectAssignments(".bulk-assignment-row", true)), "#bulkAssignModal");
     });
 
     /* ============================================================
@@ -912,6 +927,7 @@ $(document).ready(async function () {
         $("#progressLivePreview").html(`<div class="d-flex justify-content-between"><span><strong>Eff:</strong> ${eff}</span><span><strong>Progress:</strong> ${progress}</span><span><strong>Passed:</strong> ${passed}</span><span><strong>Remaining:</strong> ${remaining}</span></div>`);
     }
 
+    /* ✅ NEW: Render assignment history in progress modal */
     function renderProgressHistory(workId) {
         const $list = $("#progressHistoryList");
         if (!$list.length) return;
@@ -967,23 +983,23 @@ $(document).ready(async function () {
 
     $("#updateProgressBtn").on("click", async function () {
         const type = $("#progressTypeSelect").val(), qty = Number($("#progressQty").val());
-        if (type === "recover") { await productionAction(() => Production.recoverRepair("addWork_peco", currentEditingId, qty), "#progressModal"); return; }
+        if (type === "recover") { await productionAction(() => Production.recoverRepair(WORK_STORAGE_KEY, currentEditingId, qty), "#progressModal"); return; }
         const fields = { completed: "addCompleted", damage: "addDamage", set_completed: "completedQty", set_damage: "damageQty", set_assigned: "assignedQty" };
-        await productionAction(() => Production.edit("addWork_peco", [{ id: currentEditingId, [fields[type]]: qty }]), "#progressModal");
+        await productionAction(() => Production.edit(WORK_STORAGE_KEY, [{ id: currentEditingId, [fields[type]]: qty }]), "#progressModal");
     });
 
     /* ============================================================
        PASS TO NEXT STAGE
        ============================================================ */
     function pushToNextStage(item) {
-        return Production.pass("addWork_peco", [item.id]);
+        return Production.pass(WORK_STORAGE_KEY, [item.id]);
     }
 
     $(document).on("click", ".pass-row-action-btn", async function () {
         const id = Number($(this).data("id"));
         const result = await Swal.fire({ title: "Pass completed quantity?", icon: "question", showCancelButton: true, confirmButtonText: "Yes, Pass" });
         if (!result.isConfirmed) return;
-        const passed = await productionAction(() => Production.pass("addWork_peco", [id]));
+        const passed = await productionAction(() => Production.pass(WORK_STORAGE_KEY, [id]));
         if (passed && !passed.some(p => p.qty > 0)) Swal.fire({ icon: "info", title: "Nothing to Pass" });
     });
 
@@ -992,13 +1008,10 @@ $(document).ready(async function () {
        ============================================================ */
     $(document).on("click", ".stop-row-action-btn", async function () {
         const id = Number($(this).data("id"));
-        await productionAction(() => Production.stop("addWork_peco", id));
+        await productionAction(() => Production.stop(WORK_STORAGE_KEY, id));
     });
 
-    /* ============================================================
-       VIEW DETAIL (Cutting Manager style — no history in view)
-       ============================================================ */
-    function buildViewHtml(item) {
+        function buildViewHtml(item) {
         return AssignmentDetails.render(item);
     }
 
@@ -1006,6 +1019,7 @@ $(document).ready(async function () {
         const id = Number($(this).data("id"));
         const item = workData.find(d => Number(d.id) === id);
         if (!item) return;
+        currentViewingId = id;
         $("#viewDetailBody").html(buildViewHtml(item));
         $("#viewDetailModal").modal("show");
     });
@@ -1048,6 +1062,7 @@ $(document).ready(async function () {
                         <td>${escapeHtml(item.brand || "-")}</td>
                         <td>${escapeHtml(item.pieceType || "-")}</td>
                         <td>${escapeHtml(item.worker || "-")}</td>
+                        <td>${escapeHtml(item.workType || item.stage || "-")}</td>
                         <td>${item.assignedQty}</td>
                         <td>${item.completedQty || 0}</td>
                         <td>${item.damageQty || 0}</td>
@@ -1070,7 +1085,7 @@ $(document).ready(async function () {
                     <thead>
                         <tr>
                             <th>#</th><th>Batch ID</th><th>Sub-Batch</th><th>Brand</th>
-                            <th>Piece</th><th>Worker</th><th>Qty</th><th>Progress</th>
+                            <th>Piece</th><th>Worker</th><th>Work Type</th><th>Qty</th><th>Progress</th>
                             <th>Damage</th><th>Remaining</th><th>Priority</th><th>Delivery</th>
                             <th>Status</th><th>Action</th>
                         </tr>
@@ -1086,11 +1101,9 @@ $(document).ready(async function () {
         $("#listAllModal").modal("show");
     });
 
-    /* ============================================================
-       NESTED BATCH HISTORY
-       ============================================================ */
+    /* ✅ NEW: Nested batch history modal — opens on top of List */
     function buildBatchHistoryHtml(batchId) {
-        const history = readStorage(WORK_HISTORY_KEY);
+        const history = historyData;
         const batchRows = workData.filter(d => String(d.batchId) === String(batchId));
         if (!batchRows.length) return `<div class="text-center text-muted py-5">No assignments found for batch ${escapeHtml(batchId)}.</div>`;
 
@@ -1168,12 +1181,20 @@ $(document).ready(async function () {
     });
 
     $("#printBatchHistoryBtn").on("click", function () { window.print(); });
+
     $("#printListAllBtn").on("click", function () { window.print(); });
 
     /* ============================================================
        REFRESH
        ============================================================ */
-    $("#refreshPecoBtn").on("click", function () {
+    $("#workTypeFilter").on("change", function () {
+        availablePage = 1;
+        assignedPage = 1;
+        renderAvailableTable();
+        renderAssignedTable();
+    });
+
+    $("#refreshAdditionalWorkBtn").on("click", function () {
         loadData();
         renderAvailableTable();
         renderAssignedTable();
@@ -1202,6 +1223,6 @@ $(document).ready(async function () {
             renderAssignedTable();
         }
     }, 2000);
-    installProductionControls("addWork_peco", () => { loadData(); renderAvailableTable(); renderAssignedTable(); });
+    installProductionControls(WORK_STORAGE_KEY, () => { loadData(); renderAvailableTable(); renderAssignedTable(); });
 
 });
