@@ -68,9 +68,14 @@
             if(mode==='packing'&&results.length===1&&window.PackingLabels){try{PackingLabels.downloadBrandSizes(results[0][0]);}catch(error){await Swal.fire({icon:'warning',title:'Assigned; download labels using QR Code',text:error.message});}}
         }catch(error){showError(error);}finally{busy=false;$('#setAssignmentModal button').prop('disabled',false);}
     }
-    function open(stage,id,callback) {
+    function open(stage,id,callback,batchId,fullWidth=false) {
         if(busy)return;mount();mode=stage;onSaved=callback;const state=Production.readState();
-        sources=stage==='packing'?Production.packingBatches(state).filter(s=>!s.held&&s.available>0):Production.bundlingReady(state);
+        const dialog=$('#setAssignmentModal .modal-dialog'),content=$('#setAssignmentModal .modal-content');
+        dialog.toggleClass('modal-fullscreen',fullWidth);
+        if(fullWidth){dialog.css({width:'100vw',maxWidth:'100vw',height:'100dvh',margin:'0'});content.css({height:'100dvh',maxHeight:'100dvh',borderRadius:'0'});}
+        else{dialog.css({width:'calc(100% - 2rem)',maxWidth:'1500px',height:'',margin:'0 auto'});content.css({height:'',maxHeight:'',borderRadius:''});}
+        sources=(stage==='packing'?Production.packingBatches(state).filter(s=>!s.held&&s.available>0):Production.bundlingReady(state))
+            .filter(s=>!batchId||String(s.batchId)===String(batchId));
         $('#setAssignmentModal').toggleClass('set-bulk-modal',!id);
         $('#setAssignmentTitle').text((id?'Assign ':'Bulk Assign ')+(stage==='packing'?'Packing':'Bundling')+' Workers');
         $('#setAssignmentCards,#setAssignmentError').empty();

@@ -942,22 +942,21 @@
                 const rows = key === 'packingData' ? s[key].filter(w => (w.packingLotId || `legacy-${w.id}`) === lotId) : [source];
                 const qty = source.damageQty;
                 if (rows.some(w => w.damageQty !== qty)) throw new Error('Packing damage quantities do not match.');
-                const closed = key === 'packingData' && (rows.some(w => w.packingClosed || (w.passedQty > 0 && w.passedQty === w.inputQty-w.damageQty)) || s.bundlingData.some(b => b.packingLotId === lotId));
                 let nextId = Math.max(0,...s[key].map(w => Number(w.id) || 0)) + 1;
                 const newLotId = `${lotId}-repair-${nextId}`;
                 for (const w of rows) {
                     const p = getPool(s,w.poolId), before = copy(w);
                     syncRepair(s,p,w,key);
                     w.damageQty = 0;
-                    if (closed) {
-                        w.inputQty -= qty; w.assignedQty -= qty;
-                        const repairWork = aliases({...copy(before), id:nextId++, packingLotId:newLotId,
-                            subBatch:`${before.subBatch}-repair`, inputQty:qty, assignedQty:qty,
-                            completedQty:0, damageQty:0, passedQty:0, packingClosed:false,
-                            stopped:false, createdAt:time()});
-                        delete repairWork.passedAt;
-                        s[key].push(repairWork);
-                    }
+                    w.inputQty -= qty; w.assignedQty -= qty;
+                    const repairWork = aliases({...copy(before), id:nextId++,
+                        ...(key === 'packingData' ? { packingLotId:newLotId } : {}),
+                        subBatch:`${before.subBatch || before.id}-repair`,
+                        ...(before.splitGroupId ? { splitGroupId:`${before.splitGroupId}-repair` } : {}),
+                        inputQty:qty, assignedQty:qty, completedQty:0, damageQty:0, passedQty:0,
+                        packingClosed:false, stopped:false, createdAt:time()});
+                    delete repairWork.passedAt;
+                    s[key].push(repairWork);
                     validateWork(w); aliases(w);
                     const repair = s.repairData.find(r => r.sourceKey === key && same(r.sourceWorkId,w.id));
                     repair.reassignedQty = (repair.reassignedQty || 0) + qty;

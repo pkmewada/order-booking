@@ -109,7 +109,7 @@ test('Pant, Shirt and Jacket fan out and unlock Stitching independently per piec
     })));
     await engine.edit('stitchingData', stitchingAssignments.map(work => ({ id: work.id, completedQty: 100 })));
     await engine.pass('stitchingData', stitchingAssignments.map(work => work.id));
-    let ironing = engine.views('ironingData').pool;
+    const ironing = engine.views('ironingData').pool;
     assert.deepEqual(ironing.map(pool => pool.pieceItem), itemNames);
     assert.deepEqual(ironing.map(pool => pool.quantity), [100, 100, 100]);
 
@@ -122,6 +122,303 @@ test('Pant, Shirt and Jacket fan out and unlock Stitching independently per piec
     assert.equal(packingReceipts.length, 3);
     assert.deepEqual(packingReceipts.map(row => row.pieceNumber), [1, 2, 3]);
     assert.deepEqual(packingReceipts.map(row => row.inputQty), [100, 100, 100]);
+});
+
+test('two-piece batch can be assigned and passed from Cutting through Bundling into inventory', async () => {
+    const batchId = 'BATCH-TWO-PIECE';
+    const items = ['Pant', 'Shirt'];
+    const route = Production.buildRoute({});
+    const pools = items.map((pieceItem, index) => ({
+        id: index + 1,
+        batchId,
+        pieceNumber: index + 1,
+        pieceItem,
+        brand: 'LITTLE DOLLY',
+        designNumber: '60031',
+        color: 'Black',
+        quantity: 5,
+        route: structuredClone(route),
+        currentStage: { type: 'cutting', stage: 'Cutting' },
+        stageBalances: { Cutting: { inputQty: 5 } },
+        stageHistory: []
+    }));
+    const storage = new MemoryStorage({
+        approvedPool: pools,
+        approvedBatchData: [{
+            batchId,
+            quantity: 5,
+            brand: 'LITTLE DOLLY',
+            designNumber: '60031',
+            pieces: items.map((item, index) => ({ number: index + 1, item }))
+        }]
+    });
+    const engine = Production.createEngine(storage, { request: (_name, _opts, action) => action() });
+    const deadline = '2026-11-06';
+
+    for (const [key, stage] of [['cuttingData', 'Cutting'], ['stitchingData', 'Stitching'], ['ironingData', 'Ironing']]) {
+        const available = engine.views(key).pool.filter(pool => String(pool.batchId) === batchId && pool.stageEnabled);
+        assert.equal(available.length, 2, `${stage} is available for both pieces`);
+        const assignments = await engine.assign(key, available.map(pool => ({
+            poolId: pool.id,
+            quantity: 5,
+            worker: `${stage} worker`,
+            deliveryDate: deadline,
+            ...(key === 'cuttingData' ? { componentId: 'legacy', splitGroupId: `inventory-${pool.id}` } : {})
+        })));
+        await engine.edit(key, assignments.map(work => ({ id: work.id, completedQty: 5 })));
+        await engine.pass(key, assignments.map(work => work.id));
+    }
+
+    const packingBatch = engine.packingBatches().find(batch => String(batch.batchId) === batchId);
+    assert.equal(packingBatch.available, 5);
+    const packingAssignments = await engine.assignPackingBulk([{
+        batchId,
+        quantity: 5,
+        worker: 'Packing worker',
+        deliveryDate: deadline
+    }]);
+    const packingLotId = packingAssignments[0][0].packingLotId;
+    await engine.editPackingLot(packingLotId, 'completed', 5);
+    await engine.passPackingLot(packingLotId);
+
+    const readyForBundling = engine.bundlingReady().find(lot => String(lot.batchId) === batchId);
+    assert.equal(readyForBundling.availableSets, 1);
+    const bundlingAssignments = await engine.assignBundlingBulk([{
+        packingLotId,
+        setQuantity: 1,
+        worker: 'Bundling worker',
+        deliveryDate: deadline
+    }]);
+    await engine.editBundling(bundlingAssignments[0].id, 5);
+    await engine.passBundling(bundlingAssignments[0].id);
+
+    const inventory = engine.readState().inventoryData.filter(row => String(row.batchId) === batchId);
+    assert.equal(inventory.length, 1);
+    assert.equal(inventory[0].quantity, 5);
+    assert.deepEqual(inventory[0].productionHistory.map(pool => pool.pieceItem), items);
+});
+
+test('piece quantities stay isolated and Packing and Bundling use matching set quantities', async () => {
+    const batchId = 'BATCH-PIECE-QUANTITY-GUARD';
+    const items = ['Pant', 'Shirt'];
+    const quantities = [900, 1000];
+    const route = Production.buildRoute({});
+    const pools = items.map((pieceItem, index) => ({
+        id: index + 1, batchId, pieceNumber: index + 1, pieceItem, brand: 'LITTLE DOLLY',
+        quantity: quantities[index], route: structuredClone(route),
+        currentStage: { ...route[0], routeIndex: 0 },
+        stageBalances: { Cutting: { inputQty: quantities[index] } }, stageHistory: []
+    }));
+    const engine = Production.createEngine(new MemoryStorage({
+        approvedPool: pools,
+        approvedBatchData: [{ batchId, quantity: 1000, brand: 'LITTLE DOLLY', pieces: items.map((item, index) => ({ number: index + 1, item })) }]
+    }), { request: (_name, _opts, action) => action() });
+    const deadline = '2026-11-06';
+
+    const cutting = engine.views('cuttingData').pool;
+    await assert.rejects(engine.assign('cuttingData', [{
+        poolId: cutting[0].id, quantity: 1000, componentId: 'legacy', splitGroupId: 'too-many',
+        worker: 'Cutting worker', deliveryDate: deadline
+    }]), /exceeds available quantity/i);
+    const cutRows = await engine.assign('cuttingData', cutting.map(pool => ({
+        poolId: pool.id, quantity: pool.quantity, componentId: 'legacy',
+        splitGroupId: `piece-${pool.pieceNumber}`, worker: 'Cutting worker', deliveryDate: deadline
+    })));
+    await assert.rejects(engine.edit('cuttingData', [{ id: cutRows[0].id, completedQty: 1000 }]), /cannot exceed input quantity/i);
+    await engine.edit('cuttingData', cutRows.map(work => ({ id: work.id, completedQty: work.inputQty })));
+    await assert.rejects(
+        engine.transaction(state => engine.pushToNextStage(state, 'cuttingData', cutRows[0].id, 1000)),
+        /quantity exceeds available progress\. Passable: 900/i
+    );
+    await engine.pass('cuttingData', cutRows.map(work => work.id));
+    assert.deepEqual(engine.views('stitchingData').pool.map(pool => pool.quantity), [900, 1000]);
+
+    const stitchRows = await engine.assign('stitchingData', engine.views('stitchingData').pool.map(pool => ({
+        poolId: pool.id, quantity: pool.quantity, worker: 'Stitching worker', deliveryDate: deadline
+    })));
+    await engine.edit('stitchingData', stitchRows.map(work => ({ id: work.id, completedQty: work.inputQty })));
+    await engine.pass('stitchingData', stitchRows.map(work => work.id));
+    const ironRows = await engine.assign('ironingData', engine.views('ironingData').pool.map(pool => ({
+        poolId: pool.id, quantity: pool.quantity, worker: 'Ironing worker', deliveryDate: deadline
+    })));
+    await engine.edit('ironingData', ironRows.map(work => ({ id: work.id, completedQty: work.inputQty })));
+    await engine.pass('ironingData', ironRows.map(work => work.id));
+
+    const packingBatch = engine.packingBatches().find(batch => batch.batchId === batchId);
+    assert.deepEqual(packingBatch.pieces.map(piece => piece.available), [900, 1000]);
+    assert.equal(packingBatch.available, 900, 'set quantity is limited by the piece with the least received quantity');
+    await assert.rejects(engine.assignPacking({ batchId, quantity: 1000, worker: 'Packing worker', deliveryDate: deadline }), /Only 900 packing sets are available/);
+    const packingRows = await engine.assignPacking({ batchId, quantity: 900, worker: 'Packing worker', deliveryDate: deadline });
+    const packingLotId = packingRows[0].packingLotId;
+    assert.deepEqual(packingRows.map(work => work.inputQty), [900, 900]);
+    await engine.editPackingLot(packingLotId, 'completed', 900);
+    await engine.passPackingLot(packingLotId);
+
+    const bundlingLot = engine.bundlingReady().find(lot => lot.packingLotId === packingLotId);
+    assert.equal(bundlingLot.availableSets, 180, '900 packed units make 180 five-size sets');
+    await assert.rejects(engine.assignBundling({ packingLotId, setQuantity: 181, worker: 'Bundling worker', deliveryDate: deadline }), /Only 180 bundling sets are available/);
+    const bundling = await engine.assignBundling({ packingLotId, setQuantity: 180, worker: 'Bundling worker', deliveryDate: deadline });
+    await engine.editBundling(bundling.id, 900);
+    await engine.passBundling(bundling.id);
+    const inventory = engine.readState().inventoryData.find(row => row.batchId === batchId);
+    assert.equal(inventory.quantity, 900);
+});
+
+test('Damage Reassign restores damaged quantity as fresh work at the same stage', async () => {
+    const batchId = 'BATCH-DAMAGE-REPAIR';
+    const route = Production.buildRoute({});
+    const pool = {
+        id: 1, batchId, pieceNumber: 1, pieceItem: 'Pant', quantity: 1000,
+        route: structuredClone(route), currentStage: { ...route[0], routeIndex: 0 },
+        stageBalances: { Cutting: { inputQty: 1000 } }, stageHistory: []
+    };
+    const engine = Production.createEngine(new MemoryStorage({
+        approvedPool: [pool],
+        approvedBatchData: [{ batchId, quantity: 1000, pieces: [{ number: 1, item: 'Pant' }] }]
+    }), { request: (_name, _opts, action) => action() });
+    const [source] = await engine.assign('cuttingData', [{
+        poolId: pool.id, quantity: 1000, componentId: 'legacy', splitGroupId: 'whole-piece',
+        worker: 'Cutting worker', deliveryDate: '2026-11-06'
+    }]);
+    await engine.edit('cuttingData', [{ id: source.id, completedQty: 700 }]);
+    await engine.pass('cuttingData', [source.id]);
+    await engine.edit('cuttingData', [{ id: source.id, addCompleted: 300, addDamage: 100 }]);
+    assert.equal(engine.damageRepairs().length, 1);
+    await engine.reassignDamage('cuttingData', source.id);
+
+    const repairs = engine.readState().cuttingData.filter(work => work.poolId === pool.id);
+    assert.equal(repairs.length, 2, 'reassign creates a separate repair assignment');
+    assert.deepEqual(repairs.map(work => work.inputQty).sort((a, b) => a - b), [100, 900]);
+    assert.equal(repairs.reduce((sum, work) => sum + work.assignedQty, 0), 1000);
+    assert.equal(engine.damageRepairs().length, 0);
+    const repair = repairs.find(work => work.inputQty === 100);
+    assert.equal(repair.stage, 'Cutting');
+    assert.equal(repair.completedQty, 0);
+    await engine.edit('cuttingData', [{ id: repair.id, completedQty: 100 }]);
+    await engine.pass('cuttingData', [source.id, repair.id]);
+    assert.equal(engine.views('stitchingData').pool[0].quantity, 1000);
+});
+
+test('Packing damage reassignment repairs the whole multi-piece set lot together', async () => {
+    const batchId = 'BATCH-PACKING-DAMAGE-REPAIR';
+    const items = ['Pant', 'Shirt'];
+    const pools = items.map((pieceItem, index) => {
+        const route = Production.buildRoute({});
+        const packingRoute = route.findIndex(step => step.stage === 'Packing');
+        return {
+            id: index + 1, batchId, pieceNumber: index + 1, pieceItem, brand: 'LITTLE DOLLY',
+            quantity: 900, route: structuredClone(route),
+            currentStage: { ...route[packingRoute], routeIndex: packingRoute },
+            stageBalances: { Cutting: { inputQty: 900 }, Stitching: { inputQty: 900 }, Ironing: { inputQty: 900 }, Packing: { inputQty: 900 } },
+            stageHistory: []
+        };
+    });
+    const engine = Production.createEngine(new MemoryStorage({
+        approvedPool: pools,
+        approvedBatchData: [{ batchId, quantity: 900, brand: 'LITTLE DOLLY', pieces: items.map((item, index) => ({ number: index + 1, item })) }]
+    }), { request: (_name, _opts, action) => action() });
+    const deadline = '2026-11-06';
+    const [originalRows] = await engine.assignPackingBulk([{ batchId, quantity: 900, worker: 'Packing worker', deliveryDate: deadline }]);
+    const originalLot = originalRows[0].packingLotId;
+    await engine.editPackingLot(originalLot, 'damage', 100);
+    await engine.reassignDamage('packingData', originalRows[0].id);
+
+    const state = engine.readState();
+    const repairRows = state.packingData.filter(work => work.packingLotId !== originalLot);
+    assert.equal(repairRows.length, 2, 'repair must preserve one assignment per piece');
+    assert.deepEqual(repairRows.map(work => work.inputQty), [100, 100]);
+    assert.equal(new Set(repairRows.map(work => work.packingLotId)).size, 1, 'repaired quantities stay in one set lot');
+    assert.deepEqual(state.packingData.filter(work => work.packingLotId === originalLot).map(work => work.inputQty), [800, 800]);
+
+    for (const lotId of [originalLot, repairRows[0].packingLotId]) {
+        const lotRows = engine.readState().packingData.filter(work => work.packingLotId === lotId);
+        const quantity = lotRows[0].inputQty;
+        await engine.editPackingLot(lotId, 'completed', quantity);
+        await engine.passPackingLot(lotId);
+    }
+    const bundling = engine.bundlingReady().filter(lot => lot.batchId === batchId);
+    assert.deepEqual(bundling.map(lot => lot.availableSets).sort((a, b) => a - b), [20, 160]);
+});
+
+test('Packing waits for damaged piece repair before releasing the remaining complete sets', async () => {
+    const batchId = 'BATCH-DAMAGE-SETS-WAIT';
+    const items = ['Pant', 'Shirt'];
+    const route = Production.buildRoute({});
+    const ironingIndex = route.findIndex(step => step.stage === 'Ironing');
+    const pools = items.map((pieceItem, index) => ({
+        id: index + 1, batchId, pieceNumber: index + 1, pieceItem, brand: 'LITTLE DOLLY',
+        quantity: 900, route: structuredClone(route),
+        currentStage: { ...route[ironingIndex], routeIndex: ironingIndex },
+        stageBalances: {
+            Cutting: { inputQty: 900 }, Stitching: { inputQty: 900 },
+            Ironing: { inputQty: 900 }, Packing: { inputQty: 0 }
+        },
+        stageHistory: []
+    }));
+    const engine = Production.createEngine(new MemoryStorage({
+        approvedPool: pools,
+        approvedBatchData: [{ batchId, quantity: 900, brand: 'LITTLE DOLLY', pieces: items.map((item, index) => ({ number: index + 1, item })) }]
+    }), { request: (_name, _opts, action) => action() });
+    const deadline = '2026-11-06';
+
+    const ironing = await engine.assign('ironingData', pools.map(pool => ({
+        poolId: pool.id, quantity: 900, worker: 'Ironing worker', deliveryDate: deadline
+    })));
+    await engine.edit('ironingData', ironing.map(work => ({ id: work.id, completedQty: 900 })));
+    await engine.edit('ironingData', [{ id: ironing[0].id, addDamage: 100 }]);
+    await engine.pass('ironingData', ironing.map(work => work.id));
+    assert.deepEqual(engine.packingBatches().find(batch => batch.batchId === batchId).pieces.map(piece => piece.received), [800, 900]);
+
+    const initialPacking = await engine.assignPacking({ batchId, quantity: 800, worker: 'Packing worker', deliveryDate: deadline });
+    const initialLot = initialPacking[0].packingLotId;
+    await engine.editPackingLot(initialLot, 'completed', 800);
+    await engine.passPackingLot(initialLot);
+    assert.equal(engine.bundlingReady().find(lot => lot.packingLotId === initialLot).availableSets, 160);
+    assert.equal(engine.packingBatches().find(batch => batch.batchId === batchId).available, 0,
+        'the remaining 100 stay unavailable until the damaged piece is repaired');
+
+    const assignedIds = new Set(engine.readState().ironingData.map(work => String(work.id)));
+    await engine.reassignDamage('ironingData', ironing[0].id);
+    const repair = engine.readState().ironingData.find(work => !assignedIds.has(String(work.id)));
+    await engine.edit('ironingData', [{ id: repair.id, completedQty: 100 }]);
+    await engine.pass('ironingData', [repair.id]);
+    const packingAfterRepair = engine.packingBatches().find(batch => batch.batchId === batchId);
+    assert.deepEqual(packingAfterRepair.pieces.map(piece => piece.received), [900, 900]);
+    assert.equal(packingAfterRepair.available, 100);
+
+    const repairPacking = await engine.assignPacking({ batchId, quantity: 100, worker: 'Packing worker', deliveryDate: deadline });
+    const repairLot = repairPacking[0].packingLotId;
+    await engine.editPackingLot(repairLot, 'completed', 100);
+    await engine.passPackingLot(repairLot);
+    assert.equal(engine.bundlingReady().find(lot => lot.packingLotId === repairLot).availableSets, 20);
+});
+
+test('receiving a piece requirement updates materials without duplicating or increasing its pool quantity', async () => {
+    const batchId = 'BATCH-REQUIREMENT-QUANTITY';
+    const engine = Production.createEngine(new MemoryStorage({
+        approvedBatchData: [{
+            id: 1, batchId, quantity: 900, brand: 'LITTLE DOLLY', designNumber: 'REQ-900',
+            pieces: [
+                { number: 1, item: 'Pant', materials: ['Fabric', 'Lining'] },
+                { number: 2, item: 'Shirt', materials: ['Fabric', 'Lining'] }
+            ]
+        }]
+    }), { request: (_name, _opts, action) => action() });
+    await engine.approve(batchId, [
+        { pieceNumber: 1, mode: 'confirm', availability: { Fabric: 'yes', Lining: 'no' } },
+        { pieceNumber: 2, mode: 'confirm', availability: { Fabric: 'yes', Lining: 'no' } }
+    ]);
+    const requirements = engine.readState().requirementData;
+    await engine.tickRequirement(requirements[0].id, 'Lining', true);
+    await engine.receiveRequirement(requirements[0].id);
+    await engine.receiveRequirement(requirements[0].id);
+
+    const pools = engine.readState().approvedPool;
+    assert.equal(pools.length, 1);
+    assert.equal(pools[0].pieceNumber, 1);
+    assert.equal(pools[0].quantity, 900);
+    assert.deepEqual(pools[0].availableItems, ['Fabric', 'Lining']);
+    assert.equal(engine.readState().requirementData[0].status, 'completed');
 });
 
 test('already-passed lowercase legacy branches restore the missing Stitching receipt', () => {
@@ -156,6 +453,45 @@ test('already-passed lowercase legacy branches restore the missing Stitching rec
     assert.equal(stitching[0].stageEnabled, true);
     assert.equal(stitching[0].quantity, 100);
     assert.equal(stitching[0].stitchingReleased, true);
+});
+
+test('split Cutting assignments count each configured component once per piece split', async () => {
+    const batchId = 'BATCH-CUTTING-SPLIT';
+    const route = Production.buildRoute({});
+    const pool = {
+        id: 1, batchId, pieceNumber: 1, pieceItem: 'Shirt', quantity: 5,
+        cuttingComponents: [
+            { id: 'fabric', name: 'Fabric', available: true },
+            { id: 'lining', name: 'Lining', available: true }
+        ],
+        route: structuredClone(route), currentStage: { type: 'cutting', stage: 'Cutting' },
+        stageBalances: { Cutting: { inputQty: 5 } }, stageHistory: []
+    };
+    const engine = Production.createEngine(new MemoryStorage({
+        approvedPool: [pool],
+        approvedBatchData: [{ batchId, pieces: [{ number: 1, item: 'Shirt' }] }]
+    }), { request: (_name, _opts, action) => action() });
+    const requests = [];
+    for (const [split, quantity] of [[1, 3], [2, 2]]) {
+        for (const component of pool.cuttingComponents) {
+            requests.push({
+                poolId: pool.id, componentId: component.id, componentName: component.name,
+                splitGroupId: `piece-${split}`, subBatch: `${batchId}-C${split}`,
+                quantity, worker: `Worker ${split}`, deliveryDate: '2026-11-06'
+            });
+        }
+    }
+
+    const assignments = await engine.assign('cuttingData', requests);
+    assert.equal(assignments.length, 4);
+    for (const component of pool.cuttingComponents) {
+        const componentAssignments = assignments.filter(work => work.componentId === component.id);
+        assert.equal(componentAssignments.reduce((sum, work) => sum + work.inputQty, 0), 5);
+        assert.equal(new Set(componentAssignments.map(work => work.subBatch)).size, 2);
+    }
+    await engine.edit('cuttingData', assignments.map(work => ({ id: work.id, completedQty: work.inputQty })));
+    await engine.pass('cuttingData', assignments.map(work => work.id));
+    assert.equal(engine.views('stitchingData').pool[0].quantity, 5);
 });
 
 test('three pieces pass five Cutting branches, then one sequential work after Stitching and Ironing', async () => {

@@ -18,6 +18,7 @@ window.BulkPass = (() => {
                         </div>
                         <div class="modal-body">
                             <div class="alert alert-info py-2">Enter completed quantities and any damage for each assignment, then save progress or pass all available completed quantities.</div>
+                            <div class="d-flex justify-content-end mb-3" id="bulkPassCopyActions"></div>
                             <div class="table-responsive">
                                 <table class="table table-bordered table-hover text-nowrap align-middle">
                                     <thead id="bulkPassHead"></thead>
@@ -57,7 +58,7 @@ window.BulkPass = (() => {
             const oldDamage = Number(original.damage ?? 0);
             const quantity = Number(original.quantity ?? 0);
             if (mode === 'absolute') {
-                if (completion < oldCompleted || completion + oldDamage > quantity) invalid = true;
+                if (completion < oldCompleted || completion + oldDamage + damage > quantity) invalid = true;
             } else if (oldCompleted + completion + oldDamage + damage > quantity) {
                 invalid = true;
             }
@@ -125,6 +126,10 @@ window.BulkPass = (() => {
                 ${showDamage ? `<td><input class="form-control form-control-sm bulk-pass-damage" type="number" min="0" step="1" max="${Math.max(0, quantity - damage - completed)}" value="0" aria-label="Add damage quantity"></td>` : ''}
             </tr>`;
         }).join(''));
+        $('#bulkPassCopyActions').html(rows.length > 1
+            ? '<button type="button" class="btn btn-outline-primary btn-sm" id="bulkPassCopyFirstRow"><i class="bx bx-copy me-1"></i>Copy First Row Values</button>'
+            : '');
+        $('#bulkPassCopyFirstRow').off('click').on('click', () => copyFirstRow(rows, mode, showDamage));
 
         $('#bulkPassRows').off('input', '.bulk-pass-completed,.bulk-pass-damage')
             .on('input', '.bulk-pass-completed,.bulk-pass-damage', function () {
@@ -138,6 +143,33 @@ window.BulkPass = (() => {
         $('#bulkPassSaveProgress').off('click').on('click', () => runSave(options, rows, mode, showDamage));
         $('#bulkPassSaveAndPass').off('click').on('click', () => runPass(options, rows, mode, showDamage));
         bootstrap.Modal.getOrCreateInstance(element).show();
+    }
+
+    function copyFirstRow(rows, mode, showDamage) {
+        const firstRow = $('#bulkPassRows tr').first();
+        const completed = Number(firstRow.find('.bulk-pass-completed').val());
+        const damage = showDamage ? Number(firstRow.find('.bulk-pass-damage').val()) : 0;
+        if (!Number.isSafeInteger(completed) || completed < 0 || !Number.isSafeInteger(damage) || damage < 0) {
+            Swal.fire({ icon: 'warning', title: 'Enter valid first-row values', text: 'Completed and damage quantities must be whole numbers.' });
+            return;
+        }
+        const targets = rows.slice(1);
+        const invalid = targets.find(item => {
+            const oldCompleted = Number(item.completed || 0), oldDamage = Number(item.damage || 0), quantity = Number(item.quantity || 0);
+            return mode === 'absolute'
+                ? completed < oldCompleted || completed + oldDamage + damage > quantity
+                : oldCompleted + completed + oldDamage + damage > quantity;
+        });
+        if (invalid) {
+            Swal.fire({ icon: 'warning', title: 'Values exceed a row limit', text: 'The first row’s completed or damage quantity does not fit every other assignment.' });
+            return;
+        }
+        $('#bulkPassRows tr').slice(1).each(function () {
+            $(this).find('.bulk-pass-completed').val(completed);
+            if (showDamage) $(this).find('.bulk-pass-damage').val(damage);
+            $(this).find('.bulk-pass-completed').trigger('input');
+        });
+        Swal.fire({ icon: 'success', title: 'Values copied', text: 'Completed and damage values copied to the other assignments.', timer: 1300, showConfirmButton: false });
     }
 
     async function runSave(options, rows, mode, showDamage) {

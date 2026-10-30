@@ -72,6 +72,9 @@
 </div>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
 <script src="assets/js/productionEngine.js?v=<?= filemtime(__DIR__ . '/../assets/js/productionEngine.js') ?>"></script>
+<script src="assets/js/setAssignments.js?v=<?= filemtime(__DIR__ . '/../assets/js/setAssignments.js') ?>"></script>
+<script src="assets/js/bulkPass.js?v=<?= filemtime(__DIR__ . '/../assets/js/bulkPass.js') ?>"></script>
+<script src="assets/js/inventoryActions.js?v=<?= filemtime(__DIR__ . '/../assets/js/inventoryActions.js') ?>"></script>
 <script src="assets/js/inventoryStock.js?v=<?= filemtime(__DIR__ . '/../assets/js/inventoryStock.js') ?>"></script>
 <link rel="stylesheet" href="assets/css/inventoryFlow.css?v=<?= filemtime(__DIR__ . '/../assets/css/inventoryFlow.css') ?>">
 <script src="assets/js/inventoryFlow.js?v=<?= filemtime(__DIR__ . '/../assets/js/inventoryFlow.js') ?>"></script>
