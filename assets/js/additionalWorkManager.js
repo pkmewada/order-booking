@@ -77,10 +77,11 @@ $(document).ready(async function () {
         historyData = Production.readState()[WORK_HISTORY_KEY];
         const types = [...new Set([...pool.map(item => item.workType), ...workData.map(item => item.workType)].filter(Boolean))]
             .sort((a, b) => a.localeCompare(b));
-        const filter = $("#workTypeFilter"), selected = filter.val() || "";
-        filter.html('<option value="">All Work Types</option>' + types.map(type =>
-            `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join(""));
-        filter.val(types.includes(selected) ? selected : "");
+        const filters = $("#availableWorkTypeFilter, #workTypeFilter");
+        const selected = $("#availableWorkTypeFilter").val() || $("#workTypeFilter").val() || "";
+        const options = '<option value="">All Work Types</option>' + types.map(type =>
+            `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("");
+        filters.html(options).val(types.includes(selected) ? selected : "");
     }
     function saveData() { throw new Error("Use the shared production transaction API."); }
 
@@ -1187,7 +1188,8 @@ $(document).ready(async function () {
     /* ============================================================
        REFRESH
        ============================================================ */
-    $("#workTypeFilter").on("change", function () {
+    $("#availableWorkTypeFilter, #workTypeFilter").on("change", function () {
+        $("#availableWorkTypeFilter, #workTypeFilter").val($(this).val());
         availablePage = 1;
         assignedPage = 1;
         renderAvailableTable();

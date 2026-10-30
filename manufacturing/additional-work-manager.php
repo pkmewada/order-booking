@@ -191,10 +191,16 @@
         <div class="row">
             <div class="col-xl-12">
                 <div class="card custom-card">
-                    <div class="card-header">
-                        <div class="card-title">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <div class="card-title mb-0">
                             <i class="bx bx-check-circle text-success me-2"></i>
                             Approved Items — Ready for Additional Work
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="form-label mb-0" for="availableWorkTypeFilter">Work Type</label>
+                            <select class="form-select form-select-sm" id="availableWorkTypeFilter" style="width:auto; min-width:180px;">
+                                <option value="">All Work Types</option>
+                            </select>
                         </div>
                     </div>
                     <div class="card-body">

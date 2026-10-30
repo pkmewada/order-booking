@@ -124,11 +124,34 @@ include __DIR__ . "/../includes/header.php";
     .bom-flow-track { flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; white-space:nowrap; scrollbar-width:thin; padding:4px 0 8px; }
     .bom-flow-track > * { flex:0 0 auto; }
     .flow-add-work-wrap { width:max-content; flex:0 0 auto; gap:8px; }
-    .flow-work-multi-choices { display:none; min-width:220px; padding:8px 12px !important; border-color:#dfe5f1 !important; border-radius:8px !important; box-shadow:0 2px 8px rgba(20,30,50,.06); }
-    .flow-work-multi-choices.show { display:block; }
-    .flow-work-multi-choices .form-check { display:inline-flex; align-items:center; gap:5px; flex:0 0 auto; min-height:0; margin:0; padding:0; white-space:nowrap; }
-    .flow-work-multi-choices .form-check-input { float:none; flex:0 0 auto; margin:0; }
-    .flow-work-multi-choices .form-check-label { white-space:nowrap; line-height:1.2; }
+    .flow-work-multi-choices {
+        display:none;
+        grid-template-columns:minmax(0,1fr);
+        gap:4px;
+        width:240px;
+        min-width:220px;
+        max-width:calc(100vw - 32px);
+        padding:12px 14px !important;
+        border-color:#dfe5f1 !important;
+        border-radius:8px !important;
+        box-shadow:0 4px 14px rgba(20,30,50,.1);
+    }
+    .flow-work-multi-choices.show { display:grid; }
+    .flow-work-multi-choices .form-check {
+        display:flex;
+        align-items:center;
+        gap:8px;
+        min-width:0;
+        min-height:24px;
+        margin:0;
+        padding:5px 7px;
+        border-radius:5px;
+        white-space:normal;
+        cursor:pointer;
+    }
+    .flow-work-multi-choices .form-check-input { float:none; flex:0 0 16px; width:16px; height:16px; margin:0; }
+    .flow-work-multi-choices .form-check-label { min-width:0; margin:0; line-height:1.3; overflow-wrap:anywhere; }
+    .flow-work-multi-choices .form-check:hover { background:#f3f4f6; }
     .flow-confirm-work { flex:0 0 auto; white-space:nowrap; border-radius:7px; }
     .flow-add-work-wrap .flow-add-work-select { width:auto; min-width:150px; }
     .bom-flow-extra { display:inline-flex; align-items:center; gap:5px; padding:5px 8px; border:1px solid #dfe5f1; border-radius:7px; background:#f8f9fc; }
@@ -364,24 +387,86 @@ include __DIR__ . "/../includes/header.php";
         overflow: visible;
     }
 
-    .bom-basic-layout { align-items:stretch; }
-    .bom-basic-fields { display:flex; flex-direction:column; flex:0 0 70%; max-width:70%; min-height:0; }
-    .bom-photo-column { flex:0 0 30%; max-width:30%; margin-left:auto; }
-    .bom-photo-panel { display:flex; align-items:center; height:100%; min-height:0; padding:12px; border:1px solid #e2e8f0; border-radius:10px; background:#fbfcff; }
-    .bom-photo-panel #photoPreview { width:100%; min-height:400px; height:100%; display:flex; align-items:center; justify-content:center; margin-top:0 !important; padding:18px; border:1px dashed #cbd5e1; border-radius:8px; background:#fff; }
-    .bom-photo-panel #photoPreview:empty::before { content:"Photo preview"; color:#94a3b8; font-size:14px; }
-    .bom-photo-panel #photoPreview .bom-photo-thumb { width:min(100%, 320px) !important; height:380px !important; min-height:0; max-height:calc(100% - 24px); object-fit:contain !important; border:0 !important; border-radius:8px !important; }
+    #bomForm { display:flex; flex-direction:column; gap:20px; }
+    .bom-form-heading { margin:0; padding-bottom:14px; border-bottom:1px solid #edf0f5; }
+    .bom-form-columns {
+        display:grid;
+        grid-template-columns:minmax(0,2fr) minmax(0,3fr) minmax(0,5fr);
+        align-items:start;
+        gap:18px;
+    }
+    .bom-basic-fields, .bom-photo-column, .bom-piece-column { min-width:0; }
+    .bom-basic-fields { display:flex; flex-direction:column; min-width:0; }
+    .bom-photo-column { align-self:stretch; }
+    .bom-basic-fields > .row { --bs-gutter-x:0; --bs-gutter-y:14px; }
+    .bom-basic-fields .form-label { margin-bottom:6px; color:#344054; font-size:13px; font-weight:600; }
+    .bom-photo-panel {
+        display:flex;
+        flex-direction:column;
+        align-items:stretch;
+        gap:12px;
+        height:100%;
+        min-height:100%;
+        padding:12px;
+        border:1px solid #e7e9ed;
+        border-radius:12px;
+        background:#fff;
+        box-shadow:none;
+    }
+    .bom-photo-panel #photoPreview {
+        width:auto;
+        min-width:0;
+        min-height:100%;
+        height:100%;
+        flex:1 1 auto;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        margin:0 !important;
+        padding:10px;
+        border:1px dashed #cbd5e1;
+        border-radius:9px;
+        background:#fff;
+    }
+    .bom-photo-panel #photoPreview:empty::before { content:""; }
+    .bom-photo-panel #photoPreview .bom-photo-thumb { width:100% !important; height:100% !important; min-height:428px; max-height:65vh; object-fit:contain !important; border:0 !important; border-radius:8px !important; }
+    .bom-piece-column {
+        padding:16px;
+        border:1px solid #e7e9ed;
+        border-radius:14px;
+        background:#fff;
+        box-shadow:none;
+    }
+    .bom-piece-column > h5 { margin:0 0 14px; color:#1e293b; }
+    #pieceConfigBody { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; align-content:start; }
+    .pattern-piece-card { padding:10px; border-color:#e7e9ed; border-radius:11px; background:#fff; box-shadow:none; }
+    .pattern-piece-card .piece-head-row { gap:10px; margin-bottom:10px; }
+    .pattern-piece-card .piece-number-badge { min-width:82px; height:38px; justify-content:center; font-size:13px; }
+    .pattern-piece-card .piece-item { height:38px; }
+    .pattern-piece-card .item-list-box { padding:11px 12px; }
+    .pattern-piece-card .item-list-title { margin-bottom:9px; font-size:13px; }
+    .pattern-piece-card .item-list-options { grid-template-columns:repeat(auto-fit,minmax(78px,1fr)); gap:8px 10px; }
+    .pattern-piece-card .item-list-options .form-check-input { width:17px; height:17px; }
+    .bom-production-section { margin-top:0; padding:16px; border:1px solid #e7e9ed; border-radius:14px; background:#fff; box-shadow:none; }
+    .bom-production-section > h5 { margin:0 0 12px; color:#1e293b; }
+    #bomFlowChart { display:flex; flex-direction:column; gap:14px; min-width:0; margin-top:0; }
+    .bom-piece-flow-card { margin:0 !important; padding:14px; border:1px solid #eceef1; border-radius:10px; background:#fff; }
+    .bom-flow-track { gap:8px; }
+    .pattern-piece-card, .pattern-piece-card .item-list-box,
+    .bom-flow-branch-group { background:#fff !important; }
+    .bom-production-section { background:#fff; }
     @media (max-width: 991.98px) {
-        .bom-basic-fields { flex:0 0 50%; max-width:50%; }
-        .bom-photo-column { flex:0 0 50%; max-width:50%; }
-        .bom-photo-panel #photoPreview { min-height:360px; }
-        .bom-photo-panel #photoPreview .bom-photo-thumb { height:340px !important; max-height:calc(100% - 20px); }
+        .bom-form-columns { grid-template-columns:minmax(0,2fr) minmax(0,3fr); }
+        .bom-piece-column { grid-column:1 / -1; }
     }
     @media (max-width: 767.98px) {
-        .bom-basic-fields { flex:0 0 100%; max-width:100%; min-height:0; }
-        .bom-photo-column { flex:0 0 100%; max-width:100%; }
-        .bom-photo-panel #photoPreview { min-height:320px; }
-        .bom-photo-panel #photoPreview .bom-photo-thumb { height:300px !important; max-height:calc(100% - 20px); }
+        .bom-form-columns { grid-template-columns:minmax(0,1fr); }
+        .bom-piece-column { grid-column:auto; }
+        .bom-photo-panel { min-height:360px; }
+        .bom-photo-panel #photoPreview { min-height:332px; }
+        .bom-photo-panel #photoPreview .bom-photo-thumb { height:328px !important; min-height:0; max-height:48vh; }
+        #pieceConfigBody { grid-template-columns:minmax(0,1fr); }
+        .bom-piece-column, .bom-production-section { padding:12px; }
     }
 
     .bom-piece-flow-header .badge.bg-primary {
@@ -404,13 +489,7 @@ include __DIR__ . "/../includes/header.php";
         border-color: #2b2b2d !important;
     }
 
-    @media (max-width: 992px) {
-        .pattern-piece-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
-    }
-
     @media (max-width: 768px) {
-        .pattern-piece-grid { grid-template-columns:1fr; }
-
         .item-list-options { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; }
 
         .work-row-inner {
@@ -736,7 +815,7 @@ include __DIR__ . "/../includes/header.php";
 
                     <!-- BASIC DETAILS -->
 
-                    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                    <div class="bom-form-heading d-flex align-items-center justify-content-between flex-wrap gap-2">
                         <h5 class="mb-0">Basic Details</h5>
 
                         <button
@@ -749,9 +828,9 @@ include __DIR__ . "/../includes/header.php";
                         </button>
                     </div>
 
-                    <div class="row g-4 bom-basic-layout">
-                        <div class="col-lg-7 bom-basic-fields">
-                            <div class="row g-3">
+                    <div class="bom-form-columns">
+                        <div class="bom-basic-fields">
+                            <div class="row">
                                 <div class="col-12">
                                     <label class="form-label" for="brandSelect">Brand Name <span class="text-danger">*</span></label>
                                     <select id="brandSelect" class="form-select" required>
@@ -774,7 +853,7 @@ include __DIR__ . "/../includes/header.php";
                                     <input id="mrp" class="form-control" type="number" min="0" step="0.01">
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label" for="photoUpload">Choose Photo</label>
+                                    <label class="form-label" for="photoUpload">Upload product image</label>
                                     <input type="file" id="photoUpload" class="form-control" accept="image/*">
                                 </div>
                                 <div class="col-12">
@@ -788,24 +867,17 @@ include __DIR__ . "/../includes/header.php";
                                 <div id="photoPreview"></div>
                             </div>
                         </div>
+                        <section class="bom-piece-column">
+                            <h5>Pattern Pieces</h5>
+                            <input type="hidden" class="piece-radio" name="pieceCount" value="">
+                            <div id="pieceConfigBody" class="pattern-piece-grid"></div>
+                        </section>
                     </div>
-                    <hr class="my-4">
 
-                    <!-- PIECE SELECTION -->
-
-                    <h5 class="mb-3">Pattern Pieces</h5>
-                    <input type="hidden" class="piece-radio" name="pieceCount" value="">
-
-                    <div id="pieceConfigBody" class="pattern-piece-grid"></div>
-
-                    <hr class="my-4">
-
-                    <!-- PRODUCTION FLOW CHART -->
-
-                    <h5 class="mb-3">Production Flow Chart</h5>
-
-                    <div id="bomFlowChart"></div>
-
+                    <section class="bom-production-section">
+                        <h5>Production Flow Chart</h5>
+                        <div id="bomFlowChart"></div>
+                    </section>
                 </form>
 
             </div>
