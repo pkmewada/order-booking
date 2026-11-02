@@ -7,7 +7,7 @@
 
 ## Automatic live schema updates
 
-Hostinger Git deployment synchronizes files but does not execute SQL files. Versioned SQL files in `../database/migrations/` are applied automatically the first time a PHP API connects to MySQL after deployment. Applied migration filenames are recorded in `appSchemaMigrations`; each migration runs once, in filename order. Migration statements use idempotent DDL/DML so they can be safely retried if a deployment is interrupted.
+Hostinger Git deployment synchronizes files but does not execute SQL files. Versioned SQL files in `../database/migrations/` are applied automatically the first time a PHP API connects to MySQL after deployment. Applied migration filenames are recorded in `appSchemaMigrations`; each migration runs once, in filename order. Migration statements use idempotent DDL/DML so they can be safely retried if a deployment is interrupted. The custom BOM pattern migration adds `patternRecords` and `patternPieceLinks` without clearing any existing records.
 
 Configure `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` and `DB_PASSWORD` in Hostinger's PHP environment or in the server's `../includes/db.php` connection settings. Do not put live credentials in Git. Back up the live database before deploying schema changes. The current migration adds the piece-item catalog and manufacturing-state tables without replacing existing application data. SQL and migration files are blocked from direct web access.
 

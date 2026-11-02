@@ -6,13 +6,7 @@ $(document).ready(function () {
     let MATERIALS = [], ITEMS = [], WORK_TYPES = [];
 
     const DEFAULT_WORK_ROWS = 0;
-    const PATTERNS = [
-        {name:'Frock', items:['Frock']},
-        {name:'Pant Shirt 2 Piece', items:['Pant','Shirt']},
-        {name:'Pant Shirt Jacket 3 Piece', items:['Pant','Shirt','Jacket']},
-        {name:'Pant Shirt Cap Jacket 4 Piece', items:['Pant','Shirt','Cap','Jacket']},
-        {name:'Pant Shirt Cap Jacket Tie 5 Piece', items:['Pant','Shirt','Cap','Jacket','Tie']}
-    ];
+    let PATTERNS = [];
 
     let bomData = [];
     let nextId = 1;
@@ -25,17 +19,18 @@ $(document).ready(function () {
     function tableRecords() { return bomData; }
     async function reloadCatalog() {
         $('#createBomBtn, #saveBomBtn').prop('disabled', true);
-        const rows = await CatalogApi.load();
+        const [rows, patterns] = await Promise.all([CatalogApi.load(), CatalogApi.request('patterns')]);
         bomData = rows.map(r => ({...r, _product: r.createdFrom === 'product' && !r.bomCompleted}));
         MATERIALS = CatalogApi.masters.items.map(r => r.name);
         ITEMS = CatalogApi.masters.pieceItems.map(r => r.name); WORK_TYPES = CatalogApi.masters.works.map(r => r.name);
+        PATTERNS = patterns;
         const current = $('#colorSelect').val();
         $('#colorSelect').empty().append($('<option>').val('').text('Select Color'));
         CatalogApi.masters.colors.forEach(c => $('#colorSelect').append($('<option>').val(c.name).text(c.name)));
         $('#colorSelect').val(current || '');
         const selectedPattern = $('#pattern').val();
         $('#pattern').empty().append($('<option>').val('').text('Select Pattern'));
-        PATTERNS.forEach(p => $('#pattern').append($('<option>').val(p.name).text(p.name)));
+        PATTERNS.forEach(p => $('#pattern').append($('<option>').val(String(p.id)).text(p.name)));
         if (selectedPattern) $('#pattern').val(selectedPattern);
         $('#createBomBtn, #saveBomBtn').prop('disabled', false);
         renderTable(); return rows;
@@ -89,14 +84,38 @@ $(document).ready(function () {
         return Number($(".piece-radio").val()) || 0;
     }
 
-    function patternConfig(name) { return PATTERNS.find(p => p.name === name); }
+    function patternConfig(id) { return PATTERNS.find(p => String(p.id) === String(id)); }
+
+    async function refreshPatterns() {
+        const selectedPattern = $('#pattern').val();
+        const legacyPatterns = PATTERNS.filter(pattern => String(pattern.id).startsWith('legacy-'));
+        PATTERNS = [...await CatalogApi.request('patterns'), ...legacyPatterns];
+        $('#pattern').empty().append($('<option>').val('').text('Select Pattern'));
+        PATTERNS.forEach(pattern => $('#pattern').append($('<option>').val(String(pattern.id)).text(pattern.name)));
+        if (selectedPattern) $('#pattern').val(selectedPattern);
+    }
 
     function applyPattern(existingPieces = []) {
         const config = patternConfig($('#pattern').val());
-        $('.piece-radio').val(config ? config.items.length : '');
-        const pieces = config ? config.items.map((item, i) => ({...(existingPieces[i] || {}), number:i + 1, item})) : [];
+        const items = config ? config.items.map(item => item.name) : [];
+        $('.piece-radio').val(config ? items.length : '');
+        const pieces = config ? items.map((item, i) => ({...(existingPieces[i] || {}), number:i + 1, item})) : [];
         renderPieceTable(pieces);
         renderBomFlowChart();
+    }
+
+    function selectPatternForBom(bom) {
+        let config = PATTERNS.find(pattern => pattern.name === bom.pattern);
+        if (!config && bom.pattern && Array.isArray(bom.pieces) && bom.pieces.length) {
+            config = {
+                id: `legacy-${bom.id}`,
+                name: bom.pattern,
+                items: bom.pieces.map(piece => ({name: piece.item || ''}))
+            };
+            PATTERNS.push(config);
+            $('#pattern').append($('<option>').val(config.id).text(config.name));
+        }
+        $('#pattern').val(config ? String(config.id) : '');
     }
 
     function getExistingPiece(pieces, number) {
@@ -325,6 +344,7 @@ $(document).ready(function () {
                             <select
                                 class="piece-item"
                                 data-piece="${i}"
+                                disabled
                             >
                                 ${optionList(
                 ITEMS,
@@ -663,6 +683,9 @@ $(document).ready(function () {
        ====================================================== */
 
     $('#refreshBomBtn').on('click', async function(){try { await reloadCatalog(); alertMsg('BOM list refreshed.', 'success'); } catch(e) { alertMsg(e.message,'error'); }});
+    $(window).on('focus', function () {
+        refreshPatterns().catch(error => alertMsg(error.message || 'Unable to refresh patterns.', 'error'));
+    });
 
     /* ======================================================
        VALIDATION
@@ -709,7 +732,7 @@ $(document).ready(function () {
 
         if (!pieceCount) {
 
-            alertMsg("Please select 1–5 Pic.", "warning");
+            alertMsg("Please select a pattern.", "warning");
 
             return false;
         }
@@ -771,13 +794,13 @@ $(document).ready(function () {
     $('#saveBomBtn').on('click',async function(){
         const button=$(this);if(button.prop('disabled')||button.data('saving'))return;
         if(!validateForm())return;
-        const designNumber=$('#designNumber').val().trim(),pattern=$('#pattern').val().trim();
+        const designNumber=$('#designNumber').val().trim(),patternId=$('#pattern').val(),pattern=patternConfig(patternId)?.name || '';
         if(!/^[0-9]{1,18}$/.test(designNumber)){alertMsg('Design number must contain 1?18 digits.','warning');return;}
-        if(!patternConfig(pattern)){alertMsg('Select a pattern.','warning');return;}
+        if(!patternConfig(patternId)){alertMsg('Select a pattern.','warning');return;}
         if(!document.getElementById('mrp').reportValidity())return;
         button.data('saving',true).prop('disabled',true);
         try{
-            const data=CatalogApi.details({id:$('#editId').val()||null,brand:$('#brandSelect').val(),designNumber,color:$('#colorSelect').val(),pattern,mrp:$('#mrp').val(),pieces:collectPieces()});
+            const data=CatalogApi.details({id:$('#editId').val()||null,brand:$('#brandSelect').val(),designNumber,color:$('#colorSelect').val(),patternId,pattern,mrp:$('#mrp').val(),pieces:collectPieces()});
             await CatalogApi.request('bom',data,document.getElementById('photoUpload').files[0]);
             await reloadCatalog();$('#bomModal').modal('hide');alertMsg('BOM saved successfully.','success');
         }catch(e){alertMsg(e.message,'error');}finally{button.data('saving',false).prop('disabled',false);}
@@ -811,7 +834,7 @@ $(document).ready(function () {
             $("#editId").val(bom.id);
 
             $("#brandSelect").val(bom.brand);
-            $("#pattern").val(bom.pattern || "");
+            selectPatternForBom(bom);
             $("#mrp").val(bom.mrp ?? "");
 
             $("#designNumber").val(
@@ -1267,7 +1290,7 @@ $(document).ready(function () {
 
             container.html(`
                 <div class="text-center text-muted py-4">
-                    Select 1–5 Pic to generate production flow chart.
+                    Select a saved pattern to generate the production flow chart.
                 </div>
             `);
 

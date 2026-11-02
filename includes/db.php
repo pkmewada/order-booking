@@ -1,5 +1,7 @@
 <?php
 // XAMPP defaults. Set these environment variables or change the defaults below.
+require_once __DIR__ . '/schema-migrations.php';
+
 function database(): PDO
 {
     static $connection;
@@ -14,6 +16,7 @@ function database(): PDO
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES => false,
         ]);
+        applySchemaMigrations($connection);
     }
     return $connection;
 }

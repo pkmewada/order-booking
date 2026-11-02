@@ -857,6 +857,9 @@
                                 <li class="slide">
                                     <a href="item-list?type=piece" class="side-menu__item">Piece Items</a>
                                 </li>
+                                 <li class="slide">
+                                    <a href="pattern" class="side-menu__item">Pattern</a>
+                                </li>
                                 <li class="slide">
                                     <a href="additional-work" class="side-menu__item">Additional Work</a>
                                 </li>

@@ -112,14 +112,44 @@ function productRecords(string $mode): void
         if (!in_array($brand, ['LITTLE DOLLY', 'AMARI', 'NIVI BLOSSOM'], true)) { throw new InvalidArgumentException('Select a valid brand.'); }
         if (!preg_match('/^[0-9]{1,18}$/D', $design)) { throw new InvalidArgumentException('Design number must contain 1–18 digits only.'); }
         $design = ltrim($design, '0') ?: '0';
-        if (!is_string($pattern) || ($pattern !== '' && !preg_match('/^[A-Za-z0-9 ]{1,150}$/D', $pattern))) { throw new InvalidArgumentException('Pattern must contain letters, numbers and spaces only.'); }
+        if (!is_string($pattern) || mb_strlen(trim($pattern), 'UTF-8') > 150 || preg_match('/[\x00-\x1F\x7F]/u', $pattern)) { throw new InvalidArgumentException('Pattern must be 150 characters or fewer.'); }
+        $pattern = trim($pattern);
         if ($mrp === '') { $mrp = null; }
         if ($mrp !== null && (!is_scalar($mrp) || !preg_match('/^[0-9]{1,10}(\.[0-9]{1,2})?$/D', (string) $mrp))) { throw new InvalidArgumentException('MRP must be a non-negative number with up to two decimals.'); }
         $lookup = $db->prepare('SELECT id FROM colourRecords WHERE id = ?'); $lookup->execute([$data['colourId'] ?? 0]);
         if (!$lookup->fetch()) { throw new InvalidArgumentException('Select a colour from Colour master.'); }
+        $expectedPatternItemIds = null;
+        if ($mode === 'bom') {
+            $patternId = $data['patternId'] ?? null;
+            if (filter_var($patternId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])) {
+                $patternLookup = $db->prepare('SELECT id, name FROM patternRecords WHERE id = ?');
+                $patternLookup->execute([$patternId]);
+                $patternRecord = $patternLookup->fetch();
+                if (!$patternRecord || $patternRecord['name'] !== $pattern) {
+                    throw new InvalidArgumentException('Select a valid saved pattern.');
+                }
+                $pieceLookup = $db->prepare('SELECT pieceItemId FROM patternPieceLinks WHERE patternId = ? ORDER BY pieceNumber');
+                $pieceLookup->execute([$patternId]);
+                $expectedPatternItemIds = array_map('intval', $pieceLookup->fetchAll(PDO::FETCH_COLUMN));
+            } elseif ($old && $pattern !== '' && $old['pattern'] === $pattern) {
+                $oldPieces = json_decode($old['pieces'], true);
+                if (!is_array($oldPieces) || !$oldPieces) {
+                    throw new InvalidArgumentException('Select a saved pattern before configuring this BOM.');
+                }
+                $expectedPatternItemIds = array_map(static function ($piece) {
+                    return (int) ($piece['pieceItemId'] ?? 0);
+                }, $oldPieces);
+            } else {
+                throw new InvalidArgumentException('Select a saved pattern.');
+            }
+            if (!$expectedPatternItemIds || count($expectedPatternItemIds) > 255) {
+                throw new InvalidArgumentException('The selected pattern has no valid pieces.');
+            }
+        }
         $complete = $mode === 'bom' || ($old && $old['bomCompleted']);
         $pieces = $complete && $mode === 'product' ? json_decode($old['pieces'], true) : ($data['pieces'] ?? []);
-        if (!is_array($pieces) || count($pieces) > 5 || ($mode === 'bom' && count($pieces) < 1)) { throw new InvalidArgumentException('Configure 1–5 pieces for BOM.'); }
+        if (!is_array($pieces) || count($pieces) > 255 || ($mode === 'bom' && count($pieces) < 1)) { throw new InvalidArgumentException('Configure between 1 and 255 pieces for BOM.'); }
+        if ($mode === 'bom' && count($pieces) !== count($expectedPatternItemIds)) { throw new InvalidArgumentException('The piece rows must match the selected pattern.'); }
         $itemLookup = $db->prepare('SELECT id, name, itemType FROM itemList WHERE id = ?');
         $pieceItemLookup = $db->prepare('SELECT id FROM pieceItemList WHERE id = ?');
         $workLookup = $db->prepare('SELECT id FROM additionalWork WHERE id = ?');
@@ -203,6 +233,14 @@ function productRecords(string $mode): void
             unset($piece['legacyItemId'], $piece['itemName']);
         }
         unset($piece);
+        if ($mode === 'bom') {
+            $submittedPatternItemIds = array_map(static function ($piece) {
+                return (int) $piece['pieceItemId'];
+            }, $normalized);
+            if ($submittedPatternItemIds !== $expectedPatternItemIds) {
+                throw new InvalidArgumentException('The piece rows must match the selected pattern in order.');
+            }
+        }
         $values = [$brand, $design, $data['colourId'], $pattern, $mrp, $newPhoto ?: ($old['photo'] ?? null), json_encode($normalized), max(1, count($normalized)), $complete ? 1 : 0];
         if ($old) {
             $query = $db->prepare('UPDATE productRecords SET brand=?, designNumber=?, colourId=?, pattern=?, mrp=?, photo=?, pieces=?, pieceCount=?, bomCompleted=? WHERE id=?');
