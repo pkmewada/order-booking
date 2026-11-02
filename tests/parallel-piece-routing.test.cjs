@@ -10,6 +10,7 @@ class MemoryStorage {
     setItem(key, value) { this.data.set(key, String(value)); }
     removeItem(key) { this.data.delete(key); }
 }
+// package
 
 test('Pant, Shirt and Jacket fan out and unlock Stitching independently per piece', async () => {
     const itemNames = ['Pant', 'Shirt', 'Jacket'];
