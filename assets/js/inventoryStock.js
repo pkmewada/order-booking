@@ -3,6 +3,14 @@ $(document).ready(async function () {
     const P=Production, stages=['Cutting','Stitching','Ironing','Hand Work','Peco','Digital Print','Embroidery','Screen Print','Packing','Bundling'];
     const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const n=v=>Math.max(0,Number(v)||0), key=v=>String(v??'').trim().toLowerCase();
+    // Paired Cutting items (e.g. Cotton + Satin) make one garment piece:
+    // count the lowest passed item and the largest damaged item, never their sum.
+    function pieceQty(rows,field,mode){
+        const items=new Map();
+        rows.forEach(w=>{const id=String(w.componentId??'legacy');items.set(id,n(items.get(id))+n(w[field]));});
+        const values=[...items.values()];
+        return values.length?(mode==='max'?Math.max(...values):Math.min(...values)):0;
+    }
     function render() {
         try {
             const state=P.readState(), boms=JSON.parse(localStorage.getItem('bomMasterData')||'[]'), groups=new Map();
@@ -29,7 +37,7 @@ $(document).ready(async function () {
                 for(const stage of stages) {
                     const eligible=rows.filter(p=>(p.route||[]).some(r=>r.stage===stage)||p.stageBalances?.[stage]);
                     if(!eligible.length)continue;
-                    const values=eligible.map(p=>({input:n(p.stageBalances?.[stage]?.inputQty),passed:batchWorks.filter(w=>w.stage===stage&&String(w.poolId)===String(p.id)).reduce((sum,w)=>sum+n(w.passedQty),0)}));
+                    const values=eligible.map(p=>({input:n(p.stageBalances?.[stage]?.inputQty),passed:pieceQty(batchWorks.filter(w=>w.stage===stage&&String(w.poolId)===String(p.id)),'passedQty','min')}));
                     const t=g.stages[stage];t.used=true;
                     // Matching garment pieces form one quantity, even for 3/4/5-piece designs.
                     // Missing mandatory pieces have not yet received or passed this stage.
@@ -45,7 +53,8 @@ $(document).ready(async function () {
                 bundling.passed+=state.bundlingData.filter(r=>String(r.batchId)===id&&r.status==='passed').reduce((sum,r)=>sum+n(r.quantity),0);
                 // Production damage is recorded per piece: any damaged piece loses one garment.
                 // Packing updates are mirrored across every piece of a set, so count each lot once.
-                let damage=batchWorks.filter(w=>w.stage!=='Packing').reduce((sum,w)=>sum+n(w.damageQty??w.damage),0);
+                let damage=batchWorks.filter(w=>w.stage!=='Packing'&&w.stage!=='Cutting').reduce((sum,w)=>sum+n(w.damageQty??w.damage),0);
+                rows.forEach(p=>{damage+=pieceQty(batchWorks.filter(w=>w.stage==='Cutting'&&String(w.poolId)===String(p.id)).map(w=>({...w,damageQty:w.damageQty??w.damage})),'damageQty','max');});
                 const packing=new Map();
                 batchWorks.filter(w=>w.stage==='Packing').forEach(w=>{const lot=w.packingLotId||`legacy-${w.id}`;packing.set(lot,Math.max(n(packing.get(lot)),n(w.damageQty??w.damage)));});
                 damage+=[...packing.values()].reduce((a,b)=>a+b,0);

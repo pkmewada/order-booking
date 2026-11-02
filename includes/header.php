@@ -1019,17 +1019,12 @@
                                 </li>
 
                                 <li class="slide">
-                                    <a href="additional-work-manager" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
-                                        </svg>
-                                        <span class="side-menu__label">Add Work</span>
+                                    <a href="auto-pass" class="side-menu__item">
+                                        <i class="bx bx-fast-forward-circle side-menu__icon"></i>
+                                        <span class="side-menu__label">Auto Pass</span>
                                     </a>
                                 </li>
 
-                
                                 <li class="slide">
                                     <a href="cutting-manager" class="side-menu__item">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
@@ -1042,6 +1037,17 @@
                                             <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
                                         </svg>
                                         <span class="side-menu__label">Cutting</span>
+                                    </a>
+                                </li>
+
+                                <li class="slide">
+                                    <a href="additional-work-manager" class="side-menu__item">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
+                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+                                        </svg>
+                                        <span class="side-menu__label">Add Work</span>
                                     </a>
                                 </li>
 
@@ -1098,18 +1104,12 @@
                                 </li>
 
                                 <li class="slide">
-                                    <a href="inventory" class="side-menu__item">
-                                        <i class="bx bx-archive side-menu__icon"></i>
-                                        <span class="side-menu__label">Inventory</span>
-                                    </a>
-                                </li>
-
-                                 <li class="slide">
                                     <a href="damageRepair.php" class="side-menu__item">
                                         <i class="bx bx-wrench side-menu__icon"></i>
                                         <span class="side-menu__label">Damage</span>
                                     </a>
                                 </li>
+
                                 <li class="slide">
                                     <a href="requirment" class="side-menu__item">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
@@ -1123,7 +1123,13 @@
                                         <span class="side-menu__label">Requirment</span>
                                     </a>
                                 </li>
-                                
+
+                                <li class="slide">
+                                    <a href="inventory" class="side-menu__item">
+                                        <i class="bx bx-archive side-menu__icon"></i>
+                                        <span class="side-menu__label">Inventory</span>
+                                    </a>
+                                </li>
                             </ul>
                         </li>
 

@@ -123,7 +123,19 @@ Stage inputs are cumulative actual receipts. Each pass credits exactly its delta
 
 `currentStage` indicates the furthest entered route step. A late upstream receipt never moves this pointer backward. Managers display projections of balances from the same pool; these projections are not extra stored pool records. History is audit-only, not the primary quantity source.
 
-For the Cutting-to-Stitching parallel group, every pass from Cutting adds the passed delta to every selected branch balance. Stitching has no received balance while any branch remains incomplete. It becomes available only after each branch's cumulative passed quantity reaches the full Cutting input quantity. The final branch pass writes the one-time `stitchingReleased` marker, credits Stitching once with the full batch quantity, and records a convergence audit entry. The assignment API also checks this gate, so a stale or forged UI request cannot assign Stitching early. Its availability view shows the missing branch names and A–E labels. A pool's route snapshot is preserved across BOM edits and legacy migration.
+For the Cutting-to-Stitching parallel group, every pass from Cutting adds the passed (good, paired) delta to each branch's own route balance (`routeBalances[routeIndex]`). A branch can assign and pass only what it actually received: 1000 cut with 200 damaged sends 800 to every branch. Stitching receives the minimum good quantity passed by all branches (never more than a branch received), progressively: Embroidery 750 passed and the other branches 800 releases 750; repairing Embroidery's 50 releases the remaining 50. Each garment piece converges on its own, so one piece never waits for another. The assignment API checks Stitching's received balance, and its availability view lists the branches still holding pieces back with A–E labels. A pool's route snapshot is preserved across BOM edits and legacy migration.
+
+Sequential steps use the same rule: Ironing, and any work after Stitching or Ironing, receive only what the previous step passed. Older saved assignments that exceed a step's exact receipt stay loadable, but no new quantity can be assigned there and the next stage is still limited by the true receipt.
+
+## Paired Cutting items and damage
+
+A piece's Cutting items (for example Cotton + Satin) cut in the same split are one garment. Damage on one item applies the same quantity to the others: 1000 Cotton + 1000 Satin with 200 Cotton damaged records 200 Satin damage too, leaving 800 garments. Damage page shows one entry; Reassign sends all paired items back to Cutting together as one repair split. Recovery is paired the same way. The Cutting manager and Auto Pass both pass the lowest ready item quantity for every item of the piece.
+
+Damage Reassign always returns the quantity to the stage, route step and branch where it was damaged (Packing repairs stay one multi-piece set lot).
+
+## Auto Pass and Inventory pages
+
+Auto Pass (`auto-pass`, below Production) is the design-wise production table with Assign and Pass actions for every stage. Inventory (last menu item) is the same table without actions; hovering a stage shows assignment details.
 
 ## Pass and edit
 
@@ -160,7 +172,7 @@ No `localStorage.clear()` is used. No production records are deleted to make tot
 Run from `order-booking`:
 
 ```sh
-node --test tests/production-engine.test.cjs
+node --test tests/*.cjs
 node tests/browser-production.cjs
 ```
 

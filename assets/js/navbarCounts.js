@@ -40,14 +40,15 @@
             'damage-repair': {total: P.damageRepairs().length},
             requirment: {total: unique(s.requirementData.filter(r => r.status !== 'completed'), r => JSON.stringify([r.batchId || r.designNumber, r.pieceNumber ?? r.pieceId ?? r.id]))},
             'final-production': {total: s.inventoryData.length},
-            inventory: {total: unique([...s.inventoryData, ...s.approvedPool], inventoryKey)}
+            inventory: {total: unique([...s.inventoryData, ...s.approvedPool], inventoryKey)},
+            'auto-pass': {total: unique(s.approvedPool, inventoryKey)}
         });
         return result;
     }
     function start() {
         const links = [];
         const read = key => { const rows = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(rows) ? rows : []; };
-        const names = new Set([...Object.keys(routes),'packing','bundling','batch','batch-approval','damage-repair','requirment','final-production','inventory']);
+        const names = new Set([...Object.keys(routes),'packing','bundling','batch','batch-approval','damage-repair','requirment','final-production','inventory','auto-pass']);
         document.querySelectorAll('a.side-menu__item[href]').forEach(link => {
             const route = link.getAttribute('href').split(/[?#]/)[0].split('/').pop().replace(/\.php$/i, '').toLowerCase();
             if (!names.has(route)) return;

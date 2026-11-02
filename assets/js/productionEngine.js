@@ -368,12 +368,76 @@
             return p;
         }
         function stageInput(p, stage) { return Number(p.stageBalances?.[stage]?.inputQty) || 0; }
+        function storedBranchInput(p, groupId, stage) {
+            const balances = p.branchBalances?.[groupId];
+            if (!balances) return undefined;
+            const match = Object.keys(balances).find(name => sameStage(name, stage));
+            return match === undefined ? undefined : Number(balances[match]?.inputQty) || 0;
+        }
+        // Receipts recorded before per-route balances existed. Parallel branches
+        // used branchBalances; sequential works used the shared stage balance.
+        function legacyRouteInput(p, index) {
+            const route = p.route[index];
+            if (!route) return 0;
+            if (route.type !== "additional_work") return stageInput(p, route.stage);
+            const occurrences = p.route.filter(step => step.type === "additional_work" && sameStage(step.stage, route.stage));
+            if (route.parallelGroup) {
+                const count = occurrences.filter(step => step.parallelGroup === route.parallelGroup).length || 1;
+                const stored = storedBranchInput(p, route.parallelGroup, route.stage);
+                return Math.floor((stored === undefined ? stageInput(p, route.stage) : stored) / count);
+            }
+            const parallelPortion = Object.keys(p.branchBalances || {})
+                .reduce((total, groupId) => total + (storedBranchInput(p, groupId, route.stage) || 0), 0);
+            const count = occurrences.filter(step => !step.parallelGroup).length || 1;
+            return Math.max(0, Math.floor((stageInput(p, route.stage) - parallelPortion) / count));
+        }
+        // Quantity actually received by one route step. Additional works keep a
+        // balance per route position, so repeated work names and damage upstream
+        // never inflate what a step may assign or pass.
         function routeInput(p, route, index = p.route.indexOf(route)) {
+            if (route?.type !== "additional_work") return route ? stageInput(p, route.stage) : 0;
+            const stored = p.routeBalances?.[index]?.inputQty;
+            return stored === undefined ? legacyRouteInput(p, index) : Number(stored) || 0;
+        }
+        // The pre-fix limit, used only so already-saved over-assignments stay readable.
+        function legacyRouteLimit(p, route, index) {
             if (route.parallelGroup) {
                 const group = Object.values(parallelGroups).find(item => item.id === route.parallelGroup);
                 return group ? stageInput(p, group.from) : stageInput(p, route.stage);
             }
             return index > 0 ? stageInput(p, p.route[index - 1].stage) : stageInput(p, route.stage);
+        }
+        function ensureRouteBalances(p) {
+            p.routeBalances ||= {};
+            p.route.forEach((route, index) => {
+                if (route.type === "additional_work" && p.routeBalances[index] === undefined)
+                    p.routeBalances[index] = { inputQty: legacyRouteInput(p, index) };
+            });
+        }
+        function creditRoute(p, index, qty) {
+            const route = p.route[index];
+            ensureRouteBalances(p);
+            if (route.type === "additional_work") p.routeBalances[index].inputQty += qty;
+            const balance = p.stageBalances[route.stage] ||= { inputQty: 0 };
+            balance.inputQty += qty; // Receipts are deltas; never overwrite an earlier unconsumed receipt.
+        }
+        function workRouteOrder(p, work) {
+            return Number.isInteger(work.routeOrder) ? work.routeOrder :
+                p.route.findIndex(route => sameStage(route.stage, work.stage) && (!work.branch || route.branch === work.branch));
+        }
+        function routePassed(s, p, index) {
+            const route = p.route[index], key = managerKeyForStage(route.stage);
+            return (s[key] || []).filter(work => same(work.poolId, p.id) &&
+                (key !== "additionalWorkData" || sameStage(work.stage, route.stage)) && workRouteOrder(p, work) === index)
+                .reduce((total, work) => total + Number(work.passedQty || 0), 0);
+        }
+        // A garment piece can leave a parallel group only as far as its slowest
+        // branch: the target stage receives the minimum good quantity passed by
+        // every branch (never more than that branch received).
+        function groupReleaseQty(s, p, groupId) {
+            const indexes = p.route.map((route, index) => route.parallelGroup === groupId ? index : -1).filter(index => index >= 0);
+            if (!indexes.length) return null;
+            return Math.min(...indexes.map(index => Math.min(routePassed(s, p, index), routeInput(p, p.route[index], index))));
         }
         function setCurrentStage(p, route) {
             p.currentStage = { ...copy(route), routeIndex: p.route.indexOf(route) };
@@ -387,39 +451,33 @@
             return p.route.find((route, index) => index >= start && sameStage(route.stage, stage)) || p.route.find(route => sameStage(route.stage, stage));
         }
         function branchesReleased(s, p, groupId) {
-            const branches = (p.route || []).filter(route => route.parallelGroup === groupId);
-            if (!branches.length) return true;
-            const group = Object.values(parallelGroups).find(item => item.id === groupId);
-            const sourceQty = stageInput(p, group.from);
-            if (sourceQty <= 0) return false;
-            const branchStages = [...new Set(branches.map(route => route.stage))];
-            return branchStages.every(stage => {
-                const required = sourceQty * branches.filter(route => route.stage === stage).length;
-                const key = managerKeyForStage(stage);
-                const storedInput = p.branchBalances?.[groupId]?.[stage]?.inputQty;
-                const groupInput = storedInput === undefined ? (groupId === "cutting-to-stitching" ? stageInput(p, stage) : 0) : Number(storedInput);
-                const rows = (s[key] || []).filter(work => same(work.poolId, p.id) &&
-                    (key !== "additionalWorkData" || sameStage(work.stage, stage)) &&
-                    (work.parallelGroup === groupId || (groupId === "cutting-to-stitching" && !work.parallelGroup)));
-                const passed = rows.reduce((sum, work) => sum + Number(work.passedQty || 0), 0);
-                return (Number.isFinite(groupInput) ? groupInput : 0) >= required && passed >= required;
-            });
+            const release = groupReleaseQty(s, p, groupId);
+            return release === null || release > 0;
         }
         function stageEnabled(s, p, stage) {
             const group = Object.values(parallelGroups).find(item => item.to === stage);
-            return !group || branchesReleased(s, p, group.id);
+            return !group || branchesReleased(s, p, group.id) || stageInput(p, stage) > 0;
+        }
+        function waitingBranches(s, p, groupId) {
+            const branches = p.route.map((route, index) => ({ route, index })).filter(({ route }) => route.parallelGroup === groupId);
+            const release = groupReleaseQty(s, p, groupId) || 0;
+            const waiting = branches.filter(({ route, index }) => {
+                const received = routeInput(p, route, index);
+                return Math.min(routePassed(s, p, index), received) <= release && received > release;
+            });
+            return [...new Set(waiting.map(({ route }) => route.stage))].map(stage =>
+                `${stage} (${waiting.filter(({ route }) => route.stage === stage).map(({ route, index }) => `${routeInput(p, route, index)} ${route.branch}`).join(" + ")})`);
         }
         function reconcileConvergence(s, p) {
             for (const group of Object.values(parallelGroups)) {
-                const branches = (p.route || []).filter(route => route.parallelGroup === group.id);
-                if (!branches.length || !branchesReleased(s, p, group.id)) continue;
-                const quantity = stageInput(p, group.from);
-                const alreadyReleased = stageInput(p, group.to) >= quantity;
+                const release = groupReleaseQty(s, p, group.id);
+                if (!release || release <= stageInput(p, group.to)) continue;
+                const before = stageInput(p, group.to);
                 p.stageBalances[group.to] ||= { inputQty: 0 };
-                p.stageBalances[group.to].inputQty = Math.max(stageInput(p, group.to), quantity);
+                p.stageBalances[group.to].inputQty = release;
                 if (group.id === "cutting-to-stitching") p.stitchingReleased = true;
-                if (!alreadyReleased) (p.stageHistory ||= []).push({ fromStage: "Additional Work", toStage: group.to,
-                    toType: group.to.toLowerCase(), qty: quantity, action: "converged_reconciled", at: time() });
+                (p.stageHistory ||= []).push({ fromStage: "Additional Work", toStage: group.to,
+                    toType: group.to.toLowerCase(), qty: release - before, action: "converged_reconciled", at: time() });
             }
         }
         function calculateAvailableQty(p, rows, stage, excludeId, componentId, routeOrder, inputQty) {
@@ -482,7 +540,9 @@
                                     (Number.isInteger(work.routeOrder) ? work.routeOrder : p.route.findIndex(step => sameStage(step.stage, workStage))) === routeOrder);
                                 rows.forEach(validateWork);
                                 const assigned = rows.reduce((n, work) => n + work.assignedQty, 0);
-                                const inputQty = route ? routeInput(p, route, routeOrder) : stageInput(p, workStage);
+                                // New assignments are limited by the exact route receipt (calculateAvailableQty);
+                                // the legacy limit only keeps older saved over-assignments loadable.
+                                const inputQty = route ? Math.max(routeInput(p, route, routeOrder), legacyRouteLimit(p, route, routeOrder)) : stageInput(p, workStage);
                                 if (assigned > inputQty) throw new Error(`${p.batchId} / ${workStage}: assigned ${assigned} exceeds stage input ${inputQty}.`);
                             }
                         }
@@ -555,21 +615,19 @@
             }
             const s = readState(), stage = managers[key];
             if (key === "additionalWorkData") {
+                // Every route step with unassigned received pieces stays visible, so a late
+                // upstream pass is never hidden behind the furthest-stage pointer.
                 const pool = s.approvedPool.flatMap(p => {
                     const currentIndex = Number.isInteger(p.currentStage?.routeIndex) ? p.currentStage.routeIndex :
-                        p.route.findIndex(route => sameStage(route.stage, p.currentStage?.stage) &&
-                            (!p.currentStage?.parallelGroup || route.parallelGroup === p.currentStage.parallelGroup));
-                    const currentStep = p.route[currentIndex];
+                        p.route.findIndex(route => sameStage(route.stage, p.currentStage?.stage));
                     return (p.route || [])
-                    .filter(route => route.type === "additional_work" &&
-                        (route.parallelGroup
-                            ? route.parallelGroup === currentStep?.parallelGroup
-                            : p.route.indexOf(route) === currentIndex))
-                    .filter(route => stageEnabled(s, p, route.stage))
+                    .filter(route => route.type === "additional_work")
                     .map(route => {
                         const routeIndex = p.route.indexOf(route);
                         const received = routeInput(p, route, routeIndex);
                         if (received <= 0) return null;
+                        const rows = s[key].filter(work => sameStage(work.stage, route.stage) && workRouteOrder(p, work) === routeIndex);
+                        if (routeIndex !== currentIndex && calculateAvailableQty(p, rows, route.stage, undefined, undefined, routeIndex, received) <= 0) return null;
                         return { ...p, quantity: received, currentStage: { ...copy(route), routeIndex },
                             stageEnabled: true, workType: route.stage,
                             branch: route.branch || null,
@@ -582,26 +640,10 @@
                 Object.values(parallelGroups).some(group => group.id === route.parallelGroup && group.to === stage))).map(p => {
                 const ready = stageEnabled(s, p, stage);
                 const targetGroup = Object.values(parallelGroups).find(group => group.to === stage);
-                const waitingBranches = targetGroup ? p.route.filter(route => route.parallelGroup === targetGroup.id) : [];
                 const activeStep = activeRouteStep(p, stage);
-                const activeRouteIndex = activeStep ? p.route.indexOf(activeStep) : -1;
-                const stageBranches = activeStep?.parallelGroup ? p.route.filter(route => route.stage === stage && route.parallelGroup === activeStep.parallelGroup) : [];
-                const activeRouteInput = activeStep?.parallelGroup ? p.branchBalances?.[activeStep.parallelGroup]?.[stage]?.inputQty :
-                    activeStep?.type === "additional_work" && activeRouteIndex > 0 ? stageInput(p, p.route[activeRouteIndex - 1].stage) : undefined;
-                const view = { ...p, quantity: activeRouteInput === undefined ? stageInput(p, stage) : Number(activeRouteInput), currentStage: activeStep, stageEnabled: ready,
-                    branch: stageBranches.map(route => route.branch).join("/") || null,
-                    branchQuantityLabel: stageBranches.map(route => `${stageInput(p, Object.values(parallelGroups).find(group => group.id === route.parallelGroup)?.from || "Cutting")} ${route.branch}`).join(" + ") || null,
-                    waitingForAdditionalWorks: targetGroup && !ready ? [...new Set(waitingBranches.map(route => route.stage))].filter(branchStage => {
-                        const branchKey = managerKeyForStage(branchStage);
-                        const required = stageInput(p, targetGroup.from) * waitingBranches.filter(route => route.stage === branchStage).length;
-                        return (s[branchKey] || []).filter(work => same(work.poolId, p.id) &&
-                            (branchKey !== "additionalWorkData" || canonicalStageName(work.stage) === canonicalStageName(branchStage)) &&
-                            (work.parallelGroup === targetGroup.id || (targetGroup.id === "cutting-to-stitching" && !work.parallelGroup)))
-                            .reduce((sum, work) => sum + Number(work.passedQty || 0), 0) < required;
-                    }).map(branchStage => {
-                        const branches = waitingBranches.filter(route => route.stage === branchStage);
-                        return `${branchStage} (${branches.map(route => `${stageInput(p, targetGroup.from)} ${route.branch}`).join(" + ")})`;
-                    }) : [] };
+                const view = { ...p, quantity: stageInput(p, stage), currentStage: activeStep, stageEnabled: ready,
+                    branch: null, branchQuantityLabel: null,
+                    waitingForAdditionalWorks: targetGroup ? waitingBranches(s, p, targetGroup.id) : [] };
                 // Component/item-list routing belongs to Cutting only. Later
                 // managers receive and display the paired garment quantity.
                 if (key !== "cuttingData") delete view.cuttingComponents;
@@ -676,9 +718,8 @@
                     const component = key === "cuttingData" ? p.cuttingComponents?.find(item => same(item.id, request.componentId)) : null;
                     const componentSlug = component ? `-${String(component.name).replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}` : "";
                     const routeBranches = routeStep?.parallelGroup ? [routeStep] : [];
-                    const branchSource = routeBranches.length ? Object.values(parallelGroups).find(group => group.id === routeBranches[0].parallelGroup)?.from : null;
                     const branchSuffix = routeBranches.length ? `-${routeBranches.map(route => route.branch).join("-")}` : "";
-                    const branchLabel = routeBranches.length ? routeBranches.map(route => `${stageInput(p, branchSource)} ${route.branch}`).join(" + ") : null;
+                    const branchLabel = routeBranches.length ? routeBranches.map(route => `${routeQty} ${route.branch}`).join(" + ") : null;
                     const work = aliases({ ...request, id, poolId: p.id, batchId: p.batchId,
                         brand: p.brand, designNumber: p.designNumber, color: p.color, pieceNumber: p.pieceNumber,
                         pieceType: `Piece ${p.pieceNumber} (${p.pieceItem})`,
@@ -707,13 +748,72 @@
             if (legacyStage) requests = requests.map(request => ({ ...request, workType: request.workType || legacyStage }));
             return transaction(s => assignInState(s, key, requests));
         }
+        // Cutting item rows (e.g. Cotton + Satin) cut for the same garment split.
+        function cuttingSplitKey(work) {
+            return `${work.poolId}|${work.splitGroupId ?? ""}|${work.subBatch ?? ""}`;
+        }
+        function cuttingSiblings(s, work) {
+            const p = s.approvedPool.find(pool => same(pool.id, work.poolId));
+            if (!Array.isArray(p?.cuttingComponents) || work.componentId === undefined || work.componentId === null) return [work];
+            return s.cuttingData.filter(row => row.componentId !== undefined && row.componentId !== null && cuttingSplitKey(row) === cuttingSplitKey(work));
+        }
+        // A damaged Cutting item spoils that garment, so every other item of the
+        // same split loses the same quantity: 1000 Cotton + 1000 Satin with 200
+        // Cotton damaged makes 800 garments and 200 damaged Satin pieces as well.
+        function pairCuttingDamage(s, edited, before) {
+            const groups = new Map();
+            for (const work of edited) {
+                const siblings = cuttingSiblings(s, work);
+                if (siblings.length < 2) continue;
+                groups.set(cuttingSplitKey(work), siblings);
+            }
+            for (const rows of groups.values()) {
+                const byComponent = new Map();
+                rows.forEach(row => {
+                    const id = String(row.componentId);
+                    if (!byComponent.has(id)) byComponent.set(id, []);
+                    byComponent.get(id).push(row);
+                });
+                if (byComponent.size < 2) continue;
+                const delta = componentRows => componentRows.reduce((total, row) =>
+                    total + row.damageQty - (before.get(String(row.id))?.damageQty ?? row.damageQty), 0);
+                const target = Math.max(...[...byComponent.values()].map(delta));
+                if (target <= 0) continue;
+                for (const componentRows of byComponent.values()) {
+                    let need = target - delta(componentRows);
+                    for (const row of componentRows) {
+                        if (need <= 0) break;
+                        const amount = Math.min(need, row.inputQty - row.damageQty - row.passedQty);
+                        if (amount <= 0) continue;
+                        const old = before.get(String(row.id)) || copy(row);
+                        if (!before.has(String(row.id))) before.set(String(row.id), old);
+                        row.damageQty += amount;
+                        row.completedQty = Math.max(row.passedQty, Math.min(row.completedQty, row.inputQty - row.damageQty));
+                        need -= amount;
+                        validateWork(row); aliases(row);
+                        const p = getPool(s, row.poolId);
+                        syncRepair(s, p, row, "cuttingData");
+                        audit(p, { stage: row.stage, qty: amount, action: "damage", paired: true, sourceWorkId: row.id, before: old, after: copy(row) });
+                    }
+                }
+            }
+        }
         async function edit(key, requests) {
             key = normalizeManagerKey(key);
             if (new Set(requests.map(r => String(r.id))).size !== requests.length) throw new Error("Each assignment may appear only once in a bulk edit.");
-            return transaction(s => requests.map(request => {
+            return transaction(s => {
+                const before = new Map();
+                const edited = editInState(s, key, requests, before);
+                if (key === "cuttingData") pairCuttingDamage(s, edited, before);
+                return edited;
+            });
+        }
+        function editInState(s, key, requests, before) {
+            return requests.map(request => {
                 const work = s[key].find(w => same(w.id, request.id));
                 if (!work) throw new Error("Assignment no longer exists.");
                 const p = getPool(s, work.poolId), old = copy(work);
+                before.set(String(work.id), old);
                 if (key === 'packingData' && (work.packingClosed || (work.passedQty > 0 && work.passedQty === work.inputQty-work.damageQty))) throw new Error('Passed packing quantities are locked.');
                 if (key === 'packingData' && request.assignedQty !== undefined && request.assignedQty !== work.assignedQty) throw new Error('Packing lot quantity is fixed; update completion using Edit.');
                 if (key === "cuttingData" && Array.isArray(p.cuttingComponents) && request.assignedQty !== undefined && request.assignedQty !== work.assignedQty)
@@ -744,7 +844,7 @@
                     action: damageDelta !== 0 ? "damage" : completedDelta !== 0 ? "completed" : "edited", sourceWorkId: work.id,
                     before: old, after: copy(work) });
                 return work;
-            }));
+            });
         }
         function pushToPackingPool(s, p, work, qty, transitionId) {
             if (s.packingPool.some(r => r.transitionId === transitionId)) return;
@@ -782,41 +882,35 @@
             } else { work.passedQty += qty; aliases(work); }
             const nextGroup = next.parallelGroup;
             if (!from.parallelGroup && nextGroup) {
-                p.route.filter(route => route.parallelGroup === nextGroup).forEach(route => {
-                    const balance = p.stageBalances[route.stage] ||= { inputQty: 0 };
-                    balance.inputQty += receivedQty;
-                    const branchBalance = p.branchBalances ||= {};
-                    branchBalance[nextGroup] ||= {};
-                    branchBalance[nextGroup][route.stage] ||= { inputQty: 0 };
-                    branchBalance[nextGroup][route.stage].inputQty += receivedQty;
+                ensureRouteBalances(p);
+                p.route.forEach((route, routeIndex) => {
+                    if (route.parallelGroup !== nextGroup || receivedQty <= 0) return;
+                    creditRoute(p, routeIndex, receivedQty);
                     audit(p, { fromStage: from.stage, fromType: from.type, toStage: route.stage, toType: route.type,
                         qty: receivedQty, branch: route.branch, action: "branched", transitionId: `${transitionId}:${route.branch}`, sourceWorkId: work.id, sourceKey: key });
                 });
                 destination = p.route.find(route => route.parallelGroup === nextGroup);
             } else if (from.parallelGroup) {
                 const group = Object.values(parallelGroups).find(item => item.id === from.parallelGroup);
-                const completed = branchesReleased(s, p, from.parallelGroup);
-                if (completed) {
-                    const outputQty = stageInput(p, group.from);
+                const before = stageInput(p, group.to), release = groupReleaseQty(s, p, from.parallelGroup) || 0;
+                if (release > before) {
                     p.stageBalances[group.to] ||= { inputQty: 0 };
-                    p.stageBalances[group.to].inputQty = Math.max(stageInput(p, group.to), outputQty);
+                    p.stageBalances[group.to].inputQty = release;
                     if (group.id === "cutting-to-stitching") p.stitchingReleased = true;
-                    destination = p.route.find(route => route.stage === group.to);
-                    receivedQty = outputQty;
-                    setCurrentStage(p, destination);
-                    p.quantity = outputQty;
-                    audit(p, { fromStage: "Additional Work", toStage: group.to, toType: destination.type, qty: outputQty, action: "converged" });
+                    destination = p.route.find(route => route.stage === group.to && !route.parallelGroup);
+                    receivedQty = release - before;
+                    audit(p, { fromStage: "Additional Work", toStage: group.to, toType: destination.type, qty: receivedQty, action: "converged" });
                 } else {
-                    const groupRoutes = p.route.filter(route => route.parallelGroup === from.parallelGroup);
-                    destination = groupRoutes[0];
+                    destination = p.route.find(route => route.parallelGroup === from.parallelGroup);
                     receivedQty = 0;
                 }
-            } else {
-                const balance = p.stageBalances[next.stage] ||= { inputQty: 0 };
-                balance.inputQty += receivedQty; // Receipts are deltas; never overwrite an earlier unconsumed receipt.
+            } else if (receivedQty > 0) {
+                creditRoute(p, fromIndex + 1, receivedQty);
             }
-            const currentIndex = p.route.findIndex(r => r.stage === p.currentStage?.stage);
-            if (receivedQty > 0 && index + 1 >= currentIndex && !from.parallelGroup) { setCurrentStage(p, destination); p.quantity = receivedQty; }
+            const currentIndex = Number.isInteger(p.currentStage?.routeIndex) ? p.currentStage.routeIndex :
+                p.route.findIndex(r => sameStage(r.stage, p.currentStage?.stage));
+            // The pointer only moves forward; late upstream receipts never move it back.
+            if (receivedQty > 0 && destination && p.route.indexOf(destination) > currentIndex) { setCurrentStage(p, destination); p.quantity = receivedQty; }
             audit(p, { fromStage: from.stage, fromType: from.type, toStage: destination?.stage || null,
                 toType: from.parallelGroup && receivedQty === 0 ? "waiting_for_convergence" : destination?.type,
                 qty: receivedQty, componentQty: qty, action: "passed", transitionId, sourceWorkId: work.id, sourceKey: key });
@@ -910,10 +1004,27 @@
                 syncRepair(s, p, work, key);
                 const repair = s.repairData.find(r => r.sourceKey === key && same(r.sourceWorkId, id));
                 if (!repair || qty <= 0 || qty > work.damageQty) throw new Error("Recovery exceeds outstanding damage.");
-                work.damageQty -= qty; validateWork(work); aliases(work);
-                repair.recoveredQty = (repair.recoveredQty || 0) + qty; repair.damageQty = work.damageQty;
-                repair.status = work.damageQty ? "pending_repair" : "recovered";
-                audit(p, { stage: work.stage, qty, action: "recovered", sourceWorkId: id });
+                const recover = (row, amount) => {
+                    const rowRepair = row === work ? repair : (syncRepair(s, p, row, key), s.repairData.find(r => r.sourceKey === key && same(r.sourceWorkId, row.id)));
+                    row.damageQty -= amount; validateWork(row); aliases(row);
+                    rowRepair.recoveredQty = (rowRepair.recoveredQty || 0) + amount; rowRepair.damageQty = row.damageQty;
+                    rowRepair.status = row.damageQty ? "pending_repair" : "recovered";
+                    audit(p, { stage: row.stage, qty: amount, action: "recovered", sourceWorkId: row.id });
+                };
+                recover(work, qty);
+                // Paired Cutting items recover together, keeping one garment count.
+                if (key === "cuttingData") {
+                    const others = new Map();
+                    cuttingSiblings(s, work).filter(row => !same(row.componentId, work.componentId)).forEach(row => {
+                        const componentId = String(row.componentId);
+                        if (!others.has(componentId)) others.set(componentId, []);
+                        others.get(componentId).push(row);
+                    });
+                    others.forEach(rows => {
+                        let left = qty;
+                        rows.forEach(row => { const amount = Math.min(left, row.damageQty); if (amount > 0) { recover(row, amount); left -= amount; } });
+                    });
+                }
                 return work;
             });
         }
@@ -924,10 +1035,15 @@
                 if (w.damageQty <= 0) continue;
                 const lotId = w.packingLotId || `legacy-${w.id}`;
                 if (key === 'packingData' && result.some(r => r.sourceKey === key && r.packingLotId === lotId)) continue;
-                const rows = key === 'packingData' ? s[key].filter(r => (r.packingLotId || `legacy-${r.id}`) === lotId) : [w];
+                const siblings = key === 'cuttingData' ? cuttingSiblings(s, w).filter(r => r.damageQty > 0) : [w];
+                if (key === 'cuttingData' && result.some(r => r.sourceKey === key && r.splitKey === cuttingSplitKey(w) && siblings.length > 1)) continue;
+                const rows = key === 'packingData' ? s[key].filter(r => (r.packingLotId || `legacy-${r.id}`) === lotId) : siblings;
+                const items = key === 'cuttingData' && siblings.length > 1 ? `: ${siblings.map(r => `${r.itemName || 'Item'} ${r.damageQty}`).join(', ')}` : '';
                 result.push({...copy(w), stage, sourceKey:key, sourceWorkId:w.id,
                     packingLotId:key === 'packingData' ? lotId : undefined,
-                    pieces:rows.map(r => r.pieceType || `Piece ${r.pieceNumber}`).join(', '),
+                    splitKey:key === 'cuttingData' ? cuttingSplitKey(w) : undefined,
+                    damageQty:Math.max(...rows.map(r => r.damageQty)),
+                    pieces:key === 'cuttingData' ? `${w.pieceType || `Piece ${w.pieceNumber}`}${items}` : rows.map(r => r.pieceType || `Piece ${r.pieceNumber}`).join(', '),
                     worker:w.worker || w.firm || '-', unit:key === 'packingData' ? 'sets' : 'pcs'});
             }
             return result;
@@ -939,29 +1055,33 @@
                 const source = s[key].find(w => same(w.id,id));
                 if (!source || source.damageQty <= 0) throw new Error('This damage has already been reassigned.');
                 const lotId = source.packingLotId || `legacy-${source.id}`;
-                const rows = key === 'packingData' ? s[key].filter(w => (w.packingLotId || `legacy-${w.id}`) === lotId) : [source];
+                // Packing lots and paired Cutting items are repaired together and
+                // return to the exact stage, route step and branch where the damage happened.
+                const rows = key === 'packingData' ? s[key].filter(w => (w.packingLotId || `legacy-${w.id}`) === lotId) :
+                    key === 'cuttingData' ? cuttingSiblings(s, source).filter(w => w.damageQty > 0) : [source];
                 const qty = source.damageQty;
-                if (rows.some(w => w.damageQty !== qty)) throw new Error('Packing damage quantities do not match.');
+                if (key === 'packingData' && rows.some(w => w.damageQty !== qty)) throw new Error('Packing damage quantities do not match.');
                 let nextId = Math.max(0,...s[key].map(w => Number(w.id) || 0)) + 1;
-                const newLotId = `${lotId}-repair-${nextId}`;
+                const repairTag = `R${nextId}`, newLotId = `${lotId}-repair-${nextId}`;
                 for (const w of rows) {
-                    const p = getPool(s,w.poolId), before = copy(w);
+                    const p = getPool(s,w.poolId), before = copy(w), rowQty = w.damageQty;
                     syncRepair(s,p,w,key);
                     w.damageQty = 0;
-                    w.inputQty -= qty; w.assignedQty -= qty;
+                    w.inputQty -= rowQty; w.assignedQty -= rowQty;
                     const repairWork = aliases({...copy(before), id:nextId++,
                         ...(key === 'packingData' ? { packingLotId:newLotId } : {}),
-                        subBatch:`${before.subBatch || before.id}-repair`,
-                        ...(before.splitGroupId ? { splitGroupId:`${before.splitGroupId}-repair` } : {}),
-                        inputQty:qty, assignedQty:qty, completedQty:0, damageQty:0, passedQty:0,
+                        subBatch:`${before.subBatch || before.id}-${repairTag}`,
+                        ...(before.splitGroupId ? { splitGroupId:`${before.splitGroupId}-${repairTag}` } : {}),
+                        repairOf:before.id,
+                        inputQty:rowQty, assignedQty:rowQty, completedQty:0, damageQty:0, passedQty:0,
                         packingClosed:false, stopped:false, createdAt:time()});
                     delete repairWork.passedAt;
                     s[key].push(repairWork);
                     validateWork(w); aliases(w);
                     const repair = s.repairData.find(r => r.sourceKey === key && same(r.sourceWorkId,w.id));
-                    repair.reassignedQty = (repair.reassignedQty || 0) + qty;
+                    repair.reassignedQty = (repair.reassignedQty || 0) + rowQty;
                     repair.damageQty = 0; repair.status = 'reassigned'; repair.updatedAt = time();
-                    audit(p,{stage:w.stage, qty, action:'damage reassigned', sourceKey:key, sourceWorkId:w.id, before, after:copy(w)});
+                    audit(p,{stage:w.stage, qty:rowQty, action:'damage reassigned', repairWorkId:repairWork.id, sourceKey:key, sourceWorkId:w.id, before, after:copy(w)});
                 }
                 return {qty, stage:source.stage, batchId:source.batchId};
             });

@@ -423,6 +423,26 @@
             await Swal.fire({ icon: 'info', title: 'Nothing to Pass', text: `No completed ${stage} assignments for ${batchId} are ready to pass.` });
             return false;
         }
+        if (key === 'cuttingData') {
+            // Same paired math as the Cutting manager: every cutting item of a
+            // piece passes the same garment quantity (the lowest ready item).
+            const poolIds = [...new Set(rows.map(row => String(row.poolId)))];
+            let passed = false;
+            for (const id of poolIds) {
+                const poolRows = (state.cuttingData || []).filter(row => String(row.poolId) === id);
+                const components = new Map();
+                poolRows.forEach(row => {
+                    const componentId = String(row.componentId ?? 'legacy');
+                    components.set(componentId, (components.get(componentId) || 0) + P.calculateProductionMath(row).passableQty);
+                });
+                const quantity = Math.min(...components.values());
+                if (quantity <= 0 || poolRows.some(row => row.stopped)) continue;
+                await P.passComponents(key, poolRows[0].poolId, [...components.keys()].map(componentId => ({ componentId, quantity })));
+                passed = true;
+            }
+            if (!passed) await Swal.fire({ icon: 'info', title: 'Nothing to Pass', text: `Every cutting item of a piece must be completed before ${batchId} can pass.` });
+            return passed;
+        }
         await P.pass(key, rows.map(row => row.id));
         return true;
     }

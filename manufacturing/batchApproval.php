@@ -1,6 +1,9 @@
 <?php require_once __DIR__ . '/../includes/header.php'; ?>
 
 <style>
+    /* ========================================= */
+    /* --- ORIGINAL CSS (UNCHANGED) --- */
+    /* ========================================= */
     #approvalModal .modal-dialog {
         max-width: 100%;
         width: 100%;
@@ -19,9 +22,10 @@
         padding: 16px 20px;
     }
 
+    /* Modified Grid for spacing */
     .batch-top-row {
         display: grid;
-        grid-template-columns: 25% 25% 50%;
+        grid-template-columns: 20% 23% 57%; /* Image space, Info space, Flow Chart space */
         gap: 12px;
         align-items: start;
         margin-bottom: 16px;
@@ -54,18 +58,19 @@
         object-fit: cover;
     }
 
+    /* Batch Info Compact */
     .batch-info-box {
         border: 1px solid #e2e7f1;
         border-radius: 8px;
-        padding: 12px 14px;
+        padding: 10px 12px; /* Reduced padding */
         height: 100%;
         overflow-y: auto;
     }
 
     .batch-info-box h6 {
-        margin-bottom: 10px;
+        margin-bottom: 8px;
         color: #18243d;
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 700;
     }
 
@@ -75,28 +80,30 @@
     }
 
     .batch-info-box .table th {
-        font-size: 13px;
+        font-size: 12px; /* Smaller font */
         width: 42%;
         vertical-align: middle;
-        padding: 8px 10px;
+        padding: 6px 8px; /* Reduced padding */
         font-weight: 600;
         color: #18243d;
     }
 
     .batch-info-box .table td {
-        font-size: 13px;
+        font-size: 12px; /* Smaller font */
         vertical-align: middle;
-        padding: 8px 10px;
+        padding: 6px 8px; /* Reduced padding */
         color: #333;
     }
 
+    /* Flow Box */
     .batch-flow-box {
         border: 1px solid #e2e7f1;
         border-radius: 8px;
         background: #fff;
         padding: 12px 14px;
         height: 100%;
-        overflow-y: auto;
+        overflow-x: auto; /* Allow horizontal scroll if really needed */
+        overflow-y: hidden;
     }
 
     .batch-flow-box h6 {
@@ -106,32 +113,81 @@
         font-weight: 700;
     }
 
-    #batchFlowChart>div {
-        margin-bottom: 10px !important;
+    /* ========================================= */
+    /* --- NEW CSS FOR FLOW CHART FIXES --- */
+    /* ========================================= */
+    
+    /* Remove blue/gray backgrounds inside flow chart */
+    #batchFlowChart div:not(.badge):not(.batch-flow-node),
+    #batchFlowChart [class*="bg-"],
+    #batchFlowChart [style*="background"] {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
     }
 
-    #batchFlowChart>div:last-child {
+    /* Force everything in one single line */
+    #batchFlowChart > div {
+        margin-bottom: 8px !important;
+    }
+    
+    #batchFlowChart > div:last-child {
         margin-bottom: 0 !important;
     }
 
-    #batchFlowChart .badge {
+    #batchFlowChart .batch-flow-track {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 4px !important;
+        font-size: 11px !important; 
+        line-height: 1.4 !important;
+        white-space: nowrap !important;
+        padding-bottom: 4px !important;
+    }
+
+    /* Make nodes and badges small */
+    #batchFlowChart .batch-flow-node,
+    #batchFlowChart .batch-flow-node strong,
+    #batchFlowChart .batch-flow-connector {
         font-size: 11px !important;
-        padding: 4px 9px !important;
+        padding: 0 !important;
+    }
+
+    #batchFlowChart .batch-flow-connector {
+        margin: 0 2px !important;
+    }
+    
+    #batchFlowChart .badge {
+        font-size: 9px !important;
+        padding: 2px 6px !important;
     }
 
     #batchFlowChart .fw-semibold {
-        font-size: 13px !important;
+        font-size: 11px !important;
     }
 
-    .batch-flow-track {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 5px;
-        font-size: 13px;
-        color: #18243d;
-        line-height: 1.6;
+    /* Flatten vertical lists (Parallel work) to horizontal */
+    #batchFlowChart ul {
+        display: inline-flex !important;
+        flex-wrap: nowrap !important;
+        gap: 6px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        list-style: none !important;
     }
+    
+    #batchFlowChart li {
+        margin: 0 !important;
+        padding: 0 !important;
+        font-size: 11px !important;
+        display: inline !important;
+    }
+
+    /* ========================================= */
+    /* --- REST OF THE ORIGINAL CSS --- */
+    /* ========================================= */
 
     .batch-flow-node {
         display: inline-flex;
@@ -162,7 +218,7 @@
     }
 
     .batch-flow-connector::before {
-        content: "â†’";
+        content: "→";
     }
 
     .piece-cards-grid {
@@ -224,7 +280,7 @@
         margin-top: 2px;
     }
 
-    /* ---------- Status badges (UNCHANGED â€” original style) ---------- */
+    /* ---------- Status badges ---------- */
     .status-badge {
         display: inline-block;
         padding: 4px 10px;
@@ -421,47 +477,45 @@
     }
 
     .approve-piece-btn,
-.btn-approve-piece {
-    background-color: #cbd5e1 !important;
-    border-color: #cbd5e1 !important;
-    color: #64748b !important;
-    font-weight: 500;
-    cursor: not-allowed;
-    opacity: 1;
-    box-shadow: none !important;
-}
+    .btn-approve-piece {
+        background-color: #cbd5e1 !important;
+        border-color: #cbd5e1 !important;
+        color: #64748b !important;
+        font-weight: 500;
+        cursor: not-allowed;
+        opacity: 1;
+        box-shadow: none !important;
+    }
 
-/* Keep same look on hover/focus (since disabled) */
-.approve-piece-btn:hover,
-.approve-piece-btn:focus,
-.approve-piece-btn:active,
-.btn-approve-piece:hover,
-.btn-approve-piece:focus,
-.btn-approve-piece:active {
-    background-color: #cbd5e1 !important;
-    border-color: #cbd5e1 !important;
-    color: #64748b !important;
-    box-shadow: none !important;
-}
+    .approve-piece-btn:hover,
+    .approve-piece-btn:focus,
+    .approve-piece-btn:active,
+    .btn-approve-piece:hover,
+    .btn-approve-piece:focus,
+    .btn-approve-piece:active {
+        background-color: #cbd5e1 !important;
+        border-color: #cbd5e1 !important;
+        color: #64748b !important;
+        box-shadow: none !important;
+    }
 
-/* When enabled (not disabled) â€” green approve style */
-.approve-piece-btn:not(:disabled),
-.btn-approve-piece:not(:disabled) {
-    background-color: #16a34a !important;
-    border-color: #16a34a !important;
-    color: #fff !important;
-    cursor: pointer;
-    box-shadow: none !important;
-}
+    .approve-piece-btn:not(:disabled),
+    .btn-approve-piece:not(:disabled) {
+        background-color: #16a34a !important;
+        border-color: #16a34a !important;
+        color: #fff !important;
+        cursor: pointer;
+        box-shadow: none !important;
+    }
 
-.approve-piece-btn:not(:disabled):hover,
-.approve-piece-btn:not(:disabled):focus,
-.btn-approve-piece:not(:disabled):hover,
-.btn-approve-piece:not(:disabled):focus {
-    background-color: #15803d !important;
-    border-color: #15803d !important;
-    color: #fff !important;
-}
+    .approve-piece-btn:not(:disabled):hover,
+    .approve-piece-btn:not(:disabled):focus,
+    .btn-approve-piece:not(:disabled):hover,
+    .btn-approve-piece:not(:disabled):focus {
+        background-color: #15803d !important;
+        border-color: #15803d !important;
+        color: #fff !important;
+    }
 
     .approve-all-btn:not(:disabled):hover {
         background-color: #157347 !important;
@@ -533,14 +587,12 @@
         border-bottom: none;
     }
 
-    /* ---------- Color TEXT (plain, no badge â€” only colour column changed) ---------- */
     .color-text {
         font-size: 13px;
         font-weight: 600;
         color: #18243d;
     }
 
-    /* ---------- Priority badge (UNCHANGED â€” same as batch.php) ---------- */
     .priority-badge {
         display: inline-block;
         padding: 4px 10px;
@@ -564,7 +616,6 @@
         color: #161617 !important;
     }
 
-    /* ---------- Action cell: one row, small ---------- */
     .action-cell {
         white-space: nowrap;
     }
@@ -638,6 +689,11 @@
         background: #f8f9fa !important;
         opacity: 0.9;
     }
+
+    
+
+
+
 </style>
 
 <div class="main-content app-content">
@@ -719,7 +775,17 @@
             </div>
             <div class="modal-body table-responsive">
                 <table class="table table-bordered text-nowrap align-middle w-100">
-                    <thead><tr><th>Batch ID</th><th>Brand</th><th>Design Number</th><th>Color</th><th>Pieces</th><th>Quantity</th><th>Passed At</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th>Batch ID</th>
+                            <th>Brand</th>
+                            <th>Design Number</th>
+                            <th>Color</th>
+                            <th>Pieces</th>
+                            <th>Quantity</th>
+                            <th>Passed At</th>
+                        </tr>
+                    </thead>
                     <tbody id="passedApprovalBatchTableBody"></tbody>
                 </table>
             </div>
@@ -782,9 +848,9 @@
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                     <h6 class="mb-0">Piece-wise Item Availability</h6>
                     <small class="text-muted" style="font-size:11px;">
-                        <b>Approve</b> = all items present â†’ Pass to Cutting |
-                        <b>Confirm</b> = partial â†’ Requirement (Pending) |
-                        <b>Pass</b> = partial â†’ Cutting + Requirement (In Progress)
+                        <b>Approve</b> = all items present Pass to Cutting |
+                        <b>Confirm</b> = partial Requirement (Pending) |
+                        <b>Pass</b> = partial Cutting Requirement (In Progress)
                     </small>
                 </div>
 

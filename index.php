@@ -27,6 +27,7 @@ $GLOBALS['routeParams'] = $params;
 // Check normal page
 
 $pageRoutes = [
+    'auto-pass' => 'manufacturing/autoPass.php',
     'batch' => 'manufacturing/batch.php',
     'batch-approval' => 'manufacturing/batchApproval.php',
     'bom-master' => 'manufacturing/bomMaster.php',

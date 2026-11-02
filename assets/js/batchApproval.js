@@ -290,7 +290,7 @@ $(document).ready(async function () {
                     while (i < nodes.length && nodes[i].parallelGroup === group) branches.push(nodes[i++]);
                     i--;
                     const branchGate = group === 'stitching-to-ironing' ? 'Stitching' : group === 'ironing-to-packing' ? 'Ironing' : 'Cutting';
-                    html += `<span class="batch-flow-connector" aria-hidden="true"></span><div class="border rounded bg-light p-2"><small class="d-block text-muted mb-1">Parallel work after ${branchGate}</small><div class="d-flex flex-column gap-1">${branches.map(branch => `<span class="batch-flow-node"><strong>${escapeHtml(branch.label)} (${escapeHtml(branch.branch)})</strong></span>`).join("")}</div></div>`;
+                    html += `<span class="batch-flow-connector" aria-hidden="true"></span><div class="border rounded bg-light p-2"><div class="d-flex flex-column gap-1">${branches.map(branch => `<span class="batch-flow-node"><strong>${escapeHtml(branch.label)} (${escapeHtml(branch.branch)})</strong></span>`).join("")}</div></div>`;
                     continue;
                 }
                 if (i > 0) html += `<span class="batch-flow-connector" aria-hidden="true"></span>`;

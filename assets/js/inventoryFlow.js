@@ -5,7 +5,9 @@ $(function () {
     const key = r => String(r.designNumber ?? '').trim().toLowerCase() || `batch:${r.batchId}`;
     const date = v => v ? esc(new Date(v).toLocaleString()) : '-';
     const sum = (rows, k) => rows.reduce((t, w) => t + n(w[k]), 0);
-    let active = null, signature = '', details = [], pinned = false, selectedDetail = null;
+    // Auto Pass loads InventoryActions; the Inventory page is view-only with hover details.
+    const actionsEnabled = typeof window.InventoryActions !== 'undefined';
+    let active = null, signature = '', details = [], pinned = false, selectedDetail = null, hideTimer;
     const modal = document.getElementById('stockFlowModal');
     const panel = document.createElement('div'); panel.className = 'stock-stage-popup'; panel.hidden = true; panel.id = 'stockStagePopup'; panel.setAttribute('role', 'region'); panel.setAttribute('aria-label', 'Stage assignment details'); modal.appendChild(panel);
     function updates(events) {
@@ -30,9 +32,9 @@ $(function () {
         const index = details.length, fullyPassed = input > 0 && passed > 0 && passed + damage >= input && !rows.some(w => w.stopped);
         const belongs = (h, w) => h.sourceWorkId != null && String(h.sourceWorkId) === String(w.id) && (h.sourceKey ? h.sourceKey === w.storageKey : (h.fromStage || h.stage) === w.stage);
         const general = events.filter(h => !rows.some(w => belongs(h, w)));
-        const actionState = action ? InventoryActions.getActionState(action.stage, action.batchId, action.poolId) : null;
+        const actionState = actionsEnabled && action ? InventoryActions.getActionState(action.stage, action.batchId, action.poolId) : null;
         const poolAttribute = action?.poolId ? `data-pool="${esc(action.poolId)}"` : '';
-        const actionButtons = action ? `<div class="stock-flow-actions"><button type="button" class="btn btn-sm stock-flow-action stock-flow-assign" data-action="assign" data-stage="${esc(action.stage)}" data-batch="${esc(action.batchId)}" ${poolAttribute} ${actionState.assign ? '' : 'disabled'}><i class="bx bx-user-plus me-1" aria-hidden="true"></i>Assign</button><button type="button" class="btn btn-sm stock-flow-action stock-flow-pass" data-action="pass" data-stage="${esc(action.stage)}" data-batch="${esc(action.batchId)}" ${poolAttribute} ${actionState.pass ? '' : 'disabled'}><i class="bx bx-check-circle me-1" aria-hidden="true"></i>Pass</button></div>` : '';
+        const actionButtons = actionsEnabled && action ? `<div class="stock-flow-actions"><button type="button" class="btn btn-sm stock-flow-action stock-flow-assign" data-action="assign" data-stage="${esc(action.stage)}" data-batch="${esc(action.batchId)}" ${poolAttribute} ${actionState.assign ? '' : 'disabled'}><i class="bx bx-user-plus me-1" aria-hidden="true"></i>Assign</button><button type="button" class="btn btn-sm stock-flow-action stock-flow-pass" data-action="pass" data-stage="${esc(action.stage)}" data-batch="${esc(action.batchId)}" ${poolAttribute} ${actionState.pass ? '' : 'disabled'}><i class="bx bx-check-circle me-1" aria-hidden="true"></i>Pass</button></div>` : '';
         details.push(`<div class="stock-popup-title"><strong>${esc(title)}</strong><button type="button" class="stock-popup-close" aria-label="Close details">&times;</button></div>${note ? `<p class="small">${esc(note)}</p>` : ''}<div class="stock-popup-totals">Received: <b>${input}</b> &middot; Assigned: <b>${assigned}</b><br>Completed: <b>${completed}</b> &middot; Passed: <b>${passed}</b><br><span class="stock-damage">Damage: ${damage}</span> &middot; To complete: <b>${Math.max(0, input - completed - damage)}</b>${updates(general)}</div>${rows.map(w => worker(w, events.filter(h => belongs(h, w)))).join('') || '<p class="small mt-3">No worker assigned yet.</p>'}`);
         const state = fullyPassed ? 'passed' : rows.length ? 'in-progress' : 'not-started';
         return `<div class="stock-stage-wrap"><button type="button" class="stock-stage-cell stock-stage-${state}" data-detail="${index}" data-stage="${esc(action?.stage || title.split(' - Piece ')[0])}" data-batch="${esc(action?.batchId || '')}" ${action?.poolId ? `data-pool="${esc(action.poolId)}"` : ''} aria-label="${esc(title)}: ${state}, assigned ${assigned}, passed ${passed}" aria-controls="stockStagePopup"><span class="stock-stage-quantities"><strong class="stock-qty-assigned">${assigned}</strong> <span aria-hidden="true">&rarr;</span> <strong class="stock-qty-passed">${passed}</strong></span>${damage ? `<small class="stock-damage">${damage} damage</small>` : ''}<small class="stock-cell-hint">${rows.length} assignment${rows.length === 1 ? '' : 's'}</small><span class="stock-stage-detail" aria-hidden="true"><i class="bx bx-show"></i></span></button>${actionButtons}</div>`;
@@ -78,7 +80,7 @@ $(function () {
             }).join('');
         }).join('');
         $('#stockFlowBody').html(`<p class="stock-table-guide">Stage quantities: <strong>Assigned &rarr; Passed</strong>. Damage is shown in red. Hover, focus or tap a stage for worker assignments, dates and progress. Bundling and inventory are combined garment quantities.</p><div class="stock-detail-scroll"><table class="stock-detail-table"><thead><tr>${['Brand', 'Design / Batch', 'Piece', 'Production', ...stages, 'Bundling', 'Inventory'].map(h => `<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="${stages.length + 6}">No piece records available.</td></tr>`}</tbody></table></div>`);
-        $('#stockFlowBody .stock-table-guide').text('Select a production stage to view its assignments and available actions. Damage is shown in red. Bundling and inventory are combined garment quantities.');
+        if (actionsEnabled) $('#stockFlowBody .stock-table-guide').text('Select a production stage to view its assignments and available actions. Damage is shown in red. Bundling and inventory are combined garment quantities.');
         if (previousDetail) {
             const cell = [...document.querySelectorAll('.stock-stage-cell')].find(item =>
                 item.dataset.batch === previousDetail.batch && item.dataset.stage === previousDetail.stage && (item.dataset.pool || '') === previousDetail.pool);
@@ -86,6 +88,7 @@ $(function () {
         }
     }
     function show(button, pin = false) {
+        clearTimeout(hideTimer);
         const cell = button.closest('.stock-stage-cell'), index = Number(cell.dataset.detail), html = details[index];
         if (!html) return;
         pinned = pin;
@@ -99,6 +102,13 @@ $(function () {
         panel.style.top = `${Math.max(10, Math.min(r.bottom + 6, window.innerHeight - height - 10))}px`;
     }
     $(document).on('click', '.stock-stage-cell', function () { show(this, true); });
+    if (!actionsEnabled) {
+        const hideSoon = () => { if (!pinned) hideTimer = setTimeout(() => { panel.hidden = true; }, 180); };
+        $(document).on('mouseenter focusin', '.stock-stage-cell', function () { if (!pinned) show(this); });
+        $(document).on('mouseleave focusout', '.stock-stage-cell', hideSoon);
+        panel.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+        panel.addEventListener('mouseleave', hideSoon);
+    }
     $(document).on('keydown', '.stock-stage-cell', function (event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); show(this, true); } });
     $(panel).on('click', '.stock-popup-close', () => { pinned = false; selectedDetail = null; panel.hidden = true; });
     $(document).on('keydown', e => { if (e.key === 'Escape') { pinned = false; panel.hidden = true; } });
