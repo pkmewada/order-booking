@@ -117,6 +117,8 @@
 </div></div></div>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
 
+<script src="assets/js/ordersApi.js?v=<?= filemtime(__DIR__ . '/../assets/js/ordersApi.js') ?>"></script>
+<script src="assets/js/orderImport.js?v=<?= filemtime(__DIR__ . '/../assets/js/orderImport.js') ?>"></script>
 <script src="assets/js/orderQuantities.js?v=<?= filemtime(__DIR__ . '/../assets/js/orderQuantities.js') ?>"></script>
 <script src="assets/js/dispatchFlow.js?v=<?= filemtime(__DIR__ . '/../assets/js/dispatchFlow.js') ?>"></script>
 <script src="assets/js/dispatch.js?v=<?= filemtime(__DIR__ . '/../assets/js/dispatch.js') ?>"></script>

@@ -23,13 +23,54 @@ Management pages load records from the database and maintain a localStorage comp
 
 - New installation: import `database/order-booking.sql` using phpMyAdmin. Creates the database and three tables with unique email indexes.
 - Fresh database setup uses only `database/order-booking.sql`; there is no separate migration file. Each table includes the phone constraint and unique email index.
+- Order tables (SAP Phase 1): run `php cli/orders-admin.php migrate` once per database, also after a fresh import. It is safe to run twice and verifies the schema before the order APIs work.
 - Configure connection defaults in `includes/db.php`, or use its DB environment variables. XAMPP defaults: `127.0.0.1:3306`, `root`, blank password.
 
 ## Remaining order booking flow
 
 Master selection → customer creation → product creation/BOM import → order punch with customer/items/sets → active order list → passed order summary → dispatch with item details → each partial dispatch pass creates a separate delivery → delivery In Progress → Pass with PDF upload → that delivery Success and PDF available for download.
 
-Customer records now use the database through `api/customer.php`. Products and BOM records now share database persistence. Orders, dispatch and delivery metadata still use existing browser storage. Delivery PDF files use IndexedDB. Orders/dispatch/delivery do not yet have database APIs/tables. The three master management pages refresh their cached dropdown records for the current browser.
+Customer records now use the database through `api/customer.php`. Products and BOM records now share database persistence. The three master management pages refresh their cached dropdown records for the current browser.
+
+Since SAP Phase 1 (2026-11-12, branch `sap_integration`), orders, dispatch and delivery are stored in MySQL, and delivery PDFs in private server storage. See the next section.
+
+## Orders, dispatch and delivery database flow (SAP Phase 1)
+
+Page → `assets/js/ordersApi.js` → `api/orders.php` / `api/delivery-pdf.php` → `api/order-records.php` (all rules and validation) → MySQL in one transaction → JSON in the same order shape the pages used in localStorage. `orderQuantities.js` and `dispatchFlow.js` are unchanged and are used for display only; the PHP rules mirror them (parity test).
+
+**Access:** there is no login yet. These APIs return **401** unless the explicit local-development switch is set (`APP_ENV=development` and `ORDERS_ALLOW_UNAUTHENTICATED_DEV=1`, which only `npm run dev` sets). Production fails closed. Login, session security, API authorization and CSRF protection are required before live deployment.
+
+**Readiness:** the APIs return **503** until `php cli/orders-admin.php migrate` has verified the schema and recorded `cli/20261112_001_customer-orders.sql` in `appSchemaMigrations`. This migration lives in `database/cli-migrations/`, which the automatic web runner never reads.
+
+| Table | Purpose |
+| --- | --- |
+| `customerOrders` | One row per order: customer and agent snapshot, status, dispatch and delivery fields, `version` (stale-page check), `legacyData`/`legacyHash`/`importedAt` for browser imports |
+| `customerOrderItems` | Order lines (`sortOrder`), product snapshot, sets, set size, scanned and delivered pieces |
+| `deliveryBatches` | One row per partial pass to delivery; `pdfState` is `none`, `stored` or `missing` (imported delivery whose PDF is not on the server) |
+| `deliveryBatchItems` | Snapshot of the sets and pieces in each delivery |
+
+| Request | Rules on the server |
+| --- | --- |
+| `GET api/orders.php` (`?id=`) | All orders (or one) with `items[]` and `deliveryBatches[]` |
+| `POST create` | Customer must exist; customer and agent snapshot from the database; each barcode must be in the product list; whole sets 1 to 100000; at most 500 lines; valid delivery date; collision-safe `ORD<ms>` ID |
+| `POST update` / `setStatus` / `delete` | Only before Pass to Dispatch (owner decision D1); `version` must match |
+| `POST passToDispatch` | Safe to repeat (keeps the first timestamp) |
+| `POST scan` | Order row locked; one piece added only if the line is not complete; never above the ordered pieces |
+| `POST replaceItem` | Same Replace rules as before; passed sets stay, the remaining sets move to the new design |
+| `POST deliverPartial` | Whole sets within scanned minus delivered; one batch `DLV-<orderId>-<ms>`; `version` must match (duplicates get 409) |
+| `POST import` | Browser orders: `imported`, `alreadyImported` (same content), `conflict` (never overwritten) or `invalid` |
+| `POST api/delivery-pdf.php` | 10 MB limit, upload error, MIME type and `%PDF-` checks; one pass per delivery; `mode=import` only fills a `missing` PDF |
+| `GET api/delivery-pdf.php?batchId=` | Private download (`Cache-Control: private, no-store`, `nosniff`, attachment) |
+
+Every change runs in a short transaction that locks rows in a fixed order (order, then lines, then deliveries), with compare-and-set on quantities and a bounded retry on deadlocks.
+
+**Delivery PDFs:** stored under `DELIVERY_PDF_DIR`.
+- **Outside `APP_ENV=development`:** it must be an existing, writable folder outside the project and the web root. Otherwise the PDF APIs and the CLI return 503; nothing falls back into `public_html`.
+- **In local development only:** the fallback is `storage/delivery-pdfs/`, protected by the tracked deny-all `storage/.htaccess` and ignored by Git.
+
+**Browser data:** `assets/js/orderImport.js` offers a one-time import of localStorage `orders` on the four order pages. PDFs are uploaded from IndexedDB in a separate step that retries until the server has them. Nothing in the browser is deleted.
+
+**CLI (`cli/orders-admin.php`):** `migrate`, `verify`, `status`, `export <dir>`, `restore <dir>`, `orphans [--delete]`, and `down` (only on local `*_test` databases).
 
 ## Existing manufacturing flow
 
@@ -43,6 +84,7 @@ The production engine determines each batch/piece's applicable stages, assignmen
 | --- | --- |
 | 2026-10-07 | Added separate master APIs, PDO connection and three master tables. |
 | 2026-10-07 | Added strict mobile validation, optional validated email, unique email per master table and schema migration. New table names use lower camelCase. |
+| 2026-11-12 | SAP Phase 1 (branch `sap_integration`, local only): tables `customerOrders`, `customerOrderItems`, `deliveryBatches`, `deliveryBatchItems`; APIs `api/orders.php`, `api/delivery-pdf.php`; CLI `cli/orders-admin.php`; browser import. |
 
 ## Customer creation database flow
 

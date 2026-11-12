@@ -4,17 +4,25 @@ $(document).ready(function() {
     let statusFilter = 'all';
     let currentPage = 1;
     const pageSize = 10;
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
     loadOrders();
 
-    function loadOrders() {
-        const stored = localStorage.getItem('orders');
-        orders = stored ? JSON.parse(stored) : [];
+    // Orders come from MySQL (api/orders.php); every change is made and validated on the server.
+    async function loadOrders() {
+        try {
+            orders = await OrdersApi.list();
+        } catch (error) {
+            orders = [];
+            $('#orderTableBody').html(`<tr><td colspan="9" class="text-center text-danger py-4">${esc(error.message)}</td></tr>`);
+            return;
+        }
         renderTable();
     }
 
-    function saveOrders() {
-        localStorage.setItem('orders', JSON.stringify(orders));
+    function failed(error) {
+        Swal.fire({ title: 'Not saved', text: error.message, icon: 'error' });
+        loadOrders();
     }
 
     function getFilteredOrders() {
@@ -64,29 +72,29 @@ $(document).ready(function() {
                 tbody.append(`
                     <tr>
                         <td>${start + index + 1}</td>
-                        <td>${order.id}</td>
-                        <td>${order.customerName || 'N/A'}</td>
-                        <td>${order.shopName || 'N/A'}</td>
-                        <td>${order.deliveryDate || 'N/A'}</td>
+                        <td>${esc(order.id)}</td>
+                        <td>${esc(order.customerName || 'N/A')}</td>
+                        <td>${esc(order.shopName || 'N/A')}</td>
+                        <td>${esc(order.deliveryDate || 'N/A')}</td>
                         <td>${OrderQuantities.totals(order).sets}</td>
                         <td>${OrderQuantities.totals(order).pieces}</td>
                         <td>
                             <div class="form-check form-switch mb-0">
                                 <input class="form-check-input status-toggle" type="checkbox" role="switch"
-                                    data-id="${order.id}" ${status === 'Active' ? 'checked' : ''}>
-                                <label class="form-check-label fs-12">${status}</label>
+                                    data-id="${esc(order.id)}" ${status === 'Active' ? 'checked' : ''}>
+                                <label class="form-check-label fs-12">${esc(status)}</label>
                             </div>
                         </td>
                         <td class="text-center">
                             <div class="d-inline-flex gap-2 bg-white p-1 rounded" role="group">
-                                <button class="btn btn-sm btn-dark pass-btn" data-id="${order.id}" title="Pass to Dispatch" aria-label="Pass to Dispatch"><i class="bx bx-right-arrow-alt"></i></button>
+                                <button class="btn btn-sm btn-dark pass-btn" data-id="${esc(order.id)}" title="Pass to Dispatch" aria-label="Pass to Dispatch"><i class="bx bx-right-arrow-alt"></i></button>
                                 <button class="btn btn-sm btn-dark pdf-btn" title="Download order PDF" aria-label="Download order PDF">
                                     <i class="bx bxs-file-pdf"></i>
                                 </button>
-                                <a href="order-punch?id=${order.id}" class="btn btn-sm btn-dark" title="Edit">
+                                <a href="order-punch?id=${encodeURIComponent(order.id)}" class="btn btn-sm btn-dark" title="Edit">
                                     <i class="bx bx-edit" style="color: #fff !important;"></i>
                                 </a>
-                                <button class="btn btn-sm btn-dark delete-btn" data-id="${order.id}" title="Delete">
+                                <button class="btn btn-sm btn-dark delete-btn" data-id="${esc(order.id)}" title="Delete">
                                     <i class="bx bx-trash"></i>
                                 </button>
                             </div>
@@ -124,14 +132,14 @@ $(document).ready(function() {
 
         $('.pass-btn').click(function() {
             const id = String($(this).data('id'));
-            const latest = JSON.parse(localStorage.getItem('orders') || '[]');
-            const order = latest.find(order => String(order.id) === id);
-            if (!order) { loadOrders(); return; }
-            order.dispatchPassedAt = order.dispatchPassedAt || new Date().toISOString();
-            try { localStorage.setItem('orders', JSON.stringify(latest)); }
-            catch (_) { Swal.fire('Could not pass', 'Order could not be saved. Please try again.', 'error'); return; }
-            loadOrders();
-            Swal.fire({icon:'success', title:'Passed to Dispatch', timer:1200, showConfirmButton:false});
+            this.disabled = true;
+            OrdersApi.passToDispatch(id).then(() => {
+                loadOrders();
+                Swal.fire({icon:'success', title:'Passed to Dispatch', timer:1200, showConfirmButton:false});
+            }).catch(error => {
+                Swal.fire({ title: 'Could not pass', text: error.message, icon: 'error' });
+                loadOrders();
+            });
         });
         $('.delete-btn').click(function() {
             showDeleteConfirmation($(this).data('id'));
@@ -174,18 +182,18 @@ $(document).ready(function() {
         const order = orders.find(o => o.id === id);
         if (!order) return;
 
-        order.status = isActive ? 'Active' : 'Inactive';
-        saveOrders();
-        renderTable();
-
-        Swal.fire({
-            toast: true,
-            position: 'top-end',
-            icon: 'success',
-            title: `Order marked ${order.status}`,
-            timer: 1500,
-            showConfirmButton: false
-        });
+        const status = isActive ? 'Active' : 'Inactive';
+        OrdersApi.setStatus(order.id, order.version, status).then(() => {
+            loadOrders();
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: `Order marked ${status}`,
+                timer: 1500,
+                showConfirmButton: false
+            });
+        }).catch(failed);
     }
 
     function renderPassedOrders() {
@@ -216,15 +224,19 @@ $(document).ready(function() {
             cancelButtonText: 'Cancel'
         }).then((result) => {
             if (result.isConfirmed) {
-                orders = orders.filter(o => o.id !== id);
-                saveOrders();
-                renderTable();
-                Swal.fire('Deleted!', 'Order has been deleted successfully.', 'success');
+                const order = orders.find(o => o.id === id);
+                if (!order) { loadOrders(); return; }
+                OrdersApi.remove(order.id, order.version).then(() => {
+                    loadOrders();
+                    Swal.fire('Deleted!', 'Order has been deleted successfully.', 'success');
+                }).catch(failed);
             }
         });
     }
 
-    window.addEventListener('storage', event => { if (event.key === 'orders') loadOrders(); });
+    // Other devices change orders too: reload when this tab becomes active or an import finishes.
+    window.addEventListener('focus', loadOrders);
+    window.addEventListener('orders:changed', loadOrders);
 
     $('#searchInput').on('keyup', function() {
         searchTerm = $(this).val();

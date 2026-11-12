@@ -203,5 +203,7 @@
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
 
+<script src="assets/js/ordersApi.js?v=<?= filemtime(__DIR__ . '/../assets/js/ordersApi.js') ?>"></script>
+<script src="assets/js/orderImport.js?v=<?= filemtime(__DIR__ . '/../assets/js/orderImport.js') ?>"></script>
 <script src="assets/js/orderQuantities.js?v=<?= filemtime(__DIR__ . '/../assets/js/orderQuantities.js') ?>"></script>
 <script src="assets/js/orderPunch.js?v=<?= filemtime(__DIR__ . '/../assets/js/orderPunch.js') ?>"></script>

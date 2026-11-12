@@ -1,9 +1,14 @@
 $(function () {
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    const read = () => {
-        const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-        return Array.isArray(orders) ? orders : [];
-    };
+    // Orders come from MySQL; scans, deliveries and replacements are validated and saved on the server.
+    let serverOrders = [];
+    const read = () => serverOrders;
+    async function refresh() {
+        try { serverOrders = await OrdersApi.list(); }
+        catch (error) { $('#orderTableBody').html('<tr><td colspan="12" class="text-center text-danger py-4">' + esc(error.message) + '</td></tr>'); return; }
+        renderList();
+        if (selectedId) { draft = read().find(order => order.id === selectedId) || null; renderModal(); }
+    }
     const items = order => Array.isArray(order.items) ? order.items : [];
     const complete = order => items(order).length > 0 && items(order).every(item => OrderQuantities.checked(item));
     const status = order => DispatchFlow.status(order);
@@ -83,21 +88,16 @@ $(function () {
         $('#dispatchProgress').text(`${items(order).filter(item => OrderQuantities.checked(item)).length} / ${items(order).length} items scanned - ${status(order)}`)
             .toggleClass('text-success', complete(order));
     }
-    function updateOrder(action) {
-        const orders = read();
-        const order = orders.find(row => row.id === selectedId);
-        if (!order) throw Error('This order was removed.');
-        if (!order.dispatchPassedAt) throw Error('Pass this order from Order List first.');
-        const result = action(order);
-        localStorage.setItem('orders', JSON.stringify(orders));
-        draft = order;
+    // Applies a server response: the returned order replaces the local copy.
+    function applyServerOrder(data) {
+        const index = serverOrders.findIndex(row => row.id === data.order.id);
+        if (index === -1) serverOrders.push(data.order); else serverOrders[index] = data.order;
+        if (selectedId === data.order.id) draft = data.order;
         renderList(); renderModal();
-        return result;
+        return data;
     }
     const deliveryElement = document.getElementById('partialDeliveryModal');
     const deliveryModal = new bootstrap.Modal(deliveryElement);
-    let deliverySignature = '';
-    const signature = order => JSON.stringify(items(order).map(item => [item.barcode, item.brand, item.size, OrderQuantities.sets(item), OrderQuantities.perSet(item)]));
     function deliverySummary() {
         let pieces = 0;
         const labels = [];
@@ -115,7 +115,6 @@ $(function () {
         await stopCamera();
         draft = read().find(order => order.id === selectedId);
         if (!draft) { modal.hide(); return; }
-        deliverySignature = signature(draft);
         $('#partialDeliveryTitle').text('Pass Sets to Delivery - ' + draft.id);
         $('#partialDeliveryMessage').empty();
         const body = $('#partialDeliveryItems').empty();
@@ -128,18 +127,20 @@ $(function () {
         deliverySummary(); deliveryModal.show();
     });
     $('#partialDeliveryItems').on('input', '.deliver-pieces', deliverySummary);
-    $('#partialDeliveryConfirmBtn').on('click', function () {
+    $('#partialDeliveryConfirmBtn').on('click', async function () {
         this.disabled = true;
-        const selections = $('#partialDeliveryItems .deliver-pieces').map(function () { return this.value; }).get();
+        const order = draft;
+        const lines = $('#partialDeliveryItems .deliver-pieces').map(function () {
+            const item = items(order)[Number(this.dataset.index)];
+            return { itemId: item && item.id, sets: Number(this.value) || 0 };
+        }).get();
         try {
-            updateOrder(order => {
-                if (signature(order) !== deliverySignature) throw Error('Order changed. Close and reopen delivery details.');
-                DispatchFlow.deliverPartial(order, selections);
-            });
+            await OrdersApi.deliverPartial(order.id, order.version, lines);
             window.location.href = 'delivery';
         } catch (error) {
             deliverySummary();
             $('#partialDeliveryMessage').text(error.message);
+            if (error.status === 409) refresh();
         }
     });
     $(deliveryElement).on('shown.bs.modal', function () { $('.modal-backdrop').last().css('z-index', 1060); });
@@ -148,7 +149,7 @@ $(function () {
     });
     const replaceElement = document.getElementById('replaceDesignModal');
     const replaceModal = new bootstrap.Modal(replaceElement);
-    let replaceIndex = null, replaceOriginal = '', replacement = null;
+    let replaceIndex = null, replacement = null;
     const products = () => JSON.parse(localStorage.getItem('products') || '[]');
     const designName = product => String(product.designNumber || product.description || '');
     const designKey = product => String(product.designNumber || product.description || product.itemDescription || product.itemCode || '').trim().toLowerCase();
@@ -180,7 +181,6 @@ $(function () {
         replaceIndex = Number(this.dataset.index);
         const item = draft && items(draft)[replaceIndex];
         if (!item) return;
-        replaceOriginal = JSON.stringify(item);
         replacement = null;
         $('#replacementDesign').val(''); $('#replacementResults').empty(); $('#replacementPreview').empty().addClass('d-none'); $('#replacementMessage').empty(); $('#replaceDesignSave').prop('disabled', true);
         replaceModal.show();
@@ -197,45 +197,37 @@ $(function () {
         matches.forEach(product => $('<button>', {type:'button', class:'list-group-item list-group-item-action', text:[designName(product),product.brand,product.size,product.color].filter(Boolean).join(' | ')}).on('click', () => chooseReplacement(product)).appendTo(list));
         if (!matches.length) $('<div>', {class:'list-group-item text-muted', text:'No product found for this design.'}).appendTo(list);
     });
-    $('#replaceDesignSave').on('click', function () {
-        if (!replacement) return;
+    // The split rules (passed sets stay, remaining sets move to the new design) run on the server.
+    $('#replaceDesignSave').on('click', async function () {
+        if (!replacement || !draft) return;
         this.disabled = true;
+        const item = items(draft)[replaceIndex];
         try {
-            updateOrder(order => {
-                const item = items(order)[replaceIndex];
-                if (!item || JSON.stringify(item) !== replaceOriginal) throw Error('Order changed. Close and reopen Replace.');
-                const product = products().find(product => product.barcode === replacement.barcode && designName(product) === designName(replacement));
-                if (!product || !product.barcode) throw Error('Product changed or removed. Select the design again.');
-                if (designSelected(order, product)) throw Error('This design is already selected in this order. Choose another design.');
-                const passed = DispatchFlow.deliveredPieces(order, item);
-                const perSet = OrderQuantities.perSet(item);
-                if (passed % perSet) throw Error('This item has a previous partial-piece delivery. Replace an item with complete passed sets.');
-                const passedSets = passed / perSet;
-                const remainingSets = OrderQuantities.sets(item) - passedSets;
-                if (remainingSets < 1) throw Error('All sets have already been passed.');
-                const next = {barcode:product.barcode, description:designName(product), designNumber:designName(product), brand:product.brand, size:product.size, color:product.color, piecesPerSet:OrderQuantities.perSet(product), qty:remainingSets, dispatchScannedPieces:0, dispatchDeliveredPieces:0, dispatchChecked:false};
-                if (passedSets) {
-                    item.qty = passedSets; item.dispatchScannedPieces = passed; item.dispatchDeliveredPieces = passed;
-                    order.items.splice(replaceIndex + 1, 0, next);
-                } else { order.items[replaceIndex] = next; }
-                const totals = OrderQuantities.totals(order); order.totalSets = totals.sets; order.totalPcs = totals.pieces;
-                order.dispatchStatus = DispatchFlow.status(order); order.updatedAt = new Date().toISOString();
-                delete order.dispatchConfirmedAt; delete order.dispatchCompletedAt; delete order.dispatchConfirmedItems;
-            });
+            applyServerOrder(await OrdersApi.replaceItem(draft.id, draft.version, item && item.id, replacement.barcode));
             replaceModal.hide();
-        } catch (error) { $('#replacementMessage').text(error.message); $('#replaceDesignSave').prop('disabled', false); }
+        } catch (error) {
+            $('#replacementMessage').text(error.message); $('#replaceDesignSave').prop('disabled', false);
+            if (error.status === 409) refresh();
+        }
     });
     $(replaceElement).on('shown.bs.modal', function () { $('.modal-backdrop').last().css('z-index', 1060); $('#replacementDesign').trigger('focus'); });
     $(replaceElement).on('hidden.bs.modal', function () { if (modalElement.classList.contains('show')) { document.body.classList.add('modal-open'); $('#dispatchScanInput').trigger('focus'); } });
+    // Scans are saved one at a time, in order; the server counts each piece atomically.
+    let scanQueue = Promise.resolve();
     function scan(code) {
-        if (!selectedId || !String(code || '').trim()) return;
-        try {
-            const item = updateOrder(order => DispatchFlow.scan(order, code));
-            $('#dispatchScanMessage').text('Saved: ' + code + ' - ' + OrderQuantities.scanned(item) + ' / ' + OrderQuantities.pieces(item) + ' pieces').removeClass('text-danger').addClass('text-success');
-        } catch (error) {
-            $('#dispatchScanMessage').text(error.message).removeClass('text-success').addClass('text-danger');
-        }
+        const orderId = selectedId;
+        if (!orderId || !String(code || '').trim()) return scanQueue;
         $('#dispatchScanInput').val('').trigger('focus');
+        scanQueue = scanQueue.then(async () => {
+            try {
+                const data = applyServerOrder(await OrdersApi.scan(orderId, code));
+                const item = items(data.order)[data.result.itemIndex];
+                $('#dispatchScanMessage').text('Saved: ' + code + ' - ' + OrderQuantities.scanned(item) + ' / ' + OrderQuantities.pieces(item) + ' pieces').removeClass('text-danger').addClass('text-success');
+            } catch (error) {
+                $('#dispatchScanMessage').text(error.message).removeClass('text-success').addClass('text-danger');
+            }
+        });
+        return scanQueue;
     }
     $('#dispatchScanForm').on('submit', event => { event.preventDefault(); scan($('#dispatchScanInput').val()); });
     async function stopCamera() {
@@ -267,6 +259,10 @@ $(function () {
     $(modalElement).on('hidden.bs.modal', () => { selectedId = null; draft = null; if (!startingCamera) stopCamera(); });
     $('#searchInput').on('input', () => { page = 1; renderList(); });
     $('#statusFilter').on('change', () => { page = 1; renderList(); });
-    window.addEventListener('storage', event => { if (event.key === 'orders') { renderList(); if (selectedId) { draft = read().find(order => order.id === selectedId); renderModal(); } } });
+    // Other devices change orders too: reload when this tab becomes active or an import finishes.
+    window.addEventListener('focus', refresh);
+    window.addEventListener('orders:changed', refresh);
+    OrdersApi.products().catch(error => console.warn('Product list not refreshed:', error));
     renderList();
+    refresh();
 });
