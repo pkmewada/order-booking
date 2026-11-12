@@ -17,7 +17,7 @@ It is deployed from GitHub (`pkmewada/order-booking`) to Hostinger.
 | Item | Detail |
 | --- | --- |
 | Server | PHP with Apache. The router is `index.php` plus `.htaccess`. |
-| Database | **MySQL** through PDO (`includes/db.php`). Credentials come from the `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` and `DB_PASSWORD` environment variables (set on Hostinger). The fallback is XAMPP `root` with no password. |
+| Database | **MySQL** through PDO (`includes/db.php`). Credentials come from the `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` and `DB_PASSWORD` environment variables, otherwise from `includes/db.config.php` (one per server, ignored by Git; template `includes/db.config.example.php`). The fallback is XAMPP `root` with no password. `includes/db.php` is tracked code and must not hold credentials. |
 | Schema | `database/order-booking.sql` is the full schema. Files in `database/migrations/` run automatically on the first API call after a deploy (`includes/schema-migrations.php`, tracked in `appSchemaMigrations`). |
 | APIs | `api/*.php` return JSON: `{success, data}` or `{success:false, message}`. They use prepared statements. |
 | Frontend | jQuery, Bootstrap 5 (Mamix template), SweetAlert2, DataTables, html5-qrcode / qrcode.js, SheetJS. |
