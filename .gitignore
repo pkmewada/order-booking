@@ -1,7 +1,9 @@
 node_modules/
 
-# Database credentials: one file per server, never in Git (template: includes/db.config.example.php).
-# includes/db.php itself is code and stays tracked; it must not hold credentials.
+# Database connection: per server, never in Git.
+# includes/db.php    <- copy of the tracked template includes/db.example.php
+# includes/db.config.php <- credentials (template: includes/db.config.example.php)
+includes/db.php
 includes/db.config.php
 
 # Secrets and environment files: never commit these.

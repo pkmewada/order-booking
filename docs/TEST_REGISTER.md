@@ -163,3 +163,32 @@ Code version: commit `a6ad9b9` plus working tree, fingerprint `cd5a0d3a5f6a6b32`
 Not repeated, and why:
 - **MySQL 8.4 suite:** no SQL changed.
 - **`npm test`:** it does not use `db.php`.
+
+### Malformed `db.config.php` ("Invalid server response. Check database setup.")
+
+Code version: commit `9f7677b` plus working tree, fingerprint `24d7e2bd3eeeac15`.
+
+**Before the fix**, run against local Apache with `display_errors = On`; checked `GET api/bom.php`:
+- A config file that was a copy of the old `db.php` returned **non-JSON**: a fatal "cannot redeclare `database()`".
+- A plain-text config without `<?php` returned **non-JSON**: the text was printed before the JSON.
+
+Both give the browser message "Invalid server response. Check database setup." A correct config, or none at all, returned JSON.
+
+**After the fix:**
+
+| Run | Check | Result |
+| --- | --- | --- |
+| TR-DB-07 | Same calls with these config files: copy of old `db.php`; plain text; `<?php` without `return`; UTF-8 BOM + correct `return`; correct; correct with a wrong password; no file | All return **JSON**. Malformed files are ignored, and the reason is written to the PHP error log. A wrong password gives the normal 503 JSON "Unable to save/load product…" |
+| TR-DB-08 | `APACHE_BASE_URL=http://127.0.0.1:1 npm run test:orders` (MariaDB 11.4.9) | **19 tests: 18 passed, 0 failed, 1 skipped** (TC-19, on purpose) |
+| TR-DB-09 | Wrong credentials, no config file, `display_errors=0` (simulated live) | Every catalog and master endpoint returns 503 JSON, so missing credentials alone do not cause "Invalid server response" |
+
+### Untracking `includes/db.php`
+
+| Run | Check | Result |
+| --- | --- | --- |
+| TR-DB-10 | `php -l includes/db.example.php`; `cmp includes/db.php includes/db.example.php` | No syntax errors. The template is byte-identical to the local `db.php` that TR-DB-07 and TR-DB-08 tested, so behaviour is unchanged |
+| TR-DB-11 | `git check-ignore -v includes/db.php includes/db.config.php`; `git ls-files includes/` | Both ignored. `db.php` is no longer tracked; `db.example.php` and `db.config.example.php` are tracked |
+| TR-DB-12 | Fresh checkout of the commit (`git archive` to a scratch folder): `includes/db.php` absent; after copying `db.example.php` to `db.php`, `php -l` passes | See the commit report |
+| TR-DB-13 | Local Apache `GET api/bom.php` with the kept local `db.php` | 200 JSON |
+
+Not repeated: the `test:orders` suites. The connection code itself did not change; only its Git tracking did (TR-DB-10).

@@ -2,22 +2,35 @@
 
 1. Start Apache and MySQL in XAMPP.
 2. Open phpMyAdmin, choose **Import**, and import `../database/order-booking.sql`. It creates the database `order-booking` and separate `agents`, `distributors`, `transporters`, and `customerRecords` tables. This is the complete schema for a fresh database. All four tables include phone constraints and unique email indexes.
-3. **Connection settings.** Defaults: host `127.0.0.1`, port `3306`, database `order-booking`, username `root`, empty password. To use other values, either:
+3. **Connection file.** Copy `../includes/db.example.php` to `../includes/db.php`.
+   - `db.php` is **not in Git**; every clone and server needs this copy.
+   - When `db.example.php` changes in Git, copy it again.
+4. **Connection settings.** Defaults: host `127.0.0.1`, port `3306`, database `order-booking`, username `root`, empty password. To use other values, either:
    - copy `../includes/db.config.example.php` to `../includes/db.config.php` and edit the copy; or
    - set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` in the server environment. These take priority over the file.
 
-   `db.config.php` is ignored by Git. Do **not** edit `../includes/db.php`: it is tracked code, so local edits show up as changes and every deploy replaces it. PHP needs PDO MySQL and mbstring (included with XAMPP).
-4. Open the application through Apache, then use the existing Agent, Distributor, and Transporter pages. Add, edit, delete, and list operations now use the database. Success appears only after the API accepts the change; database errors appear in the form instead.
+   `db.php` and `db.config.php` are both ignored by Git. PHP needs PDO MySQL and mbstring (included with XAMPP).
+5. Open the application through Apache, then use the existing Agent, Distributor, and Transporter pages. Add, edit, delete, and list operations now use the database. Success appears only after the API accepts the change; database errors appear in the form instead.
 
 ## Automatic live schema updates
 
 Hostinger Git deployment synchronizes files but does not execute SQL files. Versioned SQL files in `../database/migrations/` are applied automatically the first time a PHP API connects to MySQL after deployment. Applied migration filenames are recorded in `appSchemaMigrations`; each migration runs once, in filename order. Migration statements use idempotent DDL/DML so they can be safely retried if a deployment is interrupted. The custom BOM pattern migration adds `patternRecords` and `patternPieceLinks` without clearing any existing records.
 
 Configure the live connection in one of two places, both of which survive deploys:
-- Create `includes/db.config.php` on the server once, from `includes/db.config.example.php`, using the Hostinger File Manager. It is ignored by Git, so deploys never overwrite it.
+- Create `includes/db.config.php` on the server once, from `includes/db.config.example.php`, using the Hostinger File Manager. It is ignored by Git, so deploys never overwrite it. Keep the example's exact shape: `<?php`, then `return [ 'DB_HOST' => '…', … ];` and nothing else. Do not paste the old `db.php` into it, and do not write plain text. A malformed file is ignored and logged in the PHP error log ("includes/db.config.php ignored: …").
 - Or set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` and `DB_PASSWORD` in Hostinger's PHP environment.
 
-Do not edit `includes/db.php` on the server: deploys replace it. Do not put live credentials in Git. Back up the live database before deploying schema changes. The current migration adds the piece-item catalog and manufacturing-state tables without replacing existing application data. SQL and migration files are blocked from direct web access.
+**`includes/db.php` on the server.** It is not in Git, so deploys neither update nor delete it. After a deploy that changes `includes/db.example.php`, copy that file over `includes/db.php` in the File Manager.
+
+**One-time switch-over,** for the deploy that removes `db.php` from Git. That deploy deletes `includes/db.php` on the server, so do these steps in order:
+1. **Before merging:**
+   - Download `includes/db.php` from the server to your PC as a backup. Don't leave a copy inside `public_html`.
+   - Make sure `includes/db.config.php` exists with the live values, or that the `DB_*` variables are set.
+2. Merge the pull request and let Hostinger deploy. The APIs fail from this moment.
+3. **Immediately afterwards:** in the File Manager, copy `includes/db.example.php` to `includes/db.php`. The APIs work again.
+4. Open a page that uses the database (for example, BOM Master) and check that it loads.
+
+Do not put live credentials in Git. Back up the live database before deploying schema changes. The current migration adds the piece-item catalog and manufacturing-state tables without replacing existing application data. SQL and migration files are blocked from direct web access.
 
 ## Separate APIs
 
