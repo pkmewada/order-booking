@@ -25,6 +25,9 @@ function manufacturingStateKeys(): array
     ];
 }
 
+require_once __DIR__ . '/../includes/auth.php';
+authRequireApi('manufacturing-state');
+
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if ($method === 'GET') {
     try {

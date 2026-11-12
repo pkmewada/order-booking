@@ -21,7 +21,7 @@ It is deployed from GitHub (`pkmewada/order-booking`) to Hostinger.
 | Schema | `database/order-booking.sql` is the full schema. Files in `database/migrations/` run automatically on the first API call after a deploy (`includes/schema-migrations.php`, tracked in `appSchemaMigrations`). |
 | APIs | `api/*.php` return JSON: `{success, data}` or `{success:false, message}`. They use prepared statements. |
 | Frontend | jQuery, Bootstrap 5 (Mamix template), SweetAlert2, DataTables, html5-qrcode / qrcode.js, SheetJS. |
-| Auth | **None.** `login.php` is a template page. Pages and APIs are open to anyone with the URL. |
+| Auth | **None on `main`.** Branch `feature/authentication` (not merged) adds sign-in, admin and employee roles, sessions and CSRF (`includes/auth.php`, table `appUsers`); see `docs/flow.md`, "Sign-in and access". |
 
 ## 3. Routing and folders
 
@@ -57,9 +57,9 @@ It is deployed from GitHub (`pkmewada/order-booking`) to Hostinger.
 Notes:
 - Pages also keep a **localStorage cache** of database records (`customers`, `products`, `bomMasterData`, …) so older order and production screens can read them. **MySQL is the real copy**; the cache is rebuilt when a page loads.
 - **Production engine persistence:** `productionEngine.js` loads the full state from `api/manufacturing-state.php` and works on it in the browser. It saves changes back with a **revision number**. If another session saved first, the API returns 409 and the user must reload. On first use it imports any old browser data once.
-- **Orders (SAP Phase 1, not yet merged or deployed):**
-  - On `main` and on the live site, orders are still browser-only (localStorage `orders`, PDFs in IndexedDB).
-  - On branch `sap_integration` they are in MySQL. `orderImport.js` imports each browser's old orders once, and nothing in the browser is deleted.
+- **Orders (SAP Phase 1, merged into `main` on 2026-11-12 through PRs #1 to #3; live deployment not verified and blocked, see `docs/SECURITY_AUDIT.md` section 7):**
+  - Before Phase 1, orders were browser-only (localStorage `orders`, PDFs in IndexedDB). Any live site still running older code keeps them there.
+  - With Phase 1 (`main` and `sap_integration`) they are in MySQL. `orderImport.js` imports each browser's old orders once, and nothing in the browser is deleted.
   - The order APIs return **401** unless the explicit local dev switch is set (`npm run dev`). They return **503** until `php cli/orders-admin.php migrate` has run.
   - Details: `docs/flow.md` and `docs/SAP_INTEGRATION.md`.
 
@@ -105,7 +105,7 @@ BOM Master → Batch → Batch Approval (materials) → [Requirements if missing
 
 ## 8. Known gaps
 
-- On `main` and live, orders, dispatch and delivery are still browser-only. SAP Phase 1 on branch `sap_integration` moves them to MySQL; it is not merged or deployed.
-- There is no login or access control on pages or APIs. The new order APIs refuse all requests outside local development until login exists.
+- SAP Phase 1 moves orders, dispatch and delivery to MySQL. It is merged into `main` (PRs #1 to #3), but **must not be deployed** until the blockers in `docs/SECURITY_AUDIT.md` section 7 are resolved. Without login the order APIs return 401 on any web server.
+- On `main` there is no login or access control on pages or APIs, and the order APIs refuse all requests outside local development. Authentication is implemented on `feature/authentication`, awaiting approval.
 - There is no SAP Business One integration yet, and SAP's required fields (customer group, GSTIN, payment terms, item code, UoM, unit price, tax code, warehouse) are missing.
 - Production state is stored as JSON per key, not as normalized tables. Reporting has to go through the engine.

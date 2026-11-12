@@ -79,7 +79,11 @@ function jsResults(rules) {
 
 test('php -l passes for every Phase 1 PHP file', () => {
     for (const file of ['api/order-records.php', 'api/orders.php', 'api/delivery-pdf.php', 'cli/orders-admin.php', 'cli/dev-router.php',
-        'tests/helpers/test-db.php', 'tests/helpers/rules.php']) {
+        'tests/helpers/test-db.php', 'tests/helpers/rules.php',
+        // Phase 2 (authentication)
+        'includes/auth.php', 'includes/users.php', 'api/users.php', 'cli/users-admin.php', 'settings/users.php', 'login.php', 'logout.php', 'index.php',
+        'includes/header.php', 'includes/header2.php', 'api/master-records.php', 'api/manufacturing-records.php', 'api/product-records.php',
+        'api/manufacturing-state.php', 'api/patterns.php']) {
         const result = php(['-l', file]);
         assert.equal(result.code, 0, file + ': ' + result.stdout + result.stderr);
     }

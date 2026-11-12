@@ -50,6 +50,7 @@ function removeProductPhoto(?string $photo): void
 
 function productRecords(string $mode): void
 {
+    authRequireApi($mode === 'bom' ? 'bom' : 'product');
     $newPhoto = null;
     try {
         $db = database();
@@ -79,8 +80,12 @@ function productRecords(string $mode): void
             $query->execute([$id]); $old = $query->fetch();
             if (!$old) { respond(404, ['success' => false, 'message' => 'Record not found.']); }
         }
+        // Rows in the Product List belong to the admin-only Product page. Through BOM Master an employee may still
+        // complete or edit their BOM (pattern, MRP, pieces) and status, but not delete them or change the product fields.
+        $listedProductAdminOnly = $mode === 'bom' && $old && $old['inProductList'] && !authIsAdmin();
         if ($action === 'delete') {
             if (!$old) { respond(422, ['success' => false, 'message' => 'ID required.']); }
+            if ($listedProductAdminOnly) { respond(403, ['success' => false, 'message' => 'Only an administrator can delete a product that is in the Product List.']); }
             $query = $db->prepare('DELETE FROM productRecords WHERE id = ?'); $query->execute([$id]);
             removeProductPhoto($old['photo']);
             respond(200, ['success' => true]);
@@ -118,6 +123,10 @@ function productRecords(string $mode): void
         if ($mrp !== null && (!is_scalar($mrp) || !preg_match('/^[0-9]{1,10}(\.[0-9]{1,2})?$/D', (string) $mrp))) { throw new InvalidArgumentException('MRP must be a non-negative number with up to two decimals.'); }
         $lookup = $db->prepare('SELECT id FROM colourRecords WHERE id = ?'); $lookup->execute([$data['colourId'] ?? 0]);
         if (!$lookup->fetch()) { throw new InvalidArgumentException('Select a colour from Colour master.'); }
+        if ($listedProductAdminOnly && ($brand !== $old['brand'] || $design !== (string) $old['designNumber'] || (int) $data['colourId'] !== (int) $old['colourId']
+            || (isset($_FILES['photo']) && $_FILES['photo']['error'] !== UPLOAD_ERR_NO_FILE))) {
+            respond(403, ['success' => false, 'message' => 'Only an administrator can change the brand, design number, colour or photo of a product in the Product List.']);
+        }
         $expectedPatternItemIds = null;
         if ($mode === 'bom') {
             $patternId = $data['patternId'] ?? null;

@@ -1,6 +1,6 @@
 # Production flow and quantity rules
 
-This document describes the production engine in `assets/js/productionEngine.js` and the manager integrations. Production state is saved in MySQL through `api/manufacturing-state.php` (table `manufacturingState`, one JSON row per storage key below, with a revision check in `manufacturingStateMeta`). The browser keeps a localStorage working copy that the engine loads from and saves back to the database. Orders, dispatch and delivery are separate from the production engine. On branch `sap_integration` they are stored in MySQL (`api/orders.php`; see `docs/flow.md`); on `main` they are still browser-only.
+This document describes the production engine in `assets/js/productionEngine.js` and the manager integrations. Production state is saved in MySQL through `api/manufacturing-state.php` (table `manufacturingState`, one JSON row per storage key below, with a revision check in `manufacturingStateMeta`). The browser keeps a localStorage working copy that the engine loads from and saves back to the database. Orders, dispatch and delivery are separate from the production engine. Since SAP Phase 1 (merged into `main` on 2026-11-12, not yet cleared for live deployment) they are stored in MySQL (`api/orders.php`; see `docs/flow.md`).
 
 ## SAP Business One integration
 

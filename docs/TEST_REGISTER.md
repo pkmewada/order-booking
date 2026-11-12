@@ -65,7 +65,29 @@ Together: 14 test cases.
 | TC-18 | [orders-api.integration.cjs:419](../tests/orders-api.integration.cjs#L419) | Rollback rehearsal: export, dump, drop, restore, down/migrate, restore. **Skips** if `mysqldump` is not found (`MYSQL_BIN_DIR`). Needs the data created by TC-07 to TC-17, so it cannot run on its own | Phase 1 |
 | TC-19 | [orders-api.integration.cjs:481](../tests/orders-api.integration.cjs#L481) | Direct web access denied (dev router; and Apache). **Skips** the Apache part, and reports the test as skipped, if `APACHE_BASE_URL` (default `http://localhost/order-bookings`) is unreachable. When Apache is reachable it writes and removes a probe PDF in `storage/delivery-pdfs/` | Phase 1 |
 
-TC-01 to TC-04 and TC-07 to TC-19 are the original 17 Phase 1 tests. TC-05 and TC-06 were added for the audit fixes, so `test:orders` now has **19** tests.
+TC-01 to TC-04 and TC-07 to TC-19 are the original 17 Phase 1 tests. TC-05 and TC-06 were added for the audit fixes, so `test:orders` had **19** tests.
+
+**Phase 2 change to TC-01:** the `php -l` list also covers the authentication files and the PHP files Phase 2 touched.
+
+### Phase 2 authentication tests: `tests/auth.integration.cjs` (part of `npm run test:orders`)
+
+These tests use their own PHP servers on ports 18101 (normal) and 18102 (`AUTH_IDLE_SECONDS=2`), **without** the dev switch, so sign-in is really required. They create accounts with `cli/users-admin.php` (password on STDIN).
+
+| ID | File:line | Test |
+| --- | --- | --- |
+| TC-20 | [auth.integration.cjs:77](../tests/auth.integration.cjs#L77) | CLI creates accounts with bcrypt hashes; short password and duplicate username refused |
+| TC-21 | [auth.integration.cjs:86](../tests/auth.integration.cjs#L86) | Valid sign-in redirects and issues a new session ID; wrong password, unknown user and missing form CSRF refused; cookie `HttpOnly` and `SameSite=Lax` |
+| TC-22 | [auth.integration.cjs:111](../tests/auth.integration.cjs#L111) | Signed out: every API returns 401 `loginRequired`; every page redirects to `login?next=` |
+| TC-23 | [auth.integration.cjs:130](../tests/auth.integration.cjs#L130) | Employee: Order Booking and Manufacturing pages and APIs allowed; Settings pages, master changes and Users API 403 |
+| TC-24 | [auth.integration.cjs:211](../tests/auth.integration.cjs#L211) | API changes without or with a wrong `X-CSRF-Token` → 403; reads need no token |
+| TC-25 | [auth.integration.cjs:225](../tests/auth.integration.cjs#L225) | Existing workflow as a signed-in employee: create, pass to dispatch, scan, partial delivery, PDF upload, private download |
+| TC-26 | [auth.integration.cjs:260](../tests/auth.integration.cjs#L260) | Order import and PDF import: employee 403, admin allowed |
+| TC-27 | [auth.integration.cjs:273](../tests/auth.integration.cjs#L273) | Idle expiry → 401 and `login?expired=1`; disabling, a role change or a password reset ends existing sessions |
+| TC-28 | [auth.integration.cjs:299](../tests/auth.integration.cjs#L299) | 5 wrong passwords lock the account (even the right password is refused); admin password reset unlocks |
+| TC-29 | [auth.integration.cjs:309](../tests/auth.integration.cjs#L309) | Users API: admin creates accounts; the last active admin cannot be demoted or disabled (409) |
+| TC-30 | [auth.integration.cjs:323](../tests/auth.integration.cjs#L323) | Logout: GET does nothing; POST without CSRF refused; POST with CSRF ends the session |
+
+With these, `test:orders` had **30** tests. TC-31 (BOM endpoint, R1 fix) makes **31**; see "R1 fix" in the execution log.
 
 ### Manual and scripted checks (not in `npm` scripts)
 
@@ -77,6 +99,8 @@ These scripts live in the session scratchpad, outside the repository, so they ar
 | TC-M02 | Browser PDF import retry: network failure, then lost response, then reload | `node pdf-retry.cjs` (own `php -S` on 127.0.0.1:8090, Fetch interception) |
 | TC-M03 | SweetAlert2 text rendering on a real page, plus library behaviour | `node swal-text.cjs` (own `php -S` on 127.0.0.1:8092) |
 | TC-M04 | Direct-access and bypass checks with `curl --path-as-is` on Apache and on the dev router | See TR-AUD-05 |
+| TC-M05 | Browser sign-in checks (headless Chrome): sign-in form, wrong password message, `next` return, signed-in name and role, Settings hidden for employees, Log Out, expired-session redirect from an API call, employee import notice | `node auth-e2e.cjs` against `npm run dev` with a scratch database |
+| TC-M06 | TC-M01 with a sign-in step first, on a dev server without the dev switch | `node e2e-auth-flows.cjs` |
 
 ## 3. Execution log
 
@@ -192,3 +216,127 @@ Both give the browser message "Invalid server response. Check database setup." A
 | TR-DB-13 | Local Apache `GET api/bom.php` with the kept local `db.php` | 200 JSON |
 
 Not repeated: the `test:orders` suites. The connection code itself did not change; only its Git tracking did (TR-DB-10).
+
+### Focused Phase 1 QA (2026-11-12)
+
+**Code version:** commit `6154194` (`sap_integration`; the same tree is on `main` through PR #3 `745fb01`), fingerprint `242df67d91a7862b`. No application code was changed.
+
+**Reused, not rerun** (still valid for this code):
+- API suite TR-DB-08 (18 passed, 1 skipped on purpose). `6154194` changed only Git tracking (TR-DB-10).
+- MySQL 8.4 run TR-FIX-02.
+- PDF tests TC-13 and TC-15.
+- Browser PDF retry TR-AUD-04.
+- `npm test`: 14/14 in TR-FIX-01.
+
+**Scratch environment for TR-QA-01 and TR-QA-02:**
+- Database `order_booking_audit_test` on MariaDB 11.4.9, dropped afterwards.
+- Created with `tests/helpers/orders-env.cjs` (`resetDatabase`, CLI `migrate`, `seedCatalog`).
+- Served by `DEV_DB_PORT=3307 DEV_DB_NAME=order_booking_audit_test DELIVERY_PDF_DIR=<scratch folder> node cli/dev-server.cjs`.
+
+| Run | Check | Result |
+| --- | --- | --- |
+| TR-QA-01 | TC-M01 two-browser end-to-end (`node e2e.cjs`): areas 1–9, i.e. create, list and persistence, status, pass to dispatch, edit refused after pass, scans, unknown barcode, partial delivery, Replace, delivery states, PDF pass, upload and private download | **25 of 26.** The one failure was "customer name is escaped in Order List", caused by test data, not code: that check needs a customer named with `<b>bold</b>`, and `seedCatalog()` creates "Asha". Re-checked in TR-QA-02 |
+| TR-QA-02 | Targeted browser check: customer name `Asha <b>bold</b>` and shop `Shop <img src=x onerror=…>`, order created through the API, Order List row inspected | **PASS.** No `<b>` or `<img>` element, no script run, text shown literally |
+| TR-QA-03 | `git diff 6ee8500 6154194` on `productionEngine.js`, `manufacturing/`, `settings/`, `uploads/`, the inventory and stock JS/CSS/PHP, the manufacturing, product, BOM, pattern and master APIs, `includes/schema-migrations.php`, `database/migrations/` | **Unchanged.** No invoice or payment code exists in the repository |
+| TR-QA-04 | PHP requirements: new PHP files scanned for PHP 8-only syntax; extensions; local Apache `php.ini` | No PHP 8-only syntax found; tested on PHP 8.3.28. Needs `fileinfo`, `pdo_mysql`, `mbstring` (enabled locally). Local Apache `upload_max_filesize=2M`, `post_max_size=8M`, so PDFs over 2 MB get a 413 "larger than the server upload limit" (see SECURITY_AUDIT B5) |
+| TR-QA-05 | `curl` on local Apache: `includes/db.config.example.php`, `includes/db.php` | HTTP 200 with an **empty body**: PHP runs the file and prints nothing. `includes/` has no deny rule (SECURITY_AUDIT B6) |
+| TR-QA-06 | Git and GitHub state (`git fetch`, `git merge-base`, GitHub REST API, read-only) | PRs #1 `084f41b`, #2 `5212e03` and #3 `745fb01` are merged into `main`. `origin/main` is `745fb01` and contains `6154194`. GitHub lists 0 deployment records. Hostinger was not inspected |
+
+**Not tested** (needs a manual or Hostinger check):
+- Editing and saving, and deleting, an eligible order by clicking through the UI. Both are covered at API level by TC-08; manual steps are in the QA report.
+- Everything on the live server.
+
+**Note on TC-M01:** it needs `seedCatalog()` data plus a customer whose name contains `<b>bold</b>`. With the plain seed, its Order List escaping check fails by design.
+
+### Phase 2 authentication (2026-11-12)
+
+**Code version:** branch `feature/authentication` from `origin/main` `745fb01`, working tree (not committed).
+
+**Reused, not rerun:**
+- PDF retry TR-AUD-04 and SweetAlert TR-FIX-06. Phase 2 did not change that code, apart from the server-side role and CSRF checks that TC-24 to TC-26 cover.
+- The TR-QA-03 check that manufacturing and engine files are unchanged. It was repeated for Phase 2 in TR-AUTH-09.
+
+**Scratch environment:**
+- Test databases `order_booking_test` (MariaDB 11.4.9, port 3307), or MySQL 8.4.7 (port 3306) for TR-AUTH-03.
+- Browser checks used a scratch database and PDF folder, both deleted afterwards.
+
+| Run | Check | Database | Result |
+| --- | --- | --- | --- |
+| TR-AUTH-01 | `node --test tests/auth.integration.cjs` | MariaDB 11.4.9 | **11 of 11** (TC-20 to TC-30) |
+| TR-AUTH-02 | `APACHE_BASE_URL=http://127.0.0.1:1 npm run test:orders` | MariaDB 11.4.9 | **30 tests: 29 passed, 0 failed, 1 skipped** (TC-19 Apache part, on purpose). All Phase 1 workflow tests still pass with authentication in place |
+| TR-AUTH-03 | Same with `TEST_DB_PORT=3306 MYSQL_BIN_DIR=C:/wamp64/bin/mysql/mysql8.4.7/bin` | MySQL 8.4.7 | **30 tests: 29 passed, 0 failed, 1 skipped** (TC-19) |
+| TR-AUTH-04 | `npm test` | - | **14 of 14** |
+| TR-AUTH-05 | Mutation check 1: CSRF check removed from `authRequireApi()` | MariaDB 11.4.9 | TC-24 and TC-25 **failed as intended**. Code restored, and `cmp` against a backup is identical |
+| TR-AUTH-06 | Mutation check 2: role check made to allow every role | MariaDB 11.4.9 | TC-23 and TC-26 **failed as intended**. Code restored, `cmp` identical |
+| TR-AUTH-07 | TC-M05 browser sign-in checks | MariaDB 11.4.9 (scratch) | **20 of 20** |
+| TR-AUTH-08 | TC-M06 two-browser end-to-end after signing in | MariaDB 11.4.9 (scratch) | **27 of 28.** The one failure is the known test-data artifact from TR-QA-01: the Order List escaping check needs a customer named `<b>bold</b>`. That check passed separately in TR-QA-02, and the code it covers is unchanged |
+| TR-AUTH-09 | `git diff --stat 745fb01` on `productionEngine.js`, `manufacturing/`, `settings/` (existing pages), `orderQuantities.js`, `dispatchFlow.js`, `orderList.js`, `orderPunch.js`, `delivery.js` | - | **No changes.** The API handlers only gained a `require` and a guard call. `api/order-records.php` also gained the two admin-only import checks |
+| TR-AUTH-10 | `curl` on local WAMP Apache. The local database `order-booking` is **not migrated**, so `appUsers` is missing there | MySQL 8.4.7 | Pages → 303 to `login`; APIs → 401; `cli/` and `database/cli-migrations/` → 403; `includes/auth.php` → 200 with an empty body (B6); sign-in POST → 503 "Sign-in is not available…" (fails closed) |
+
+**Not tested:**
+- Live Hostinger: no access.
+- HTTPS (`Secure` cookie flag): the code sets it when `HTTPS` is on, but every local run was plain HTTP.
+- The Users page clicked through by hand: its API is covered by TC-29, and the page loaded in TC-M05.
+
+### R1 fix: BOM/Product shared handler (2026-11-12)
+
+**New test TC-31**, [auth.integration.cjs:156](../tests/auth.integration.cjs#L156), "BOM endpoint: employee keeps BOM Master work but cannot make admin-only product changes; admin can do both". It checks:
+- **Employee, allowed:**
+  - add a colour, and add an item (with `itemType`);
+  - create a BOM, edit it, change its status and delete it;
+  - complete the BOM (pattern, MRP, pieces) of a listed product created on the Product page;
+  - change the status of a listed product.
+- **Employee, refused** on a listed product through `bom.php`, each with 403:
+  - a brand change;
+  - a design number change;
+  - a colour change;
+  - a photo upload;
+  - a delete.
+
+  Import through `bom.php` gives 422 and through `product.php` gives 403. The database row is unchanged afterwards.
+- **Admin:**
+  - adds a colour and an item;
+  - changes product fields through `bom.php`;
+  - deletes the listed product.
+
+There were no BOM or product API tests before this. The existing tests that touch these APIs are TC-22, TC-23 and the catalog data used by the order tests (TC-07 to TC-19, TC-25).
+
+| Run | Check | Database | Result |
+| --- | --- | --- | --- |
+| TR-R1-01 | `php -l api/product-records.php` | - | No syntax errors |
+| TR-R1-02 | `node --test tests/auth.integration.cjs` | MariaDB 11.4.9 | **12 of 12** (TC-20 to TC-31) |
+| TR-R1-03 | Mutation check: guard flag forced to `false` | MariaDB 11.4.9 | TC-31 **failed as intended** ("product field change {brand}"). File restored; `cmp` against the backup is identical |
+| TR-R1-04 | `APACHE_BASE_URL=http://127.0.0.1:1 npm run test:orders` | MariaDB 11.4.9 | **31 tests: 30 passed, 0 failed, 1 skipped** (TC-19 Apache part, on purpose) |
+| TR-R1-05 | Same with `TEST_DB_PORT=3306 MYSQL_BIN_DIR=C:/wamp64/bin/mysql/mysql8.4.7/bin` | MySQL 8.4.7 | **31 tests: 30 passed, 0 failed, 1 skipped** |
+| TR-R1-06 | `npm test` | - | **14 of 14** |
+| TR-R1-07 | `git diff --check` | - | Clean |
+| TR-R1-08 | `git show 745fb01` of `api/manufacturing-records.php` and `assets/js/bomMaster.js` | - | Confirms R9: on `main`, item-list requires `itemType`, and BOM Master sends only `{name}` |
+
+**Not tested:** clicking through BOM Master in a browser as an employee. The API responses the page would receive are covered by TC-31.
+
+### Final changes: R9 BOM Master item quick-add and final review (2026-11-12)
+
+**TC-31 extended:**
+- An employee adds a Cutting and a Non-Cutting item through `api/item-list.php`, and both types are stored.
+- A request without a type still gets 422 "Select Cutting or Non-Cutting…" for employee and admin alike, so validation is unchanged.
+
+**New scripted check TC-M07, BOM Master quick-add in headless Chrome** (`bom-quickadd-e2e.cjs`, session scratchpad):
+- Runs on a scratch database `order_booking_audit_test`, dropped afterwards.
+- For employee and for admin: sign in, open BOM Master, Create BOM, choose a pattern, then click the piece's "+":
+  - the selector offers Cutting and Non-Cutting;
+  - saving without a type is stopped in the page;
+  - one item of each type is added and saved with that type, and ticked for the piece;
+  - the BOM is saved with both new items as materials;
+  - there are no errors from `bomMaster.js`.
+
+| Run | Check | Database | Result |
+| --- | --- | --- | --- |
+| TR-R9-01 | `node --check assets/js/bomMaster.js`; `php -l manufacturing/bomMaster.php` | - | No syntax errors. The file still starts with its original UTF-8 BOM |
+| TR-R9-02 | Restored button compared with `git show f128d03:assets/js/bomMaster.js` | - | Byte-identical |
+| TR-R9-03 | TC-M07 | MariaDB 11.4.9 (scratch) | **16 of 16.** The page also logs an apexcharts "Element not found" exception, which was already present (TR-AUD-04) and does not come from `bomMaster.js` |
+| TR-R9-04 | `node --test tests/auth.integration.cjs` | MariaDB 11.4.9 | **12 of 12** |
+| TR-R9-05 | `APACHE_BASE_URL=http://127.0.0.1:1 npm run test:orders` | MariaDB 11.4.9 | **31 tests: 30 passed, 0 failed, 1 skipped** (TC-19 Apache part, on purpose) |
+| TR-R9-06 | Same with `TEST_DB_PORT=3306 MYSQL_BIN_DIR=C:/wamp64/bin/mysql/mysql8.4.7/bin` | MySQL 8.4.7 | **31 tests: 30 passed, 0 failed, 1 skipped** |
+| TR-R9-07 | `npm test` | - | **14 of 14** |
+| TR-R9-08 | Owner's local database: `mysqldump` backup, then `php cli/orders-admin.php migrate`, then `cli/users-admin.php create` for `testadmin` and `teststaff` | MySQL 8.4.7 (`order-booking`) | Both migrations verified and recorded. Accounts created |
+| TR-R9-09 | `curl` sign-in on local WAMP Apache with both accounts | MySQL 8.4.7 | Both: 303 to `dashboard`, orders API 200. `testadmin`: Users API and page 200. `teststaff`: Users API and page **403** |

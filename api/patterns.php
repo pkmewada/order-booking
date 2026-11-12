@@ -10,6 +10,9 @@ function patternResponse(int $status, array $body): void
     exit;
 }
 
+require_once __DIR__ . '/../includes/auth.php';
+authRequireApi('patterns');
+
 try {
     $db = database();
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';

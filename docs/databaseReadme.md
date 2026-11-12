@@ -10,7 +10,11 @@
    - set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` in the server environment. These take priority over the file.
 
    `db.php` and `db.config.php` are both ignored by Git. PHP needs PDO MySQL and mbstring (included with XAMPP).
-5. Open the application through Apache, then use the existing Agent, Distributor, and Transporter pages. Add, edit, delete, and list operations now use the database. Success appears only after the API accepts the change; database errors appear in the form instead.
+5. **Order tables and accounts** (from the project folder, in a terminal or over SSH):
+   - `php cli/orders-admin.php migrate` creates the order tables and the `appUsers` account table. It is safe to run again.
+   - `php cli/users-admin.php create <username> admin "<Name>"` creates the first administrator. The password is typed on the next line (at least 8 characters).
+   - Every page needs sign-in, so without an account nobody can use the application. Further accounts can be added on **Settings → Users**.
+6. Open the application through Apache and sign in, then use the existing Agent, Distributor, and Transporter pages. Add, edit, delete, and list operations now use the database. Success appears only after the API accepts the change; database errors appear in the form instead.
 
 ## Automatic live schema updates
 

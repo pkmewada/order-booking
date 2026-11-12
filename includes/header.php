@@ -1,3 +1,4 @@
+<?php require_once __DIR__ . '/auth.php'; $authUser = authRequirePage(); /* Order Booking and Manufacturing: any signed-in user */ ?>
 <!DOCTYPE html>
 <html lang="en" dir="ltr" data-nav-layout="vertical" data-theme-mode="light" data-header-styles="transparent"
     data-width="default" data-menu-styles="light" data-toggled="close">
@@ -12,6 +13,7 @@
     if ($appBaseHref === '/') { $appBaseHref = '/'; }
     ?>
     <base href="<?= htmlspecialchars($appBaseHref, ENT_QUOTES, 'UTF-8') ?>">
+<?= authHeadTags($authUser) ?>
 
     <meta charset="UTF-8">
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
@@ -912,14 +914,21 @@
                         </a>
                         <ul class="main-header-dropdown dropdown-menu pt-0 overflow-hidden header-profile-dropdown dropdown-menu-end"
                             aria-labelledby="mainHeaderProfile">
+                            <li class="dropdown-item-text text-muted fs-12 py-2">Signed in as
+                                <strong><?= htmlspecialchars($authUser['displayName'], ENT_QUOTES, 'UTF-8') ?></strong>
+                                (<?= htmlspecialchars($authUser['role'], ENT_QUOTES, 'UTF-8') ?>)</li>
                             <li><a class="dropdown-item d-flex align-items-center" href="profile.html"><i
                                         class="ti ti-user me-2 fs-18 text-primary"></i>Profile</a></li>
                             <li><a class="dropdown-item d-flex align-items-center" href="to-do-list.html"><i
                                         class="ti ti-checklist me-2 fs-18 text-success"></i>Task Manager</a></li>
+                            <?php if ($authUser['role'] === 'admin'): ?>
                             <li><a class="dropdown-item d-flex align-items-center" href="setting"><i
                                         class="ti ti-settings me-2 fs-18 text-orange"></i>Settings</a></li>
-                            <li><a class="dropdown-item d-flex align-items-center" href="sign-in-cover.html"><i
-                                        class="ti ti-logout me-2 fs-18 text-warning"></i>Log Out</a></li>
+                            <?php endif; ?>
+                            <li><form method="post" action="logout" class="m-0">
+                                    <input type="hidden" name="_csrf" value="<?= htmlspecialchars(authCsrfToken(), ENT_QUOTES, 'UTF-8') ?>">
+                                    <button type="submit" class="dropdown-item d-flex align-items-center"><i
+                                        class="ti ti-logout me-2 fs-18 text-warning"></i>Log Out</button></form></li>
                         </ul>
                     </li>
 

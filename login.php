@@ -1,4 +1,8 @@
-
+<?php
+require_once __DIR__ . '/includes/auth.php';
+$login = authLoginPage(); // handles the form; redirects after a successful sign-in
+$e = static function ($value) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); };
+?>
 <!DOCTYPE html>
 <html lang="en" dir="ltr" data-nav-layout="vertical" data-vertical-style="overlay" data-theme-mode="light" data-header-styles="light" data-menu-styles="light" data-toggled="close">
 
@@ -496,27 +500,35 @@
                     <div class="card custom-card shadow-none my-auto border-0">
                         <div class="card-body p-5">
                             <p class="h4 mb-2 fw-semibold">Sign In </p>
-                            <p class="mb-4 text-muted fw-normal">Welcome back Jhon !</p>
+                            <p class="mb-4 text-muted fw-normal">Sign in with your username and password.</p>
+                            <?php if ($login['notice'] !== ''): ?>
+                            <div class="alert alert-info py-2" role="status"><?= $e($login['notice']) ?></div>
+                            <?php endif; ?>
+                            <?php if ($login['error'] !== ''): ?>
+                            <div class="alert alert-danger py-2" role="alert"><?= $e($login['error']) ?></div>
+                            <?php endif; ?>
+                            <form method="post" action="login" autocomplete="on">
+                            <input type="hidden" name="_csrf" value="<?= $e(authCsrfToken()) ?>">
+                            <input type="hidden" name="next" value="<?= $e($login['next']) ?>">
                             <div class="row gy-3">
                                 <div class="col-xl-12">
                                     <label for="signin-username" class="form-label text-default">User Name</label>
-                                    <input type="text" class="form-control form-control-lg" id="signin-username" placeholder="user name">
+                                    <input type="text" class="form-control form-control-lg" id="signin-username" name="username" placeholder="user name"
+                                        value="<?= $e($login['username']) ?>" maxlength="64" autocomplete="username" required autofocus>
                                 </div>
                                 <div class="col-xl-12 mb-2">
-                                    <label for="signin-password" class="form-label text-default d-block">Password<a href="reset-password-basic.html" class="float-end link-danger op-5 fw-medium fs-12">Forget password ?</a></label>
+                                    <label for="signin-password" class="form-label text-default d-block">Password<span class="float-end text-muted op-5 fw-medium fs-12">Forgot it? Ask an administrator.</span></label>
                                     <div class="position-relative">
-                                        <input type="password" class="form-control form-control-lg" id="signin-password" placeholder="password">
+                                        <input type="password" class="form-control form-control-lg" id="signin-password" name="password" placeholder="password"
+                                            maxlength="200" autocomplete="current-password" required>
                                         <a href="javascript:void(0);" class="show-password-button text-muted" onclick="createpassword('signin-password',this)" id="button-addon2"><i class="ri-eye-off-line align-middle"></i></a>
                                     </div>
-                                    
-                               
-                            
-                                    
+                            </div>
                             </div>
                             <div class="d-grid mt-4">
-                                <a href="dashboard" class="btn btn-lg btn-primary">Sign In</a>
+                                <button type="submit" class="btn btn-lg btn-primary">Sign In</button>
                             </div>
-                            
+                            </form>
                         </div>
                     </div>
                 </div>

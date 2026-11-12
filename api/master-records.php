@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/auth.php';
 
 function respond(int $status, array $body): void
 {
@@ -15,6 +16,7 @@ function masterRecords(string $table, string $prefix): void
     if (!in_array($table, ['agents', 'distributors', 'transporters', 'customerRecords'], true)) {
         respond(400, ['success' => false, 'message' => 'Invalid resource.']);
     }
+    authRequireApi(['agents' => 'agent', 'distributors' => 'distributor', 'transporters' => 'transporter', 'customerRecords' => 'customer'][$table]);
     $isCustomer = $table === 'customerRecords';
     $method = $_SERVER['REQUEST_METHOD'];
     if (!in_array($method, ['GET', 'POST', 'PUT', 'DELETE'], true)) {
