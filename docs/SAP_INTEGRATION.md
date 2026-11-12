@@ -165,6 +165,7 @@ Full file-by-file plan: [SAP_PHASE1_PLAN.md](SAP_PHASE1_PLAN.md).
 | 2026-11-12 | `docs/SECURITY_AUDIT.md`, `docs/TEST_REGISTER.md` (new) | Audit findings, decisions, deferred items; test catalogue and run log | 1 |
 | 2026-11-12 | `includes/db.php`, `includes/db.config.example.php` (new), `.gitignore` | Credentials moved out of tracked code into the ignored `includes/db.config.php`; removed the ineffective `includes/db.php` ignore rule (decision 2) | 1 (fix) |
 | 2026-11-12 | `docs/databaseReadme.md`, `docs/flow.md`, `PROJECT_OVERVIEW.md` | Connection setup now points to `db.config.php` or env vars, never to editing `db.php` | 1 (fix) |
+| 2026-11-12 | `includes/db.php` (removed from Git, kept on disk), `includes/db.example.php` (new), `.gitignore`, `docs/databaseReadme.md`, `docs/flow.md`, `PROJECT_OVERVIEW.md` | `db.php` untracked at the owner's request; template plus the server switch-over steps | 1 (fix) |
 
 Not modified, on purpose (verified with `git diff 6ee8500`):
 - `includes/` (including `db.php`) and the database configuration;
@@ -180,6 +181,8 @@ There is no invoice or payment code.
 2. **`includes/db.php` is listed in `.gitignore` but is tracked.** The ignore rule has no effect. The file holds no secrets (it only reads environment variables) and the app needs it. Do not untrack it, or the next deploy will delete it from the server.
    - **Resolved 2026-11-12, owner request.** `db.php` stays tracked as code; the misleading ignore rule was removed. Credentials now go in `includes/db.config.php` (ignored, one per server; template `includes/db.config.example.php`) or in the `DB_*` environment variables, which take priority.
    - Without a config file the behaviour is unchanged. Decision 6 is lifted for this change only.
+   - **Changed later on 2026-11-12, owner decision ("untrack, safe procedure").** `includes/db.php` is no longer in Git and is ignored again. The tracked template `includes/db.example.php` is copied to `db.php` on every server and clone.
+   - The deploy that removes it deletes `db.php` on the server. The one-time switch-over steps are in `docs/databaseReadme.md`. Later code changes to the template must be copied to each server by hand.
 3. **No secrets found.** Every version of `includes/db.php` in history uses environment variables with the local fallback `root` and an empty password. No `.env`, key, certificate or SQL dump has ever been committed. No credential rotation is needed.
 4. **Invoices and payments are excluded** (section 1).
 5. **Hostinger deploy behaviour is not assumed** (owner, 2026-11-12). It cannot be verified from the repo: there is no deploy config, and Hostinger access is not connected in this environment. It stays pending until the owner confirms it.
@@ -369,4 +372,5 @@ All values are unknown. Do not invent them. Real values go in server-side config
 | 2026-11-12 | Phase 1 security audit | Read-only audit, accepted by the owner. Audit M1, M2 and L1 fixed; audit H1 and A1 deferred to the authentication phase; L2 to L12 recorded. 2 new tests; 18 of 19 pass, 1 Apache test skipped on purpose. Not committed. Stopped for owner review |
 | 2026-11-12 | Commit and push | Phase 0 + 1 committed as `a6ad9b9` on `sap_integration` and pushed to `origin/sap_integration` (owner request). `main` unchanged |
 | 2026-11-12 | DB config fix | `includes/db.php` was tracked despite `.gitignore`, so credential edits kept showing as changes and deploys replaced them. Credentials moved to the ignored `includes/db.config.php`. Committed by the owner as `9f7677b`; PRs #1 and #2 merged into `main` by the owner |
-| 2026-11-12 | DB config hardening | "Invalid server response. Check database setup." reproduced with a malformed `db.config.php` (copy of the old `db.php`, or plain text). `db.php` now ignores and logs a malformed config file instead of breaking every API. Not committed. Stopped for owner review |
+| 2026-11-12 | DB config hardening | "Invalid server response. Check database setup." reproduced with a malformed `db.config.php` (copy of the old `db.php`, or plain text). `db.php` now ignores and logs a malformed config file instead of breaking every API. Committed as `3123d87` |
+| 2026-11-12 | Untrack `db.php` | Owner chose "untrack, safe procedure": `includes/db.php` removed from Git (kept on disk) and ignored; tracked template `includes/db.example.php`. Committed on `sap_integration` for a PR; `main` not touched directly |

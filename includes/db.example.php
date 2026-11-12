@@ -1,7 +1,9 @@
 <?php
 // Connection settings, in this order: DB_* environment variables, then includes/db.config.php
 // (one per server, never in Git; copy includes/db.config.example.php), then the XAMPP defaults below.
-// Do not put credentials in this file: it is tracked, so every deploy replaces it.
+// includes/db.php is NOT in Git. Its tracked template is includes/db.example.php: copy it to
+// includes/db.php on every server and clone, and copy it again when the template changes.
+// Credentials still belong in includes/db.config.php or the DB_* environment variables, not here.
 require_once __DIR__ . '/schema-migrations.php';
 
 // Reads includes/db.config.php, which must contain only `<?php return [...];` (see db.config.example.php).
