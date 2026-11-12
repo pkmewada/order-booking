@@ -1,3 +1,4 @@
+<?php require_once __DIR__ . '/auth.php'; $authUser = authRequirePage('admin'); /* Settings: administrators only */ ?>
 <!DOCTYPE html>
 <html lang="en" dir="ltr" data-nav-layout="vertical" data-theme-mode="light" data-header-styles="transparent"
     data-width="default" data-menu-styles="light" data-toggled="close">
@@ -12,6 +13,7 @@
     if ($appBaseHref === '/') { $appBaseHref = '/'; }
     ?>
     <base href="<?= htmlspecialchars($appBaseHref, ENT_QUOTES, 'UTF-8') ?>">
+<?= authHeadTags($authUser) ?>
 
     <meta charset="UTF-8">
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
@@ -799,6 +801,16 @@
                     </li>
                     <!-- End::header-element -->
 
+                    <!-- Sign out (POST with the CSRF token) -->
+                    <li class="header-element">
+                        <form method="post" action="logout" class="m-0 h-100 d-flex align-items-center">
+                            <input type="hidden" name="_csrf" value="<?= htmlspecialchars(authCsrfToken(), ENT_QUOTES, 'UTF-8') ?>">
+                            <button type="submit" class="header-link border-0 bg-transparent" title="Log Out (<?= htmlspecialchars($authUser['displayName'], ENT_QUOTES, 'UTF-8') ?>)" aria-label="Log Out">
+                                <i class="ti ti-logout header-link-icon fs-5"></i>
+                            </button>
+                        </form>
+                    </li>
+
                 </ul>
             </div>
         </header>
@@ -901,6 +913,14 @@
                                 </li>
 
                             </ul>
+                        </li>
+
+                        <!-- Sign-in accounts (admin only, like every Settings page) -->
+                        <li class="slide">
+                            <a href="users" class="side-menu__item">
+                                <i class="ti ti-users side-menu__icon"></i>
+                                <span class="side-menu__label">Users</span>
+                            </a>
                         </li>
 
                     </ul>

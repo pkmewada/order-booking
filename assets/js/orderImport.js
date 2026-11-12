@@ -95,6 +95,15 @@ $(function () {
         const local = localOrders();
         if (!local.length) return;
         const state = record();
+        // Importing is admin-only on the server; other users only see how many orders are waiting.
+        if ((document.querySelector('meta[name="app-user-role"]') || {}).content !== 'admin') {
+            const waiting = local.filter((order, index) => !state.orders[keyOf(order, index)]).length;
+            if (waiting) {
+                $('.main-content .container-fluid').first().prepend(`<div id="ordersImportBanner" class="alert alert-info mt-3" role="status">
+                    This browser has ${waiting} order(s) saved before orders moved to the server. An administrator must sign in on this computer to import them. Nothing in this browser is deleted.</div>`);
+            }
+            return;
+        }
         const pending = local.map((order, index) => ({ order, key: keyOf(order, index) })).filter(entry => !state.orders[entry.key]);
         try {
             if (pending.length) {

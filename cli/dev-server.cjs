@@ -1,6 +1,7 @@
-// LOCAL development server: `npm run dev` (http://127.0.0.1:8080/order-bookings/order-list).
-// Always bound to 127.0.0.1. It is the only place that sets the explicit local-development switch
-// ORDERS_ALLOW_UNAUTHENTICATED_DEV=1; without it (for example on Apache or Hostinger) the order APIs return 401.
+// LOCAL development server: `npm run dev` (http://127.0.0.1:8080/order-bookings/login).
+// Always bound to 127.0.0.1. Sign-in is required exactly as on the live site: create an account first with
+// `php cli/users-admin.php create <username> admin` (same DEV_DB_* database). Only the integration tests set the
+// API test switch ORDERS_ALLOW_UNAUTHENTICATED_DEV=1 (see includes/auth.php authDevBypass).
 // Database: DEV_DB_* (default: the same local database as includes/db.php, 127.0.0.1:3306 `order-booking`).
 const { spawn } = require('node:child_process');
 const path = require('node:path');
@@ -9,7 +10,6 @@ const port = Number(process.env.DEV_PORT || 8080);
 const env = {
     ...process.env,
     APP_ENV: 'development',
-    ORDERS_ALLOW_UNAUTHENTICATED_DEV: '1',
     DB_HOST: process.env.DEV_DB_HOST || '127.0.0.1',
     DB_PORT: process.env.DEV_DB_PORT || '3306',
     DB_NAME: process.env.DEV_DB_NAME || 'order-booking',

@@ -1,4 +1,7 @@
 <?php
+// Start the session before any page writes output (some page files begin with a UTF-8 BOM).
+require_once __DIR__ . '/includes/auth.php';
+authStartSession();
 
 $route = trim($_GET['url'] ?? '', '/');
 
@@ -68,6 +71,7 @@ $pageRoutes = [
     'product-form' => 'settings/productForm.php',
     'setting' => 'settings/settings.php',
     'transporter' => 'settings/transporter.php',
+    'users' => 'settings/users.php',
 ];
 
 $file = __DIR__ . '/' . ($pageRoutes[$page] ?? "{$page}.php");

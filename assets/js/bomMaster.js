@@ -356,7 +356,7 @@ $(document).ready(function () {
 
                         <div class="item-list-box">
 
-                            <div class="item-list-title d-flex justify-content-between align-items-center"><span>Item List</span></div>
+                            <div class="item-list-title d-flex justify-content-between align-items-center"><span>Item List</span><button type="button" class="btn btn-sm btn-outline-secondary add-material-btn" data-piece="${i}" title="Add item"><i class="bx bx-plus"></i></button></div>
 
                             <div class="item-list-options">
 
@@ -454,7 +454,8 @@ $(document).ready(function () {
         const $button = $(button);
         const $panel = kind === 'color' ? $button.closest('.input-group') : $button.closest('.item-list-title');
         $('.bom-master-entry-editor').remove();
-        const $editor = $(`<div class="bom-master-entry-editor"><input type="text" class="form-control master-entry-name" maxlength="150" placeholder="Enter ${kind === 'color' ? 'color' : 'item'} name"><button type="button" class="btn btn-primary btn-sm master-entry-save">Save</button><button type="button" class="btn btn-light btn-sm master-entry-cancel" aria-label="Cancel">Cancel</button><small class="text-danger master-entry-error"></small></div>`);
+        const typeSelect = kind === 'color' ? '' : '<select class="form-select master-entry-type" aria-label="Item type" required><option value="">Item Type</option><option value="Cutting">Cutting</option><option value="Non-Cutting">Non-Cutting</option></select>';
+        const $editor = $(`<div class="bom-master-entry-editor"><input type="text" class="form-control master-entry-name" maxlength="150" placeholder="Enter ${kind === 'color' ? 'color' : 'item'} name">${typeSelect}<button type="button" class="btn btn-primary btn-sm master-entry-save">Save</button><button type="button" class="btn btn-light btn-sm master-entry-cancel" aria-label="Cancel">Cancel</button><small class="text-danger master-entry-error"></small></div>`);
         $editor.data({kind, piece: $button.data('piece')});
         $panel.after($editor);
         $editor.find('.master-entry-name').trigger('focus');
@@ -471,6 +472,8 @@ $(document).ready(function () {
         const name = String($editor.find('.master-entry-name').val() || '').trim();
         const kind = $editor.data('kind');
         if (!name) { $editor.find('.master-entry-error').text('Enter a name.'); $editor.find('.master-entry-name').trigger('focus'); return; }
+        const itemType = String($editor.find('.master-entry-type').val() || '');
+        if (kind !== 'color' && !itemType) { $editor.find('.master-entry-error').text('Select Cutting or Non-Cutting.'); $editor.find('.master-entry-type').trigger('focus'); return; }
         $(this).prop('disabled', true);
         try {
             if (kind === 'color') {
@@ -481,7 +484,7 @@ $(document).ready(function () {
             } else {
                 const piece = Number($editor.data('piece'));
                 const pieces = collectPieces();
-                await CatalogApi.request('item-list', {name});
+                await CatalogApi.request('item-list', {name, itemType});
                 await reloadCatalog();
                 renderPieceTable(pieces);
                 $(`.material-check[data-piece="${piece}"]`).filter(function(){ return $(this).val() === name; }).prop('checked', true);

@@ -1,6 +1,6 @@
 # SAP Phase 1 plan: orders, dispatch and delivery to MySQL
 
-**Status:** revision 2 approved (2026-11-12). **Implemented locally** on branch `sap_integration` (not committed, pushed or deployed). See section 14 for the outcome and the differences from this plan. Passages superseded by the owner's security clarification are marked *(superseded)*.
+**Status:** revision 2 approved (2026-11-12). **Implemented** on branch `sap_integration` and merged into `main` on 2026-11-12 (PRs #1 to #3); live deployment not verified and blocked (see `SECURITY_AUDIT.md` section 7). See section 14 for the outcome and the differences from this plan. Passages superseded by the owner's security clarification are marked *(superseded)*.
 
 | | |
 | --- | --- |

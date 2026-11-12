@@ -29,16 +29,11 @@ class OrderError extends RuntimeException
     }
 }
 
-// There is no login yet. Unauthenticated access exists ONLY behind an explicit local-development
-// switch. Every other environment, including production, fails closed (owner decision D3).
-// The switch only works under PHP's built-in server (`npm run dev`), never under Apache/LiteSpeed,
-// so a stray SetEnv on a web server cannot open the API.
-function ordersRequireAccess(): void
+// Sign-in, role and CSRF checks (includes/auth.php). The Phase 1 test switch still works only under
+// PHP's built-in server (authDevBypass), never under Apache/LiteSpeed.
+function ordersRequireAccess(string $resource = 'orders'): void
 {
-    if (PHP_SAPI === 'cli-server' && getenv('APP_ENV') === 'development' && getenv('ORDERS_ALLOW_UNAUTHENTICATED_DEV') === '1') {
-        return;
-    }
-    respond(401, ['success' => false, 'message' => 'Login required. Order APIs stay disabled until authentication is implemented.']);
+    authRequireApi($resource);
 }
 
 // The new APIs stay disabled until `php cli/orders-admin.php migrate` has verified the schema.
@@ -749,6 +744,9 @@ function ordersHandleAction(PDO $db, array $data): array
         return ['order' => ordersCreate($db, $data)];
     }
     if ($action === 'import') {
+        if (!authIsAdmin()) {
+            throw new OrderError('Only an administrator can import browser orders.', 403);
+        }
         return ['results' => ordersImport($db, $data['orders'] ?? null)];
     }
     $id = ordersText($data, 'id', 40, true);
@@ -1328,7 +1326,7 @@ function ordersApi(): void
 
 function ordersPdfApi(): void
 {
-    ordersRequireAccess();
+    ordersRequireAccess('delivery-pdf');
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     try {
         $db = database();
@@ -1350,6 +1348,9 @@ function ordersPdfApi(): void
             throw new OrderError('This delivery was removed. Refresh the list.', 404);
         }
         $mode = ($_POST['mode'] ?? 'pass') === 'import' ? 'import' : 'pass';
+        if ($mode === 'import' && !authIsAdmin()) {
+            throw new OrderError('Only an administrator can import browser PDFs.', 403);
+        }
         respond(200, ['success' => true, 'data' => ['order' => ordersAttachPdf($db, $batchId, $path, $name, $mode, true)]]);
     } catch (Throwable $error) {
         ordersRespondError($error, 'Delivery PDF API');

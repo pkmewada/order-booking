@@ -5,8 +5,8 @@ This is the single source of truth for SAP work. Update it at the end of every s
 | | |
 | --- | --- |
 | **Current phase** | Phase 1: orders, dispatch and delivery to MySQL |
-| **Phase status** | **Implemented and tested locally** (2026-11-12); not committed, pushed or deployed. [Plan and outcome](SAP_PHASE1_PLAN.md) |
-| **Next action** | Owner reviews Phase 1. Live deploy is **blocked** until login, session security, API authorization and CSRF protection exist (A1) and Hostinger items H1 to H9 are answered. No other phase starts without approval. |
+| **Phase status** | **Implemented, tested and merged into `main`** (2026-11-12): PR #1 `084f41b`, PR #2 `5212e03`, PR #3 `745fb01`. Focused QA passed on `6154194`. Live deployment **not verified and blocked**. [Plan and outcome](SAP_PHASE1_PLAN.md) |
+| **Next action** | Owner review of the authentication work on branch `feature/authentication` (A1 and audit H1 implemented, not committed). Confirm on Hostinger whether `main` is auto-deployed (H1). Live deploy stays **blocked** until authentication is merged, `migrate` and the first admin are run on the server, the QA blockers in [SECURITY_AUDIT.md](SECURITY_AUDIT.md) section 7 and Hostinger items H1 to H9 are resolved. No other phase starts without approval. |
 | **Branch** | `sap_integration` (local, created 2026-11-12 from `main` at `6ee8500`; nothing committed or pushed) |
 | **Last updated** | 2026-11-12 |
 | **Team report** | [SAP Service Layer access and requirement gaps](https://claude.ai/artifact/6xKTLpcSALsjHVj6BLpq1R) |
@@ -26,7 +26,7 @@ The goal is a two-way integration between the Little Dolly app (this repo) and L
 - PHP and Apache, deployed from GitHub (`pkmewada/order-booking`) to Hostinger. Routing is `.htaccess` → `index.php` (`$pageRoutes`).
 - MySQL through PDO in `includes/db.php`, using the `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` and `DB_PASSWORD` environment variables.
 - Schema: `database/order-booking.sql` plus migrations in `database/migrations/`. Migrations run automatically on the first API call (`includes/schema-migrations.php`, tracked in `appSchemaMigrations`).
-- **Authentication:** there is no login and no access control on pages or APIs.
+- **Authentication:** none on `main`. Implemented on branch `feature/authentication` (not merged): sign-in, admin and employee roles, CSRF. See `SECURITY_AUDIT.md` section 8.
 
 | Data | Stored in today | SAP object |
 | --- | --- | --- |
@@ -57,7 +57,7 @@ Browser (jQuery) → api/*.php → MySQL (local copy, SAP mapping columns, sync 
 | Phase | Name | Status |
 | --- | --- | --- |
 | 0 | Repository safety and baseline | Done except 2 pending Hostinger checks |
-| 1 | Move orders, dispatch and delivery to MySQL; delivery PDFs to server storage | **Done locally** (branch `sap_integration`). Awaiting owner review. Live deploy blocked by A1 and H1 to H9 |
+| 1 | Move orders, dispatch and delivery to MySQL; delivery PDFs to server storage | **Done; merged into `main`** (PRs #1 to #3). Live deploy blocked by A1, QA blockers B1 to B6 and H1 to H9 |
 | 2 | SAP fields and local database readiness | Not started |
 | 3 | SAP settings and connection foundation | Blocked on admin authentication and SAP test access |
 | 4 | Customer and product sync | Blocked on Phase 3 |
@@ -95,8 +95,8 @@ Full file-by-file plan: [SAP_PHASE1_PLAN.md](SAP_PHASE1_PLAN.md).
 - [x] `database/order-booking.sql`, `database/cli-migrations/`, `docs/flow.md` updated
 - [x] Two-browser end-to-end check (headless Chrome, 2 profiles): 26 of 26
 - [x] Read-only security audit of the Phase 1 diff (2026-11-12): no critical findings. Audit M1, M2 and L1 fixed before commit. See [SECURITY_AUDIT.md](SECURITY_AUDIT.md) and [TEST_REGISTER.md](TEST_REGISTER.md)
-- [ ] **Before live:** A1 (login, sessions, API authorization, CSRF) and Hostinger items H1 to H9
-- [ ] **Before live (audit H1):** the `import` action must be admin-only, or disabled once the browser migration is complete
+- [ ] **Before live:** A1 (login, sessions, API authorization, CSRF): **implemented** on `feature/authentication`, awaiting approval and merge. Hostinger items H1 to H9 still open
+- [ ] **Before live (audit H1):** the `import` action must be admin-only, or disabled once the browser migration is complete. **Implemented** (admin-only) on `feature/authentication`
 
 ### Phase 2: SAP fields
 - [ ] Confirm the mandatory fields with Accelon for each form (including production and inventory)
@@ -104,7 +104,7 @@ Full file-by-file plan: [SAP_PHASE1_PLAN.md](SAP_PHASE1_PLAN.md).
 - [ ] Update forms and APIs; no SAP calls yet
 
 ### Phase 3: Settings and connection
-- [ ] Admin login and authorization (prerequisite)
+- [ ] Admin login and authorization (prerequisite). Implemented on `feature/authentication`, not merged
 - [ ] Server-side SAP config that is never returned by any API
 - [ ] SAP Settings page (admin only): environment, URL, port, CompanyDB, user, password (write only), connection test
 - [ ] Service Layer client (login, session reuse, logout, error handling) once test credentials exist
@@ -125,8 +125,9 @@ Full file-by-file plan: [SAP_PHASE1_PLAN.md](SAP_PHASE1_PLAN.md).
 | Date | Migration | Tables / columns | Phase |
 | --- | --- | --- | --- |
 | 2026-11-12 | `database/cli-migrations/20261112_001_customer-orders.sql` (+ `.down.sql`, local/test only) | New: `customerOrders`, `customerOrderItems`, `deliveryBatches`, `deliveryBatchItems`. Additive; nothing existing altered. Also copied into `database/order-booking.sql`. Applied only by `php cli/orders-admin.php migrate` and recorded as `cli/20261112_001_customer-orders.sql` after verification. Tested on MariaDB 11.4 and MySQL 8.4 | 1 |
+| 2026-11-12 | `database/cli-migrations/20261112_002_app-users.sql` (+ `.down.sql`, test only) | New: `appUsers` (accounts for sign-in). There was no user table, and `employeeRecords` holds production workers without login fields. Additive. Also in `database/order-booking.sql`. Applied by `php cli/orders-admin.php migrate`. Branch `feature/authentication`, not merged | Auth |
 
-**Not yet applied** to any real database. The owner's local `order-booking` (MySQL 8.4, port 3306) has not been migrated.
+**Not yet applied** to the live database. The owner's local `order-booking` (MySQL 8.4, port 3306) was migrated on 2026-11-12 (both CLI migrations, after a `mysqldump` backup) so that local test accounts could be created.
 
 ## 7. API endpoints introduced or modified
 
@@ -134,6 +135,8 @@ Full file-by-file plan: [SAP_PHASE1_PLAN.md](SAP_PHASE1_PLAN.md).
 | --- | --- | --- | --- |
 | 2026-11-12 | `api/orders.php` | New. `GET` (all or `?id=`); `POST` actions `create`, `update`, `setStatus`, `delete`, `passToDispatch`, `scan`, `replaceItem`, `deliverPartial`, `import`. 401 without login (dev switch only); 503 until migrated | 1 |
 | 2026-11-12 | `api/delivery-pdf.php` | New. `POST` (pass, or `mode=import`); `GET ?batchId=` private download | 1 |
+| 2026-11-12 | All page APIs (orders, PDF, masters, manufacturing, product, BOM, patterns, manufacturing state) | Sign-in required (401), role rules (403), CSRF header on changes. Order and PDF import admin-only | Auth |
+| 2026-11-12 | `api/users.php` | New, admin only: list, create, update, set password | Auth |
 
 ## 8. Files created or modified
 
@@ -162,6 +165,8 @@ Full file-by-file plan: [SAP_PHASE1_PLAN.md](SAP_PHASE1_PLAN.md).
 | 2026-11-12 | `api/order-records.php` | Audit fixes. M1: the dev switch also needs PHP's built-in server. M2: outside development, PDF storage needs an existing, writable `DELIVERY_PDF_DIR` outside the project and web root, otherwise 503 | 1 |
 | 2026-11-12 | `assets/js/orderList.js`, `orderPunch.js`, `orderImport.js`, `delivery.js` | Audit L1: error messages shown as text in SweetAlert2 (7 calls) | 1 |
 | 2026-11-12 | `tests/orders-api.integration.cjs` | Tests TC-05 (M1, M2) and TC-06 (L1 guard) | 1 |
+| 2026-11-12 | `includes/auth.php`, `includes/users.php`, `api/users.php`, `cli/users-admin.php`, `settings/users.php`, `assets/js/users.js`, `logout.php`, `tests/auth.integration.cjs`, migration `20261112_002` (new) | Authentication (branch `feature/authentication`) | Auth |
+| 2026-11-12 | `login.php`, `index.php`, `includes/header.php`, `includes/header2.php`, the API handlers, `assets/js/orderImport.js`, `cli/dev-server.cjs`, `package.json`, `database/order-booking.sql`, TC-01 list | Sign-in form, page and API guards, Log Out, Users menu item, admin-only import notice; `npm run dev` no longer bypasses sign-in | Auth |
 | 2026-11-12 | `docs/SECURITY_AUDIT.md`, `docs/TEST_REGISTER.md` (new) | Audit findings, decisions, deferred items; test catalogue and run log | 1 |
 | 2026-11-12 | `includes/db.php`, `includes/db.config.example.php` (new), `.gitignore` | Credentials moved out of tracked code into the ignored `includes/db.config.php`; removed the ineffective `includes/db.php` ignore rule (decision 2) | 1 (fix) |
 | 2026-11-12 | `docs/databaseReadme.md`, `docs/flow.md`, `PROJECT_OVERVIEW.md` | Connection setup now points to `db.config.php` or env vars, never to editing `db.php` | 1 (fix) |
@@ -374,3 +379,6 @@ All values are unknown. Do not invent them. Real values go in server-side config
 | 2026-11-12 | DB config fix | `includes/db.php` was tracked despite `.gitignore`, so credential edits kept showing as changes and deploys replaced them. Credentials moved to the ignored `includes/db.config.php`. Committed by the owner as `9f7677b`; PRs #1 and #2 merged into `main` by the owner |
 | 2026-11-12 | DB config hardening | "Invalid server response. Check database setup." reproduced with a malformed `db.config.php` (copy of the old `db.php`, or plain text). `db.php` now ignores and logs a malformed config file instead of breaking every API. Committed as `3123d87` |
 | 2026-11-12 | Untrack `db.php` | Owner chose "untrack, safe procedure": `includes/db.php` removed from Git (kept on disk) and ignored; tracked template `includes/db.example.php`. Committed on `sap_integration` for a PR; `main` not touched directly |
+| 2026-11-12 | Merges by owner | PRs #1 (`084f41b`), #2 (`5212e03`) and #3 (`745fb01`) merged `sap_integration` into `main`. Whether Hostinger deployed them is not verified |
+| 2026-11-12 | Focused QA | QA on `6154194`: no application bugs. Two-browser e2e 25/26 (1 test-data artifact, re-checked: pass). Blockers B1 to B6 recorded in `SECURITY_AUDIT.md` section 7; runs TR-QA-01 to TR-QA-06 in `TEST_REGISTER.md`. No application code changed. Docs not committed |
+| 2026-11-12 | Authentication (`feature/authentication` from `origin/main` `745fb01`) | Owner decisions: employees get Order Booking and Manufacturing; accounts via CLI and an admin Users page. Implemented A1 and audit H1. Tests: `test:orders` 30 (29 pass, 1 skipped on purpose) on MariaDB 11.4 and MySQL 8.4; `npm test` 14/14; browser 20/20 and 27/28 (known test-data artifact). Not committed. SAP sync not started |

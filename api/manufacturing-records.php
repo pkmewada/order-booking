@@ -6,6 +6,8 @@ function manufacturingRecords(string $table): void
     if (!in_array($table, ['employeeRecords', 'colourRecords', 'itemList', 'pieceItemList', 'additionalWork'], true)) {
         respond(400, ['success' => false, 'message' => 'Invalid resource.']);
     }
+    authRequireApi(['employeeRecords' => 'employee', 'colourRecords' => 'colour', 'itemList' => 'item-list',
+        'pieceItemList' => 'piece-item-list', 'additionalWork' => 'additional-work'][$table]);
     $employee = $table === 'employeeRecords';
     $method = $_SERVER['REQUEST_METHOD'];
     if (!in_array($method, ['GET', 'POST', 'PUT', 'DELETE'], true)) {

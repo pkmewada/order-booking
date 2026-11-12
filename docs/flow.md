@@ -24,6 +24,7 @@ Management pages load records from the database and maintain a localStorage comp
 - New installation: import `database/order-booking.sql` using phpMyAdmin. Creates the database and three tables with unique email indexes.
 - Fresh database setup uses only `database/order-booking.sql`; there is no separate migration file. Each table includes the phone constraint and unique email index.
 - Order tables (SAP Phase 1): run `php cli/orders-admin.php migrate` once per database, also after a fresh import. It is safe to run twice and verifies the schema before the order APIs work.
+- Accounts (Phase 2): the same `migrate` also creates `appUsers`. Then create the first administrator with `php cli/users-admin.php create <username> admin "<Name>"`; the password is typed on the next line and is not echoed in the command. Until then nobody can sign in.
 - Copy `includes/db.example.php` to `includes/db.php`. `db.php` is not in Git; copy it again when the template changes.
 - Configure the connection in `includes/db.config.php` (copy of `includes/db.config.example.php`, ignored by Git) or with the `DB_*` environment variables, which take priority.
 - XAMPP defaults: `127.0.0.1:3306`, `root`, blank password.
@@ -40,7 +41,7 @@ Since SAP Phase 1 (2026-11-12, branch `sap_integration`), orders, dispatch and d
 
 Page → `assets/js/ordersApi.js` → `api/orders.php` / `api/delivery-pdf.php` → `api/order-records.php` (all rules and validation) → MySQL in one transaction → JSON in the same order shape the pages used in localStorage. `orderQuantities.js` and `dispatchFlow.js` are unchanged and are used for display only; the PHP rules mirror them (parity test).
 
-**Access:** there is no login yet. These APIs return **401** unless the explicit local-development switch is set (`APP_ENV=development` and `ORDERS_ALLOW_UNAUTHENTICATED_DEV=1`, which only `npm run dev` sets). Production fails closed. Login, session security, API authorization and CSRF protection are required before live deployment.
+**Access (Phase 2, branch `feature/authentication`):** every page and API needs a signed-in account; see the next section. Signed out, the APIs return **401**. Order and PDF import are admin-only. The old local test switch (`APP_ENV=development` and `ORDERS_ALLOW_UNAUTHENTICATED_DEV=1`, PHP built-in server only) is set only by `npm run test:orders`, so `npm run dev` also needs an account.
 
 **Readiness:** the APIs return **503** until `php cli/orders-admin.php migrate` has verified the schema and recorded `cli/20261112_001_customer-orders.sql` in `appSchemaMigrations`. This migration lives in `database/cli-migrations/`, which the automatic web runner never reads.
 
@@ -74,6 +75,22 @@ Every change runs in a short transaction that locks rows in a fixed order (order
 
 **CLI (`cli/orders-admin.php`):** `migrate`, `verify`, `status`, `export <dir>`, `restore <dir>`, `orphans [--delete]`, and `down` (only on local `*_test` databases).
 
+## Sign-in and access (Phase 2)
+
+Sign in (`login`) → session → pages and APIs → Log Out (header menu, POST).
+
+| Role | Can use |
+| --- | --- |
+| **admin** | Everything, including Settings, all master changes, **Settings → Users**, and order/PDF import |
+| **employee** | All Order Booking and Manufacturing pages and their APIs. Can read every master list and add colours and items from BOM Master. Cannot open Settings, change other masters, manage users or import browser orders |
+
+- **Accounts:** table `appUsers` (username, display name, bcrypt hash, role, active, `authVersion`, lockout fields). Managed with `php cli/users-admin.php list | create | set-password | set-role | disable | enable`, or by an admin on the Users page. The last active admin cannot be demoted or disabled.
+- **Sessions:** end after 2 hours idle or 12 hours in total. Disabling an account, changing its role or resetting its password ends that user's open sessions.
+- **Lock-out:** 5 wrong passwords lock the account for 15 minutes. An admin password reset unlocks it.
+- **Changes:** every POST, PUT or DELETE needs the page's CSRF token. A script in the page `<head>` adds it to each request, so page code needs no change.
+- **Expired session:** a page that calls an API after expiry is sent to the sign-in page, and returns to the same page after signing in.
+- **Code:** rules in `includes/auth.php` (`AUTH_API_RULES`), accounts in `includes/users.php`. Details and remaining issues are in `docs/SECURITY_AUDIT.md` section 8.
+
 ## Existing manufacturing flow
 
 BOM → batch creation/approval → configured production route: cutting, additional work (embroidery, digital print, screen print, hand work, peco), stitching, ironing → packing → bundling → inventory/stock.
@@ -87,6 +104,7 @@ The production engine determines each batch/piece's applicable stages, assignmen
 | 2026-10-07 | Added separate master APIs, PDO connection and three master tables. |
 | 2026-10-07 | Added strict mobile validation, optional validated email, unique email per master table and schema migration. New table names use lower camelCase. |
 | 2026-11-12 | SAP Phase 1 (branch `sap_integration`, local only): tables `customerOrders`, `customerOrderItems`, `deliveryBatches`, `deliveryBatchItems`; APIs `api/orders.php`, `api/delivery-pdf.php`; CLI `cli/orders-admin.php`; browser import. |
+| 2026-11-12 | Phase 2 authentication (branch `feature/authentication`, not merged): table `appUsers` (CLI migration `20261112_002`); sign-in and sign-out; roles admin and employee; CSRF; admin-only import; Users page; CLI `cli/users-admin.php`. |
 
 ## Customer creation database flow
 

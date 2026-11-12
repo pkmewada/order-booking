@@ -117,6 +117,7 @@ include __DIR__ . "/../includes/header.php";
     .pattern-piece-card .piece-head-row { margin-bottom:14px; }
     .bom-master-entry-editor { display:flex; align-items:center; gap:8px; margin-top:8px; }
     .bom-master-entry-editor .form-control { min-width:0; }
+    .bom-master-entry-editor .form-select { width:auto; flex:0 0 auto; }
     .flow-add-work-btn { width:28px; height:28px; padding:0; border:1px solid #161617; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; background:#fff; color:#161617; }
     .flow-add-work-btn:hover { background:#161617; color:#fff; }
     .flow-add-work-wrap { display:inline-flex; align-items:center; gap:4px; width:220px; }
