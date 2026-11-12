@@ -1,4 +1,4 @@
-$(document).ready(function () {
+$(document).ready(async function () {
     "use strict";
 
     const BATCH_STORAGE_KEY = "batchData";
@@ -20,6 +20,7 @@ $(document).ready(function () {
     const photoZoomModal = new bootstrap.Modal(
         document.getElementById("photoZoomModal")
     );
+    const passedBatchesModal = new bootstrap.Modal(document.getElementById("passedBatchesModal"));
 
     // --------------------------------------------------
     // HELPERS
@@ -50,13 +51,13 @@ $(document).ready(function () {
         }
     }
 
-    function saveStorage(key, value) {
+    async function saveState(updates) {
         try {
-            localStorage.setItem(key, JSON.stringify(value));
+            await Production.saveState(updates);
             return true;
         } catch (error) {
-            console.error("Storage save error:", error);
-            Swal.fire("Storage Error", "Could not save data.", "error");
+            console.error("Manufacturing database save error:", error);
+            Swal.fire("Database Error", error.message || "Could not save manufacturing data.", "error");
             return false;
         }
     }
@@ -141,6 +142,16 @@ $(document).ready(function () {
         return "";
     }
 
+    function getBrandSizeCount(brand) {
+        const sizes = {
+            "LITTLE DOLLY": ["18", "20", "22", "24", "26"],
+            "AMARI": ["S", "M", "L"],
+            "AMARU": ["S", "M", "L"],
+            "NIVI BLOSSOM": ["28", "30", "32", "34"]
+        };
+        return (sizes[String(brand || "").trim().toUpperCase()] || []).length;
+    }
+
     /* ======================================================
        PASSED DATE/TIME FORMAT
        ====================================================== */
@@ -189,9 +200,17 @@ $(document).ready(function () {
     // DATA LOAD
     // --------------------------------------------------
 
-    function loadData() {
+    async function loadData() {
+        await Production.refresh();
         batchData = readStorage(BATCH_STORAGE_KEY);
-        bomData = readStorage(BOM_STORAGE_KEY);
+        const response = await fetch("api/bom.php", { cache: "no-store" });
+        let result;
+        try { result = await response.json(); }
+        catch (_) { throw new Error("Invalid BOM database response. Check PHP and database setup."); }
+        if (!response.ok || !result.success) throw new Error(result.message || "Unable to load BOM data.");
+        bomData = result.data;
+        try { localStorage.setItem(BOM_STORAGE_KEY, JSON.stringify(bomData)); }
+        catch (error) { console.warn("BOM cache unavailable:", error); }
     }
 
     // --------------------------------------------------
@@ -362,10 +381,11 @@ $(document).ready(function () {
     // REFRESH
     // --------------------------------------------------
 
-    $("#refreshBatchBtn").on("click", function () {
+    $("#refreshBatchBtn").on("click", async function () {
         const btn = $(this);
         btn.addClass("spinning");
-        loadData();
+        try { await loadData(); }
+        catch (error) { Swal.fire("Database Error", error.message, "error"); btn.removeClass("spinning"); return; }
         $("#brandFilter").val("");
         $("#priorityFilter").val("");
         $("#colorFilter").val("");
@@ -386,7 +406,7 @@ $(document).ready(function () {
     // SAVE BATCH
     // --------------------------------------------------
 
-    $("#batchForm").on("submit", function (event) {
+    $("#batchForm").on("submit", async function (event) {
         event.preventDefault();
 
         const designNumber = $("#designNumber").val().trim();
@@ -407,6 +427,12 @@ $(document).ready(function () {
 
         if (!quantity || quantity < 1) {
             showFormMessage("warning", "Please enter a valid quantity.");
+            return;
+        }
+
+        const sizeCount = getBrandSizeCount(getBrand(selectedBom));
+        if (sizeCount && quantity % sizeCount !== 0) {
+            showFormMessage("warning", `${getBrand(selectedBom)} has ${sizeCount} sizes. Quantity must be in complete size sets (multiples of ${sizeCount}).`);
             return;
         }
 
@@ -436,6 +462,7 @@ $(document).ready(function () {
                 number: getPieceNumber(piece, index),
                 item: getPieceItem(piece),
                 materials: getMaterials(piece),
+                ...(Array.isArray(piece.materialItems) ? { materialItems: piece.materialItems.map(item => ({ id: Number(item.id), name: String(item.name || ''), itemType: item.itemType || null })) } : {}),
                 additionalWorks: getAdditionalWorks(piece)
             }))
         };
@@ -448,7 +475,7 @@ $(document).ready(function () {
             batchData.push(batchRecord);
         }
 
-        if (!saveStorage(BATCH_STORAGE_KEY, batchData)) return;
+        if (!(await saveState({ [BATCH_STORAGE_KEY]: batchData }))) return;
 
         batchModal.hide();
         renderFilters();
@@ -470,13 +497,14 @@ $(document).ready(function () {
     function renderTable() {
         const tbody = $("#batchTableBody");
         tbody.empty();
+        const activeBatches = batchData.filter(batch => batch.status !== "approved");
 
         const brandFilter = normalize($("#brandFilter").val());
         const priorityFilter = normalize($("#priorityFilter").val());
         const colorFilter = normalize($("#colorFilter").val());
         const searchTerm = normalize($("#batchSearch").val());
 
-        const filteredBatches = batchData.filter(batch => {
+        const filteredBatches = activeBatches.filter(batch => {
             const searchableText = [
                 batch.batchId, batch.brand, batch.designNumber, batch.color,
                 batch.quantity, batch.priority,
@@ -546,6 +574,40 @@ $(document).ready(function () {
         });
     }
 
+    function getPassedBatches() {
+        const passed = [...batchData.filter(batch => batch.status === "approved"),
+            ...readStorage(APPROVED_BATCH_STORAGE_KEY).filter(batch => batch.status === "approved")];
+        return [...new Map(passed.map(batch => [String(batch.id ?? batch.batchId), batch])).values()]
+            .sort((a, b) => String(b.passedAt || "").localeCompare(String(a.passedAt || "")));
+    }
+
+    function renderPassedBatches() {
+        const tbody = $("#passedBatchTableBody").empty();
+        const passed = getPassedBatches();
+        if (!passed.length) {
+            tbody.html('<tr><td colspan="7" class="text-center text-muted py-4">No passed batches yet.</td></tr>');
+            return;
+        }
+        passed.forEach(batch => {
+            const dateTime = formatPassedDateTime(batch.passedAt);
+            tbody.append(`<tr>
+                <td><strong>${escapeHtml(batch.batchId || "-")}</strong></td>
+                <td>${escapeHtml(batch.brand || "-")}</td>
+                <td>${escapeHtml(batch.designNumber || "-")}</td>
+                <td>${escapeHtml(batch.color || "-")}</td>
+                <td>${escapeHtml(batch.quantity || 0)}</td>
+                <td>${escapeHtml(batch.priority || "-")}</td>
+                <td>${escapeHtml(dateTime.date)} ${escapeHtml(dateTime.time)}</td>
+            </tr>`);
+        });
+    }
+
+    $("#showPassedBatchesBtn").on("click", async function () {
+        try { await loadData(); renderTable(); } catch (error) { console.warn("Could not refresh passed batch list:", error); }
+        renderPassedBatches();
+        passedBatchesModal.show();
+    });
+
     // --------------------------------------------------
     // PHOTO ZOOM
     // --------------------------------------------------
@@ -605,7 +667,7 @@ $(document).ready(function () {
             confirmButtonText: "Yes, Pass",
             cancelButtonText: "Cancel",
             confirmButtonColor: "#198754"
-        }).then(function (result) {
+        }).then(async function (result) {
             if (!result.isConfirmed) return;
 
             // Mark approved + record current date/time
@@ -622,8 +684,10 @@ $(document).ready(function () {
                 approvedBatches.push({ ...batch });
             }
 
-            if (!saveStorage(APPROVED_BATCH_STORAGE_KEY, approvedBatches)) return;
-            if (!saveStorage(BATCH_STORAGE_KEY, batchData)) return;
+            if (!(await saveState({
+                [APPROVED_BATCH_STORAGE_KEY]: approvedBatches,
+                [BATCH_STORAGE_KEY]: batchData
+            }))) return;
 
             renderTable();
 
@@ -654,11 +718,11 @@ $(document).ready(function () {
             confirmButtonText: "Yes, Delete",
             cancelButtonText: "Cancel",
             confirmButtonColor: "#dc3545"
-        }).then(function (result) {
+        }).then(async function (result) {
             if (!result.isConfirmed) return;
 
             batchData = batchData.filter(item => Number(item.id) !== id);
-            if (!saveStorage(BATCH_STORAGE_KEY, batchData)) return;
+            if (!(await saveState({ [BATCH_STORAGE_KEY]: batchData }))) return;
 
             renderFilters();
             renderTable();
@@ -707,7 +771,12 @@ $(document).ready(function () {
     // INITIAL LOAD
     // --------------------------------------------------
 
-    loadData();
-    renderFilters();
-    renderTable();
+    try {
+        await Production.initialize();
+        await loadData();
+        renderFilters();
+        renderTable();
+    } catch (error) {
+        Swal.fire({ icon: "error", title: "Manufacturing database unavailable", text: error.message });
+    }
 });

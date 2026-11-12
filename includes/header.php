@@ -4,10 +4,19 @@
 
 <head>
 
+    <?php
+    $scriptPath = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/');
+    $nestedPage = preg_match('~/(manufacturing|orderBooking|settings)/[^/]+$~', $scriptPath) === 1;
+    $baseDirectory = $nestedPage ? dirname(dirname($scriptPath)) : dirname($scriptPath);
+    $appBaseHref = rtrim($baseDirectory, '/') . '/';
+    if ($appBaseHref === '/') { $appBaseHref = '/'; }
+    ?>
+    <base href="<?= htmlspecialchars($appBaseHref, ENT_QUOTES, 'UTF-8') ?>">
+
     <meta charset="UTF-8">
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title> Brother Creation </title>
+    <title> Bothra Creation </title>
     <meta name="Description" content="Bootstrap Responsive Admin Web Dashboard HTML5 Template">
     <meta name="Author" content="Spruko Technologies Private Limited">
     <meta name="keywords"
@@ -89,7 +98,7 @@
             stroke: #000 !important;
         }
 
-        html[data-theme-mode="light"] .main-menu .slide.active > .side-menu__item,
+        html[data-theme-mode="light"] .main-menu .slide.active>.side-menu__item,
         html[data-theme-mode="light"] .main-menu .side-menu__item.active,
         html[data-theme-mode="light"] .main-menu .side-menu__item.active .side-menu__label {
             color: #000 !important;
@@ -108,7 +117,7 @@
             border-color: #e9edf5 !important;
         }
 
-        html[data-theme-mode="light"] .slide-menu .side-menu__label1 > a {
+        html[data-theme-mode="light"] .slide-menu .side-menu__label1>a {
             color: #161617 !important;
             font-weight: 600 !important;
         }
@@ -271,11 +280,38 @@
             color: #161617 !important;
         }
 
-        html[data-theme-mode="light"] .page-header-breadcrumb .breadcrumb-item + .breadcrumb-item::before {
+        html[data-theme-mode="light"] .page-header-breadcrumb .breadcrumb-item+.breadcrumb-item::before {
             color: #161617 !important;
         }
     </style>
 
+    <style>
+        .app-sidebar .main-sidebar-header.enlarged-sidebar-logo { padding: 6px 12px; }
+        .app-sidebar .enlarged-sidebar-logo .header-logo { width: 100%; max-width: 232px; }
+        .app-sidebar .enlarged-sidebar-logo .header-logo img {
+            width: 100%;
+            height: 52px;
+            max-width: 100%;
+            object-fit: contain;
+        }
+    </style>
+<style>
+        html[data-theme-mode="dark"] .app-sidebar .enlarged-sidebar-logo .header-logo img {
+            filter: invert(1);
+        }
+</style>
+    <style>
+        /* Show submenu icons and labels without the theme's dash markers. */
+        .app-sidebar .slide-menu .side-menu__item::before {
+            content: none !important;
+            display: none !important;
+        }
+    </style>
+    <style>
+        .app-sidebar .slide-menu.child2 > li { padding-inline-start: .5rem; }
+        .app-sidebar .slide-menu .side-menu__label { margin-inline-end: 8px; }
+        .app-sidebar .slide-menu .side-menu__icon { flex-shrink: 0; }
+    </style>
 </head>
 
 <body>
@@ -784,10 +820,10 @@
                     <div class="header-element">
                         <div class="horizontal-logo">
                             <a href="dashboard" class="header-logo">
-                                <img src="logopk.svg" alt="logo" class="desktop-logo">
-                                <img src="logopk.svg" alt="logo" class="toggle-logo">
-                                <img src="logopk.svg" alt="logo" class="desktop-dark">
-                                <img src="logopk.svg" alt="logo" class="toggle-dark">
+                                <img src="/assets/images/logo.jpeg" alt="logo" class="desktop-logo">
+                                <img src="/assets/images/logopk.svg" alt="logo" class="toggle-logo">
+                                <img src="/assets/images/logopk.svg" alt="logo" class="desktop-dark">
+                                <img src="/assets/images/logopk.svg" alt="logo" class="toggle-dark">
                             </a>
                         </div>
                     </div>
@@ -893,12 +929,12 @@
 
         <aside class="app-sidebar sticky" id="sidebar">
 
-            <div class="main-sidebar-header">
+            <div class="main-sidebar-header enlarged-sidebar-logo">
                 <a href="dashboard" class="header-logo">
-                    <img src="logopk.svg" alt="logo" class="desktop-logo">
-                    <img src="assets/images/brand-logos/toggle-dark.png" alt="logo" class="toggle-dark">
-                    <img src="assets/images/brand-logos/desktop-dark.png" alt="logo" class="desktop-dark">
-                    <img src="assets/images/brand-logos/toggle-logo.png" alt="logo" class="toggle-logo">
+                    <img src="assets/images/logo.jpeg" alt="logo" class="desktop-logo">
+                    <img src="assets/images/logo.jpeg" alt="logo" class="toggle-dark">
+                    <img src="assets/images/logo.jpeg" alt="logo" class="desktop-dark">
+                    <img src="assets/images/logo.jpeg" alt="logo" class="toggle-logo">
                 </a>
             </div>
 
@@ -982,90 +1018,96 @@
                                     </a>
                                 </li>
 
-                                <li class="slide has-sub">
-                                    <a href="javascript:void(0);" class="side-menu__item">
-                                        <i class="ri-arrow-down-s-line side-menu__angle"></i>
+                                <li class="slide">
+                                    <a href="auto-pass" class="side-menu__item">
+                                        <i class="bx bx-fast-forward-circle side-menu__icon"></i>
+                                        <span class="side-menu__label">Auto Pass</span>
+                                    </a>
+                                </li>
+
+                                <li class="slide">
+                                    <a href="cutting-manager" class="side-menu__item">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
+                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <circle cx="6" cy="6" r="3"></circle>
+                                            <circle cx="6" cy="18" r="3"></circle>
+                                            <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
+                                            <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
+                                            <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
+                                        </svg>
+                                        <span class="side-menu__label">Cutting</span>
+                                    </a>
+                                </li>
+
+                                <li class="slide">
+                                    <a href="additional-work-manager" class="side-menu__item">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
                                             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                             stroke-linejoin="round">
                                             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
                                         </svg>
-                                        <span class="side-menu__label">Additional Work</span>
+                                        <span class="side-menu__label">Add Work</span>
                                     </a>
+                                </li>
 
-                                    <ul class="slide-menu child2">
-                                        <li class="slide side-menu__label1">
-                                            <a href="javascript:void(0)">Additional Work</a>
-                                        </li>
+                                <li class="slide">
+                                    <a href="stitching-manager" class="side-menu__item">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
+                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <path d="M3 21l18-18"></path>
+                                            <path d="M14 4l6 6"></path>
+                                            <circle cx="6" cy="18" r="3"></circle>
+                                            <path d="M18 3a3 3 0 0 1 3 3"></path>
+                                        </svg>
+                                        <span class="side-menu__label">Stitching</span>
+                                    </a>
+                                </li>
 
-                                        <li class="slide">
-                                            <a href="Embroidery" class="side-menu__item">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                    stroke-linejoin="round">
-                                                    <circle cx="12" cy="12" r="9"></circle>
-                                                    <path d="M12 3v18"></path>
-                                                    <path d="M3 12h18"></path>
-                                                    <circle cx="12" cy="12" r="4"></circle>
-                                                </svg>
-                                                <span class="side-menu__label">Embroidery</span>
-                                            </a>
-                                        </li>
+                                <li class="slide">
+                                    <a href="ironing" class="side-menu__item">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
+                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path>
+                                        </svg>
+                                        <span class="side-menu__label">Ironing</span>
+                                    </a>
+                                </li>
 
-                                        <li class="slide">
-                                            <a href="Digital-Print" class="side-menu__item">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                    stroke-linejoin="round">
-                                                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                                                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                                                    <rect x="6" y="14" width="12" height="8"></rect>
-                                                </svg>
-                                                <span class="side-menu__label">Digital Print</span>
-                                            </a>
-                                        </li>
+                                <li class="slide">
+                                    <a href="packing" class="side-menu__item">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
+                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
+                                            <path d="m3.3 7 8.7 5 8.7-5"></path>
+                                            <path d="M12 22V12"></path>
+                                        </svg>
+                                        <span class="side-menu__label">Packing</span>
+                                    </a>
+                                </li>
 
-                                        <li class="slide">
-                                            <a href="Screen-Print" class="side-menu__item">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                    stroke-linejoin="round">
-                                                    <circle cx="13.5" cy="6.5" r=".5"></circle>
-                                                    <circle cx="17.5" cy="10.5" r=".5"></circle>
-                                                    <circle cx="8.5" cy="7.5" r=".5"></circle>
-                                                    <circle cx="6.5" cy="12.5" r=".5"></circle>
-                                                    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"></path>
-                                                </svg>
-                                                <span class="side-menu__label">Screen Print</span>
-                                            </a>
-                                        </li>
+                                <li class="slide">
+                                    <a href="bundling" class="side-menu__item">
+                                        <i class="bx bx-package side-menu__icon"></i>
+                                        <span class="side-menu__label">Bundling</span>
+                                    </a>
+                                </li>
 
-                                        <li class="slide">
-                                            <a href="Handwork" class="side-menu__item">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                    stroke-linejoin="round">
-                                                    <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path>
-                                                    <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"></path>
-                                                    <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"></path>
-                                                    <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path>
-                                                </svg>
-                                                <span class="side-menu__label">Hand Work</span>
-                                            </a>
-                                        </li>
+                                <li class="slide">
+                                    <a href="final-production" class="side-menu__item">
+                                        <i class="bx bx-shield side-menu__icon"></i>
+                                        <span class="side-menu__label">Final</span>
+                                    </a>
+                                </li>
 
-                                        <li class="slide">
-                                            <a href="Peco" class="side-menu__item">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                    stroke-linejoin="round">
-                                                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-                                                    <line x1="7" y1="7" x2="7.01" y2="7"></line>
-                                                </svg>
-                                                <span class="side-menu__label">Peco</span>
-                                            </a>
-                                        </li>
-                                    </ul>
+                                <li class="slide">
+                                    <a href="damageRepair.php" class="side-menu__item">
+                                        <i class="bx bx-wrench side-menu__icon"></i>
+                                        <span class="side-menu__label">Damage</span>
+                                    </a>
                                 </li>
 
                                 <li class="slide">
@@ -1083,54 +1125,9 @@
                                 </li>
 
                                 <li class="slide">
-                                    <a href="cutting-manager" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <circle cx="6" cy="6" r="3"></circle>
-                                            <circle cx="6" cy="18" r="3"></circle>
-                                            <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
-                                            <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
-                                            <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
-                                        </svg>
-                                        <span class="side-menu__label">Cutting Manager</span>
-                                    </a>
-                                </li>
-
-                                <li class="slide">
-                                    <a href="stitching-manager" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <path d="M3 21l18-18"></path>
-                                            <path d="M14 4l6 6"></path>
-                                            <circle cx="6" cy="18" r="3"></circle>
-                                            <path d="M18 3a3 3 0 0 1 3 3"></path>
-                                        </svg>
-                                        <span class="side-menu__label">Stitching Manager</span>
-                                    </a>
-                                </li>
-
-                                <li class="slide">
-                                    <a href="ironing" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path>
-                                        </svg>
-                                        <span class="side-menu__label">Ironing</span>
-                                    </a>
-                                </li>
-
-                                <li class="slide">
-                                    <a href="settings" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <circle cx="12" cy="12" r="3"></circle>
-                                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                                        </svg>
-                                        <span class="side-menu__label">Settings</span>
+                                    <a href="inventory" class="side-menu__item">
+                                        <i class="bx bx-archive side-menu__icon"></i>
+                                        <span class="side-menu__label">Inventory</span>
                                     </a>
                                 </li>
                             </ul>
@@ -1177,18 +1174,6 @@
                                 </li>
 
                                 <li class="slide">
-                                    <a href="order-punch" class="side-menu__item">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
-                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <path d="M12 20h9"></path>
-                                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
-                                        </svg>
-                                        <span class="side-menu__label">Order Punch</span>
-                                    </a>
-                                </li>
-
-                                <li class="slide">
                                     <a href="order-list" class="side-menu__item">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20" viewBox="0 0 24 24"
                                             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -1201,6 +1186,24 @@
                                         <span class="side-menu__label">Order List</span>
                                     </a>
                                 </li>
+
+                                <li class="slide">
+                                    <a href="dispatch" class="side-menu__item">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="side-menu__icon" width="20" height="20"
+                                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                            stroke-linecap="round" stroke-linejoin="round">
+
+                                            <rect x="1" y="3" width="15" height="13"></rect>
+                                            <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                                            <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                                            <circle cx="18.5" cy="18.5" r="2.5"></circle>
+
+                                        </svg>
+                                        <span class="side-menu__label">Dispatch</span>
+                                    </a>
+                                </li>
+<li class="slide"><a href="delivery" class="side-menu__item"><i class="bx bx-package side-menu__icon"></i><span class="side-menu__label">Delivery</span></a></li>
+
                             </ul>
                         </li>
                     </ul>

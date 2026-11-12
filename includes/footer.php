@@ -2,9 +2,9 @@
 <footer class="footer mt-auto py-3 bg-white text-center">
     <div class="container">
         <span class="text-muted"> Copyright © <span id="year"></span> <a
-                href="javascript:void(0);" class="text-dark fw-medium">Mamix</a>.
+                href="javascript:void(0);" class="text-dark fw-medium"></a>.
             Designed with <span class="bi bi-heart-fill text-danger"></span> by <a href="javascript:void(0);">
-                <span class="fw-medium text-primary">Spruko</span>
+                <span class="fw-medium text-primary">Little Dolly</span>
             </a> All
             rights
             reserved
@@ -70,14 +70,17 @@
 <script src="assets/libs/apexcharts/apexcharts.min.js"></script>
 
 <!-- Sales Dashboard -->
-<script src="assets/js/sales-dashboard.js"></script>
+<script src="assets/js/salesDashboard.js"></script>
 
 <!-- Custom JS -->
 <script src="assets/js/custom.js"></script>
+<script src="assets/js/headerFullscreen.js?v=<?= filemtime(__DIR__ . '/../assets/js/headerFullscreen.js') ?>"></script>
+<script src="assets/js/productionEngine.js?v=<?= filemtime(__DIR__ . '/../assets/js/productionEngine.js') ?>"></script>
+<script src="assets/js/navbarCounts.js?v=<?= filemtime(__DIR__ . '/../assets/js/navbarCounts.js') ?>"></script>
 
 
 <!-- Custom-Switcher JS -->
-<script src="assets/js/custom-switcher.min.js"></script>
+<script src="assets/js/customSwitcher.min.js"></script>
 
 </body>
 

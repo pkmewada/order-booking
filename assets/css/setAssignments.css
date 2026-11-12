@@ -1,0 +1,28 @@
+﻿/* Cutting manager presentation shared by Packing and Bundling. */
+#setAssignmentModal .modal-dialog { max-width: 1500px; }
+#setAssignmentModal .set-assignment-card .alert { padding: 16px; }
+#setAssignmentModal .set-assignment-card .alert > div:last-child { min-width: 300px; }
+#setAssignmentModal .table th { background:#f8f9fa;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;border-bottom:2px solid #dee2e6; }
+#setAssignmentModal .table td { padding:6px 8px;vertical-align:middle; }
+#setAssignmentModal .set-split-label { font-size:13px; }
+#setAssignmentModal .set-batch-picker { position:relative;flex:1 1 420px;max-width:640px; }
+#setAssignmentModal .set-batch-picker summary { padding:9px 12px;border:1px solid #dfe5f1;border-radius:8px;background:#fff;cursor:pointer;font-size:13px; }
+#setAssignmentModal .set-picker-options { position:absolute;top:100%;left:0;right:0;z-index:10;background:white;border:1px solid #dfe5f1;border-radius:8px;padding:8px;max-height:320px;overflow:auto;box-shadow:0 8px 24px #0002; }
+#setAssignmentModal .set-source-option { display:block;cursor:pointer;font-size:13px; }
+#setAssignmentModal .set-source-option:hover { background:#f0f7ff; }
+#setAssignmentModal.set-bulk-modal .modal-dialog { width:100%!important;max-width:100%!important;height:100%;margin:0!important; }
+#setAssignmentModal.set-bulk-modal .modal-content { height:100dvh;max-height:100dvh;border-radius:0;border:0; }
+#setAssignmentModal.set-bulk-modal .modal-header,#setAssignmentModal.set-bulk-modal .modal-footer { padding-top:8px;padding-bottom:8px; }
+#setAssignmentModal.set-bulk-modal .modal-body { padding:12px 20px; }
+#setAssignmentModal.set-bulk-modal #setAssignmentForm { flex:1; }
+#assignedList td,#bundlingAssigned td,#bundlingReady td { vertical-align:middle; }
+#assignedList .btn,#bundlingAssigned .btn,#bundlingReady .btn { border-radius:4px; }
+#assignedList .btn i,#bundlingAssigned .btn i { font-size:14px; }
+#assignedList .delivery-date-badge,#bundlingAssigned .delivery-date-badge { display:inline-block;font-size:12px;padding:4px 8px;border-radius:4px;white-space:nowrap; }
+#assignedList .delivery-ontrack,#bundlingAssigned .delivery-ontrack { background:#d4edda;color:#155724; }
+#assignedList .delivery-overdue,#bundlingAssigned .delivery-overdue { background:#f8d7da;color:#721c24; }
+#assignedList .delivery-due-today,#bundlingAssigned .delivery-due-today { background:#fff3cd;color:#856404; }
+#bundlingAssigned .status-badge { display:inline-block;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;letter-spacing:.3px; }
+#bundlingAssigned .status-badge.pending { background:#fdd835;color:#161617; }
+#bundlingAssigned .status-badge.passed { background:#198754;color:white; }
+@media(max-width:767px) { #setAssignmentModal .set-assignment-card .alert > div:last-child { min-width:0;width:100%; } }

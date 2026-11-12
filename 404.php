@@ -16,7 +16,7 @@
     <link rel="icon" href="assets/images/brand-logos/favicon.ico" type="image/x-icon">
 
     <!-- Main Theme Js -->
-    <script src="assets/js/authentication-main.js"></script>
+    <script src="assets/js/authenticationMain.js"></script>
 
     <!-- Bootstrap Css -->
     <link id="style" href="assets/libs/bootstrap/css/bootstrap.min.css" rel="stylesheet" >

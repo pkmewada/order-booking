@@ -70,10 +70,6 @@ $(document).ready(async function () {
         try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : []; }
         catch { return []; }
     }
-    function saveStorage(k, v) {
-        try { localStorage.setItem(k, JSON.stringify(v)); return true; }
-        catch { return false; }
-    }
     function normalize(v) { return String(v ?? "").trim().toLowerCase(); }
 
     function isThisStage(p) {
@@ -88,12 +84,6 @@ $(document).ready(async function () {
         nextId = Math.max(0, ...workData.map(w => Number(w.id) || 0)) + 1;
     }
     function saveData() { throw new Error("Use the shared production transaction API."); }
-
-    function pushHistory(entry) {
-        const h = readStorage(WORK_HISTORY_KEY);
-        h.push({ id: Date.now() + Math.floor(Math.random() * 1000), at: new Date().toLocaleString("en-GB"), ...entry });
-        saveStorage(WORK_HISTORY_KEY, h);
-    }
 
     function parseHistoryTime(str) {
         const m = String(str).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2}):(\d{2})/);
@@ -791,6 +781,37 @@ $(document).ready(async function () {
     }
 
     $("#bulkAssignBtn").on("click", openBulkModal);
+    $("#bulkPassIroningBtn").on("click", function () {
+        const key = "ironingData";
+        const rows = Production.readState()[key]
+            .filter(item => !item.stopped && Production.status(item) !== "passed")
+            .map(item => ({
+                id: item.id, batchId: item.batchId, label: item.subBatch,
+                brand: item.brand, piece: item.pieceType, worker: item.worker,
+                quantity: item.inputQty ?? item.assignedQty, completed: item.completedQty, damage: item.damageQty
+            }));
+        BulkPass.open({
+            title: "Bulk Pass Ironing Assignments",
+            rows,
+            onSave: async changes => {
+                const requests = changes.map(change => ({
+                    id: Number(change.id),
+                    ...(change.completedChanged ? { addCompleted: change.completed } : {}),
+                    ...(change.damageChanged ? { addDamage: change.damage } : {})
+                }));
+                return (await productionAction(() => Production.edit(key, requests))) !== undefined;
+            },
+            onPass: async () => {
+                const ready = Production.readState()[key].filter(item =>
+                    !item.stopped && Production.calculateProductionMath(item).passableQty > 0);
+                if (!ready.length) {
+                    await Swal.fire({ icon: "info", title: "Nothing to Pass", text: "No completed quantities are ready to pass." });
+                    return false;
+                }
+                return (await productionAction(() => Production.pass(key, ready.map(item => item.id)))) !== undefined;
+            }
+        });
+    });
     $("#multiSelectBox").on("click", function (e) {
         e.stopPropagation();
         $("#multiSelectDropdown").toggleClass("open");
@@ -972,44 +993,7 @@ $(document).ready(async function () {
        VIEW DETAIL (Cutting Manager style — no history in view)
        ============================================================ */
     function buildViewHtml(item) {
-        const photoSrc = item.photo ? escapeHtml(item.photo) : PLACEHOLDER_IMG;
-        const now = new Date();
-        const dateStr = now.toLocaleDateString("en-GB") + ", " + now.toLocaleTimeString("en-GB", { hour12: false });
-        const qty = item.assignedQty || 0;
-
-        return `
-            <div class="detail-print-wrap">
-                <div class="detail-header-line">
-                    <h4>ASSIGNMENT DETAILS</h4>
-                    <small>${escapeHtml(dateStr)}</small>
-                </div>
-                <div class="detail-divider"></div>
-                <div class="detail-split-layout">
-                    <div>
-                        <div class="detail-highlight-grid">
-                            <div class="detail-highlight-item"><span class="lbl">Worker Name</span><span class="val">${escapeHtml(item.worker || "-")}</span></div>
-                            <div class="detail-highlight-item"><span class="lbl">Design Number</span><span class="val">${escapeHtml(item.designNumber || "-")}</span></div>
-                            <div class="detail-highlight-item"><span class="lbl">Brand</span><span class="val">${escapeHtml(item.brand || "-")}</span></div>
-                            <div class="detail-highlight-item"><span class="lbl">Total Quantity</span><span class="val">${qty}</span></div>
-                        </div>
-                        <div class="detail-info-grid">
-                            <div class="detail-info-cell"><span class="lbl">Batch ID</span><span class="val">${escapeHtml(item.batchId || "-")}</span></div>
-                            <div class="detail-info-cell"><span class="lbl">Sub-Batch</span><span class="val">${escapeHtml(item.subBatch || "-")}</span></div>
-                            <div class="detail-info-cell"><span class="lbl">Color</span><span class="val">${escapeHtml(item.color || "-")}</span></div>
-                            <div class="detail-info-cell"><span class="lbl">Piece Type</span><span class="val">${escapeHtml(item.pieceType || "-")}</span></div>
-                            <div class="detail-info-cell"><span class="lbl">Priority</span><span class="val">${escapeHtml(item.priority || "-")}</span></div>
-                            <div class="detail-info-cell"><span class="lbl">Delivery Date</span><span class="val">${escapeHtml(formatDate(item.deliveryDate))}</span></div>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="detail-photo-box">
-                            <img src="${photoSrc}" alt="Batch Photo" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}';">
-                        </div>
-                    </div>
-                </div>
-                <div class="detail-signature"><span class="sig-line">Signature .....</span></div>
-            </div>
-        `;
+        return AssignmentDetails.render(item);
     }
 
     $(document).on("click", ".view-row-action-btn", function () {
@@ -1026,9 +1010,9 @@ $(document).ready(async function () {
        LIST ALL MODAL
        ============================================================ */
     function buildListAllHtml() {
-        const passedData = workData.filter(d => isFullyPassed(d));
+        const passedData = workData.filter(d => workData.filter(w => String(w.batchId) === String(d.batchId)).every(isFullyPassed));
         if (!passedData.length) {
-            return `<div class="text-center text-muted py-5"><i class="bx bx-info-circle fs-2 d-block mb-2"></i>No fully passed assignments yet.</div>`;
+            return `<div class="text-center text-muted py-5"><i class="bx bx-info-circle fs-2 d-block mb-2"></i>No fully passed batches yet.</div>`;
         }
 
         const byBatch = {};

@@ -1,0 +1,1665 @@
+$(document).ready(async function () {
+    "use strict";
+    try { await Production.initialize(); } catch (error) { Swal.fire({icon: "error", title: "Recovery required", text: error.message}); return; }
+
+    const APPROVED_POOL_KEY = "approvedPool";
+    const CUTTING_DATA_KEY = "cuttingData";
+    const CUTTING_NEXT_ID_KEY = "cuttingNextId";
+    const REPAIR_STORAGE_KEY = "repairData";
+    const CUTTING_HISTORY_KEY = "cuttingHistory";
+
+    const ROWS_PER_PAGE = 10;
+
+    const PLACEHOLDER_IMG =
+        "data:image/svg+xml;utf8," +
+        encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="133">' +
+            '<rect width="100%" height="100%" fill="#f1f3f8"/>' +
+            '<text x="50%" y="55%" font-family="Arial" font-size="11" fill="#9aa6c2" text-anchor="middle">No Image</text>' +
+            '</svg>'
+        );
+
+    const WORKERS = [
+        "Ahmad Khan", "Bilal Ahmed", "Danish Ali", "Faisal Khan",
+        "Usman Malik", "Ali Ahmed", "Imran Khan", "Saeed Ahmad",
+        "Zafar Iqbal", "Rashid Mahmood"
+    ];
+
+    let approvedPool = [];
+    let cuttingData = [];
+    let nextId = 1;
+    let currentEditingId = null;
+    let currentViewingId = null;
+    let currentEditingPoolId = null;
+    let currentPassPoolId = null;
+
+    let approvedPage = 1;
+    let cuttingPage = 1;
+
+    let bulkSelectedBatchIds = new Set();
+    let bulkPieceSplits = {};
+
+    async function productionAction(action, modal) {
+        try {
+            const result = await action();
+            loadData(); renderApprovedTable(); renderCuttingTable();
+            if (modal) $(modal).modal("hide");
+            return result;
+        } catch (error) {
+            Swal.fire({ icon: "error", title: "Production action cancelled", text: error.message });
+            loadData(); renderApprovedTable(); renderCuttingTable();
+            return null;
+        }
+    }
+    function collectAssignments(selector, bulk) {
+        return $(selector).toArray().map(element => {
+            const row = $(element), type = row.find(".type-select").val() || "inhouse";
+            return { poolId: bulk ? Number(row.data("pool-id")) : Number($("#batchSelect").val()),
+                type, worker: type === "outsource" ? "" : row.find(".worker-select").val(),
+                firm: type === "outsource" ? row.find(".firm-select").val() : "",
+                quantity: Number(row.find(".quantity-input").val()), priority: row.find(".priority-select").val(),
+                deliveryDate: row.find(".delivery-date-input").val(),
+                componentId: String(row.data("component-id") ?? "legacy"),
+                componentName: String(row.data("component-name") ?? ""),
+                splitGroupId: String(row.data("split-group-id") ?? row.data("row-index") ?? "1"),
+                subBatch: String(row.data("sub-batch") ?? "") };
+        });
+    }
+
+    /* ================= HELPERS ================= */
+    function escapeHtml(value) {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+    function readStorage(key) {
+        try {
+            const value = localStorage.getItem(key);
+            if (!value) return [];
+            const parsed = JSON.parse(value);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) { return []; }
+    }
+    function isThisStage(p) {
+        return !!(
+            p.currentStage && p.currentStage.type === "cutting"
+        );
+    }
+    function loadData() {
+        const view = Production.views("cuttingData");
+        approvedPool = view.pool;
+        cuttingData = view.works;
+        nextId = Math.max(0, ...cuttingData.map(w => Number(w.id) || 0)) + 1;
+    }
+    async function hydrateLegacyCuttingItems() {
+        if (!approvedPool.some(pool => pool.bomId)) return;
+        try {
+            const response = await fetch("api/bom.php", { cache: "no-store" });
+            const result = await response.json();
+            if (!response.ok || !result.success) return;
+            const hydratedBatches = new Set();
+            for (const pool of approvedPool) {
+                if (!pool.bomId || hydratedBatches.has(String(pool.batchId))) continue;
+                const bom = (result.data || []).find(row => String(row.bomId) === String(pool.bomId) ||
+                    (String(row.designNumber) === String(pool.designNumber) && String(row.brand).toLowerCase() === String(pool.brand).toLowerCase()));
+                const pieces = bom?.pieces;
+                if (!Array.isArray(pieces)) continue;
+                await Production.hydrateCuttingComponents(pool.batchId, pieces);
+                hydratedBatches.add(String(pool.batchId));
+            }
+            loadData(); renderApprovedTable(); renderCuttingTable();
+        } catch (error) { console.warn("Could not load BOM item types for existing cutting batches:", error); }
+    }
+    function saveData() { throw new Error("Use the shared production transaction API."); }
+
+    /* ============================================================
+       HISTORY LOG
+       ============================================================ */
+    function parseHistoryTime(str) {
+        const m = String(str).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2}):(\d{2})/);
+        if (!m) return Date.parse(str) || 0;
+        const [, d, mo, y, h, mi, se] = m;
+        return new Date(
+            `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}T${h.padStart(2, "0")}:${mi}:${se}`
+        ).getTime();
+    }
+
+    function getHistoryForAssignment(cuttingId) {
+        return readStorage(CUTTING_HISTORY_KEY)
+            .filter(h => Number(h.cuttingId) === Number(cuttingId))
+            .sort((a, b) => parseHistoryTime(a.at) - parseHistoryTime(b.at));
+    }
+
+    function peekNextSubBatchId(batchId, sequence) {
+        let formatted = String(batchId || "");
+        if (!formatted.includes("BATCH-")) {
+            formatted = `BATCH-${String(batchId).padStart(3, "0")}`;
+        }
+        return `${formatted}-C${Math.max(1, Number(sequence) || 1)}`;
+    }
+
+    function formatDateDisplay(dateString) {
+        if (!dateString) return 'Not Set';
+        const d = new Date(dateString);
+        if (isNaN(d.getTime())) return 'Not Set';
+        const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+    }
+
+    function getDeliveryStatusClass(deliveryDate) {
+        if (!deliveryDate) return 'delivery-badge-secondary';
+        const today = new Date(); today.setHours(0,0,0,0);
+        const d = new Date(deliveryDate); d.setHours(0,0,0,0);
+        const diff = Math.ceil((d - today) / (1000*60*60*24));
+        if (diff < 0) return 'delivery-overdue';
+        if (diff === 0) return 'delivery-due-today';
+        return 'delivery-ontrack';
+    }
+
+    function defaultDeliveryDate() {
+        const d = new Date();
+        d.setDate(d.getDate() + 17);
+        return d.toISOString().split('T')[0];
+    }
+
+    function splitQuantity(totalQty, splitCount) {
+        const total = Number(totalQty) || 0;
+        const n = Math.max(1, Number(splitCount) || 1);
+        if (n === 1) return [total];
+        const base = Math.floor(total / n);
+        const remainder = total - (base * n);
+        const result = [];
+        for (let i = 0; i < n; i++) {
+            const extra = (i >= (n - remainder)) ? 1 : 0;
+            result.push(base + extra);
+        }
+        return result;
+    }
+
+    function getPriorityClass(priority) {
+        const p = String(priority || "").trim().toLowerCase();
+        if (p === "high") return "priority-high";
+        if (p === "medium") return "priority-medium";
+        if (p === "low") return "priority-low";
+        return "";
+    }
+
+    function computeCuttingStatus(item) {
+        if (item.stopped) return "stopped";
+        return Production.status(item);
+    }
+
+    function isFullyPassed(item) { return Production.status(item) === "passed"; }
+
+    function isUntouched(item) {
+        return (item.completedQty || 0) === 0 &&
+               (item.damageQty || 0) === 0 &&
+               (item.passedQty || 0) === 0;
+    }
+
+    function groupComponentAssignments(items) {
+        const groups = new Map();
+        items.forEach(item => {
+            const id = String(item.componentId ?? "legacy");
+            if (!groups.has(id)) groups.set(id, []);
+            groups.get(id).push(item);
+        });
+        return [...groups.entries()].map(([componentId, rows]) => ({
+            componentId,
+            name: rows[0].itemName || "Item",
+            rows: rows.slice().sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0))
+        }));
+    }
+
+    function displayedSubBatch(item) {
+        const expectedSubBatchPrefix = `${item.batchId}-C`;
+        if (item.subBatch && String(item.subBatch).startsWith(expectedSubBatchPrefix) && /^\d+$/.test(String(item.subBatch).slice(expectedSubBatchPrefix.length))) return String(item.subBatch);
+        const batchRows = cuttingData.filter(row => String(row.batchId) === String(item.batchId))
+            .slice().sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+        const poolIds = [...new Set(batchRows.map(row => String(row.poolId)))];
+        let sequence = 0;
+        for (const poolId of poolIds) {
+            const poolRows = batchRows.filter(row => String(row.poolId) === poolId);
+            const splitKeys = [...new Set(poolRows.filter(row => row.splitGroupId).map(row => String(row.splitGroupId)))];
+            const componentKeys = [...new Set(poolRows.map(row => String(row.componentId ?? row.itemName ?? "legacy")))];
+            const splitCount = splitKeys.length || Math.max(1, ...componentKeys.map(key =>
+                poolRows.filter(row => String(row.componentId ?? row.itemName ?? "legacy") === key).length));
+            if (poolId === String(item.poolId)) {
+                let splitIndex = 0;
+                if (item.splitGroupId && splitKeys.length) splitIndex = splitKeys.indexOf(String(item.splitGroupId));
+                else {
+                    const componentKey = String(item.componentId ?? item.itemName ?? "legacy");
+                    splitIndex = poolRows.filter(row => String(row.componentId ?? row.itemName ?? "legacy") === componentKey)
+                        .findIndex(row => String(row.id) === String(item.id));
+                }
+                return peekNextSubBatchId(item.batchId, sequence + Math.max(0, splitIndex) + 1);
+            }
+            sequence += splitCount;
+        }
+        return peekNextSubBatchId(item.batchId, sequence + 1);
+    }
+
+    function nextBatchSubBatchNumber(batchId) {
+        return cuttingData.filter(row => String(row.batchId) === String(batchId))
+            .reduce((highest, row) => {
+                const label = displayedSubBatch(row);
+                const match = label.match(/-C(\d+)$/);
+                return Math.max(highest, match ? Number(match[1]) : 0);
+            }, 0) + 1;
+    }
+
+    function buildPager($container, currentPage, totalPages, totalItems, pageSize, onPageChange, label) {
+        $container.empty();
+        if (totalItems === 0) return;
+        const startItem = (currentPage - 1) * pageSize + 1;
+        const endItem = Math.min(currentPage * pageSize, totalItems);
+        $container.append(`<div class="info-text">Showing <strong>${startItem}-${endItem}</strong> of <strong>${totalItems}</strong> ${label}</div>`);
+        const $pager = $('<div class="pager"></div>');
+        const $prev = $(`<button class="page-btn" ${currentPage === 1 ? "disabled" : ""}><i class="bx bx-chevron-left"></i></button>`);
+        $prev.on("click", () => currentPage > 1 && onPageChange(currentPage - 1));
+        $pager.append($prev);
+        let startPage = Math.max(1, currentPage - 2);
+        let endPage = Math.min(totalPages, startPage + 4);
+        if (endPage - startPage < 4) startPage = Math.max(1, endPage - 4);
+        for (let p = startPage; p <= endPage; p++) {
+            const $btn = $(`<button class="page-btn ${p === currentPage ? "active" : ""}">${p}</button>`);
+            $btn.on("click", () => onPageChange(p));
+            $pager.append($btn);
+        }
+        const $next = $(`<button class="page-btn" ${currentPage === totalPages ? "disabled" : ""}><i class="bx bx-chevron-right"></i></button>`);
+        $next.on("click", () => currentPage < totalPages && onPageChange(currentPage + 1));
+        $pager.append($next);
+        $container.append($pager);
+    }
+
+    function getBusyWorkersExcluding(poolId) {
+        const busy = new Set();
+        cuttingData.forEach(row => {
+            if (Number(row.poolId) !== Number(poolId)) {
+                if (!isFullyPassed(row) && !row.stopped) busy.add(row.worker);
+            }
+        });
+        return busy;
+    }
+    function getWorkersInPool(poolId) {
+        const workers = new Set();
+        cuttingData.forEach(row => {
+            if (Number(row.poolId) === Number(poolId) && row.worker) workers.add(row.worker);
+        });
+        return workers;
+    }
+
+    function getPoolTotal(p) { return Number(p.stageBalances?.[Production.managers["cuttingData"]]?.inputQty) || 0; }
+    function getCuttingComponents(pool) {
+        if (!Array.isArray(pool.cuttingComponents)) {
+            if (pool.bomId) return [];
+            return [{ id: `legacy:${pool.id}`, name: pool.pieceItem || `Piece ${pool.pieceNumber}`, legacy: true, available: true }];
+        }
+        return pool.cuttingComponents.filter(component => component.available && getComponentRemaining(pool, component.id) > 0);
+    }
+    function getComponentAssigned(pool, componentId) {
+        return cuttingData.filter(work => String(work.poolId) === String(pool.id) && String(work.componentId) === String(componentId)).reduce((total, work) => total + Number(work.assignedQty || 0), 0);
+    }
+    function getComponentRemaining(pool, componentId) {
+        return Production.calculateAvailableQty(pool, cuttingData, Production.managers["cuttingData"], undefined, componentId);
+    }
+    function getPoolAssigned(p) {
+        if (Array.isArray(p.cuttingComponents)) return Math.max(0, ...p.cuttingComponents.map(component => getComponentAssigned(p, component.id)));
+        return cuttingData.filter(w => String(w.poolId) === String(p.id)).reduce((n,w) => n + w.assignedQty, 0);
+    }
+    function getPoolRemaining(p) {
+        if (Array.isArray(p.cuttingComponents)) {
+            const components = p.cuttingComponents.filter(component => component.available);
+            return components.length ? Math.min(...components.map(component => getComponentRemaining(p, component.id))) : 0;
+        }
+        return Production.calculateAvailableQty(p, cuttingData, Production.managers["cuttingData"]);
+    }
+
+    /* ============================================================
+       MANUAL SPLIT — auto-distribute remaining qty
+       ============================================================ */
+    function redistributeQuantities($tbody, totalRemaining, changedRowIdx) {
+        const $rows = $tbody.find(".assignment-row, .bulk-assignment-row");
+        if (!$rows.length) return;
+
+        const rowCount = $rows.length;
+        if (rowCount === 1) {
+            $rows.eq(0).find(".quantity-input").val(totalRemaining);
+            return;
+        }
+
+        const manualVal = parseInt($rows.eq(changedRowIdx).find(".quantity-input").val()) || 0;
+
+        // Remaining to distribute among the other rows
+        const remainingForOthers = Math.max(0, totalRemaining - manualVal);
+        const otherRowsCount = rowCount - 1;
+
+        if (otherRowsCount === 1) {
+            $rows.each(function (i) {
+                if (i === changedRowIdx) return;
+                $(this).find(".quantity-input").val(remainingForOthers);
+            });
+            return;
+        }
+
+        // Distribute evenly among other rows (last gets remainder)
+        const base = Math.floor(remainingForOthers / otherRowsCount);
+        const rem = remainingForOthers - (base * otherRowsCount);
+
+        let otherIdx = 0;
+        $rows.each(function (i) {
+            if (i === changedRowIdx) return;
+            const extra = (otherIdx >= (otherRowsCount - rem)) ? 1 : 0;
+            $(this).find(".quantity-input").val(base + extra);
+            otherIdx++;
+        });
+    }
+
+    /* ================= TABLE 1: APPROVED POOL ================= */
+    function renderApprovedTable() {
+        const tbody = $("#approvedItemsList");
+        tbody.empty();
+        const available = approvedPool.filter(p => getPoolRemaining(p) > 0);
+
+        if (!available.length) {
+            tbody.html(`<tr><td colspan="11" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No approved items available.</td></tr>`);
+            $("#approvedPagination").empty();
+            return;
+        }
+
+        available.sort((a, b) => {
+            if (String(a.batchId) !== String(b.batchId)) return String(a.batchId).localeCompare(String(b.batchId));
+            return Number(a.pieceNumber) - Number(b.pieceNumber);
+        });
+
+        const totalItems = available.length;
+        const totalPages = Math.max(1, Math.ceil(totalItems / ROWS_PER_PAGE));
+        if (approvedPage > totalPages) approvedPage = totalPages;
+        const startIdx = (approvedPage - 1) * ROWS_PER_PAGE;
+        const pageItems = available.slice(startIdx, startIdx + ROWS_PER_PAGE);
+
+        const grouped = {};
+        pageItems.forEach(item => {
+            const key = String(item.batchId);
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(item);
+        });
+
+        Object.keys(grouped).forEach(batchId => {
+            const items = grouped[batchId].slice().sort((a, b) => Number(a.pieceNumber) - Number(b.pieceNumber));
+            const first = items[0];
+            const rowspan = items.length;
+            const photo = first.photo || "";
+            const photoSrc = photo ? escapeHtml(photo) : PLACEHOLDER_IMG;
+            const priorityClass = getPriorityClass(first.priority);
+
+            const batchCols = `
+                <td rowspan="${rowspan}"><strong>${escapeHtml(first.batchId || "-")}</strong></td>
+                <td rowspan="${rowspan}"><img src="${photoSrc}" alt="Batch" style="width:55px;height:55px;object-fit:cover;border-radius:6px;" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}';"></td>
+                <td rowspan="${rowspan}">${escapeHtml(first.brand || "-")}</td>
+                <td rowspan="${rowspan}">${escapeHtml(first.designNumber || "-")}</td>
+                <td rowspan="${rowspan}"><span class="color-text">${escapeHtml(first.color || "-")}</span></td>
+            `;
+
+            items.forEach((it, idx) => {
+                const total = getPoolTotal(it);
+                const assigned = getPoolAssigned(it);
+                const remaining = getPoolRemaining(it);
+                const pieceLine = `<div class="piece-line"><span class="piece-num">${escapeHtml(it.pieceNumber)} Piece</span></div>`;
+                const itemLine = `<div class="piece-line">${escapeHtml(it.pieceItem || "-")}</div>`;
+                const qtyHtml = `
+                    <span class="qty-pair">
+                        <span class="qty-total">${total}</span>
+                        <span class="qty-sep">/</span>
+                        <span class="qty-assigned ${assigned === 0 ? "zero" : ""}">${assigned}</span>
+                    </span>
+                `;
+                const priorityHtml = `<span class="priority-badge ${priorityClass}">${escapeHtml(it.priority || "-")}</span>`;
+                let statusHtml = "";
+                if (assigned === 0) statusHtml = `<span class="status-badge not_assigned">Not Assigned</span>`;
+                else if (remaining > 0) statusHtml = `<span class="status-badge assign_progress">Assign In Progress</span>`;
+
+                const actionHtml = remaining > 0
+                    ? `<button class="btn btn-sm btn-primary assign-single-btn" data-pool-id="${it.id}" title="Assign Piece ${escapeHtml(it.pieceNumber)}"><i class="bx bx-plus"></i> Assign</button>`
+                    : "";
+
+                tbody.append(`
+                    <tr>
+                        ${idx === 0 ? batchCols : ""}
+                        <td>${pieceLine}</td>
+                        <td>${itemLine}</td>
+                        <td>${qtyHtml}</td>
+                        <td>${priorityHtml}</td>
+                        <td>${statusHtml}</td>
+                        <td>${actionHtml}</td>
+                    </tr>
+                `);
+            });
+        });
+
+        buildPager($("#approvedPagination"), approvedPage, totalPages, totalItems, ROWS_PER_PAGE,
+            (p) => { approvedPage = p; renderApprovedTable(); }, "items");
+    }
+
+    /* ================= TABLE 2: CUTTING ASSIGNMENTS ================= */
+    function renderCuttingTable() {
+        const tbody = $("#cuttingMastersList");
+        tbody.empty();
+        if (!cuttingData.length) {
+            tbody.html(`<tr><td colspan="10" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No cutting assignments yet.</td></tr>`);
+            $("#cuttingPagination").empty();
+            return;
+        }
+
+        const grouped = {};
+        cuttingData.forEach(item => {
+            const key = String(item.poolId ?? `${item.batchId}:${item.pieceNumber}:${item.pieceType}`);
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(item);
+        });
+        const groups = Object.values(grouped)
+            .filter(rows => rows.some(item => !isFullyPassed(item)))
+            .map(rows => rows.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0)));
+        groups.sort((a, b) => String(a[0].batchId || "").localeCompare(String(b[0].batchId || "")) ||
+            Number(a[0].pieceNumber || 0) - Number(b[0].pieceNumber || 0));
+        if (!groups.length) {
+            tbody.html(`<tr><td colspan="10" class="text-center text-muted py-4"><i class="bx bx-info-circle me-1"></i> No cutting assignments yet.</td></tr>`);
+            $("#cuttingPagination").empty();
+            return;
+        }
+
+        const totalItems = groups.length;
+        const totalPages = Math.max(1, Math.ceil(totalItems / ROWS_PER_PAGE));
+        if (cuttingPage > totalPages) cuttingPage = totalPages;
+        const startIdx = (cuttingPage - 1) * ROWS_PER_PAGE;
+        groups.slice(startIdx, startIdx + ROWS_PER_PAGE).forEach((items, idx) => {
+            const first = items[0];
+            const pieceLabel = first.pieceType || `Piece ${first.pieceNumber}`;
+            const componentLines = (render) => `<div class="component-lines compact">${items.map(render).join("")}</div>`;
+            const componentGroups = groupComponentAssignments(items);
+            const batchHtml = `<strong>${escapeHtml(first.batchId || "-")}</strong>`;
+            const subBatchHtml = componentLines(item => { const label = displayedSubBatch(item); return `<div class="component-line sub-batch-cell"><span class="sub-batch-text" title="${escapeHtml(label)}">${escapeHtml(label)}</span></div>`; });
+            const detailHtml = componentLines(item => `<div class="component-line piece-cell"><strong>${escapeHtml(pieceLabel)}</strong><span class="item-line">${escapeHtml(item.itemName || "Item")}</span><span class="worker-line">${escapeHtml(item.worker || "-")}</span></div>`);
+            const pairedQty = (field, mode = "min") => {
+                const totals = componentGroups.map(group => group.rows.reduce((sum, row) => sum + Number(row[field] || 0), 0));
+                return totals.length ? (mode === "max" ? Math.max(...totals) : Math.min(...totals)) : 0;
+            };
+            const pairedAssigned = pairedQty("assignedQty");
+            const pairedCompleted = pairedQty("completedQty");
+            const pairedDamage = Math.min(pairedAssigned, componentGroups.length
+                ? Math.max(...componentGroups.map(group => group.rows.reduce((sum, row) => sum + Number(row.damageQty || 0), 0)))
+                : 0);
+            const pairedPassed = pairedQty("passedQty");
+            const pairedRemaining = componentGroups.length
+                ? Math.min(...componentGroups.map(group => group.rows.reduce((sum, row) => sum + Math.max(0,
+                    Number(row.inputQty || row.assignedQty || 0) - Number(row.damageQty || 0) - Number(row.passedQty || 0)), 0)))
+                : 0;
+            const qtyHtml = `<strong>${pairedAssigned}</strong>`;
+            const damageHtml = `<span>${pairedDamage}</span>`;
+            const remainingHtml = `<strong>${pairedRemaining}</strong>`;
+            const stopped = items.some(item => item.stopped);
+            const statusKey = stopped ? "stopped" : pairedRemaining === 0 && pairedPassed > 0 ? "passed" : pairedCompleted > pairedPassed ? "ready_to_pass" : pairedCompleted > 0 ? "partial" : "assigned";
+            const statusLabel = ({stopped:"Stopped", passed:"Passed", ready_to_pass:"Ready to Pass", partial:"Partial", assigned:"Assigned"})[statusKey];
+            const statusClass = statusKey === "stopped" ? "stopped" : statusKey === "passed" ? "passed" : "in_progress";
+            const statusHtml = `<span class="status-badge ${statusClass}">${statusLabel}</span>`;
+            const priorityClass = getPriorityClass(first.priority);
+            const rowIds = items.map(item => Number(item.id)).join(",");
+            const editBtn = `<button class="btn btn-sm btn-primary progress-btn" data-group-ids="${escapeHtml(rowIds)}" title="Update item progress"><i class="bx bx-edit"></i></button>`;
+            const commonPassable = componentGroups.length ? Math.min(...componentGroups.map(group => group.rows.reduce((sum, item) => sum + Production.calculateProductionMath(item).passableQty, 0))) : 0;
+            const canPass = items.length > 0 && items.every(item => !item.stopped) && commonPassable > 0;
+            const passBtn = canPass ? `<button class="btn btn-sm btn-dark pass-row-action-btn" data-group-ids="${escapeHtml(rowIds)}" title="Review and pass this garment's items"><i class="bx bx-right-arrow-alt"></i></button>` : "";
+            const isStopped = items.some(item => item.stopped);
+            const stopBtn = `<button class="btn btn-sm ${isStopped ? "btn-success" : "btn-danger"} stop-row-action-btn" data-group-ids="${escapeHtml(rowIds)}" title="${isStopped ? "Resume all items" : "Stop all items"}"><i class="bx ${isStopped ? "bx-play" : "bx-stop"}"></i></button>`;
+            tbody.append(`<tr>
+                <td class="batch-cell">${batchHtml}</td>
+                <td>${subBatchHtml}</td>
+                <td>${escapeHtml(first.brand || "-")}</td>
+                <td>${detailHtml}</td>
+                <td>${qtyHtml}</td>
+                <td>${damageHtml}</td>
+                <td>${remainingHtml}</td>
+                <td><span class="priority-badge ${priorityClass}">${escapeHtml(first.priority || "-")}</span></td>
+                <td>${statusHtml}</td>
+                <td class="actions-cell"><div class="d-flex align-items-center gap-1 flex-wrap">${editBtn}${passBtn}${stopBtn}</div></td>
+            </tr>`);
+        });
+
+        buildPager($("#cuttingPagination"), cuttingPage, totalPages, totalItems, ROWS_PER_PAGE,
+            (p) => { cuttingPage = p; renderCuttingTable(); }, "assignments");
+    }
+
+    /* ============================================================
+       VIEW DETAIL MODAL
+       ============================================================ */
+    function buildDetailHtml(item) {
+        return AssignmentDetails.render(item);
+    }
+
+    $(document).on("click", ".view-row-action-btn", function () {
+        const id = Number($(this).data("id"));
+        loadData();
+        const item = cuttingData.find(d => Number(d.id) === id);
+        if (!item) return;
+        currentViewingId = id;
+        $("#viewDetailBody").html(buildDetailHtml(item));
+        const modal = new bootstrap.Modal(document.getElementById("viewDetailModal"));
+        modal.show();
+    });
+
+    $("#printDetailBtn").on("click", function () { window.print(); });
+
+    /* ============================================================
+       LIST DETAIL MODAL
+       ============================================================ */
+    function buildListDetailHtml(batchId) {
+        const allRows = cuttingData.filter(d => String(d.batchId) === String(batchId));
+        const fullyPassed = allRows.length > 0 && allRows.every(r => isFullyPassed(r));
+        if (!fullyPassed) {
+            return `<div class="text-center text-muted py-5"><i class="bx bx-lock-alt fs-2 d-block mb-3" style="color:#dc3545;"></i><h6 style="color:#dc3545;font-weight:700;">Batch Not Fully Passed</h6><p class="mb-0">Kuch pieces abhi bhi pending / in-progress hain.</p></div>`;
+        }
+
+        const rows = allRows.slice().sort((a, b) => {
+            const pa = Number(a.pieceNumber) || 0, pb = Number(b.pieceNumber) || 0;
+            if (pa !== pb) return pa - pb;
+            return String(a.subBatch || "").localeCompare(String(b.subBatch || ""));
+        });
+
+        const first = rows[0] || {};
+        const photo = first.photo || "";
+        const photoSrc = photo ? escapeHtml(photo) : PLACEHOLDER_IMG;
+        const now = new Date();
+        const dateStr = now.toLocaleDateString("en-GB") + ", " + now.toLocaleTimeString("en-GB", { hour12: false });
+
+        let totalQty = 0, totalProgress = 0, totalPassed = 0, totalDamage = 0;
+        rows.forEach(r => {
+            totalQty += Number(r.assignedQty) || 0;
+            totalProgress += Number(r.completedQty) || 0;
+            totalPassed += Number(r.passedQty) || 0;
+            totalDamage += Number(r.damageQty) || 0;
+        });
+
+        let tableRows = "";
+        rows.forEach((r, i) => {
+            const qty = r.assignedQty || 0, progress = r.completedQty || 0;
+            const passedQty = r.passedQty || 0, damage = r.damageQty || 0;
+            const effectiveTotal = Production.calculateProductionMath(r).effectiveQty;
+            const remaining = Production.calculateProductionMath(r).uncompletedQty;
+            const history = getHistoryForAssignment(r.id);
+            const historyText = history.length
+                ? history.map(h => `<div>• <strong>${escapeHtml(h.at)}</strong> — ${escapeHtml(h.action || "")}</div>`).join("")
+                : `<span class="text-muted">No history</span>`;
+
+            tableRows += `
+                <tr>
+                    <td>${i + 1}</td>
+                    <td>${escapeHtml(r.subBatch || "-")}</td>
+                    <td>Piece ${escapeHtml(r.pieceNumber || "-")}</td>
+                    <td>${escapeHtml(r.worker || "-")}</td>
+                    <td>${qty}</td>
+                    <td>${progress}</td>
+                    <td>${damage > 0 ? damage : "-"}</td>
+                    <td>${passedQty}</td>
+                    <td>${remaining}</td>
+                    <td><button class="btn btn-sm view-row-btn view-row-action-btn" data-id="${r.id}"><i class="bx bx-show"></i></button></td>
+                </tr>
+                <tr>
+                    <td colspan="10" style="padding:0;border:none;">
+                        <div class="history-block"><strong>History:</strong> ${historyText}</div>
+                    </td>
+                </tr>
+            `;
+        });
+
+        return `
+            <div class="detail-print-wrap">
+                <div class="detail-header-line"><h4>BATCH ASSIGNMENT LIST</h4><small>${escapeHtml(dateStr)}</small></div>
+                <div class="detail-divider"></div>
+                <div class="detail-split-layout">
+                    <div>
+                        <div class="detail-highlight-grid">
+                            <div class="detail-highlight-item"><span class="lbl">Batch ID</span><span class="val">${escapeHtml(first.batchId || batchId)}</span></div>
+                            <div class="detail-highlight-item"><span class="lbl">Design Number</span><span class="val">${escapeHtml(first.designNumber || "-")}</span></div>
+                            <div class="detail-highlight-item"><span class="lbl">Brand</span><span class="val">${escapeHtml(first.brand || "-")}</span></div>
+                            <div class="detail-highlight-item"><span class="lbl">Total Assignments</span><span class="val">${rows.length}</span></div>
+                        </div>
+                        <div class="detail-info-grid">
+                            <div class="detail-info-cell"><span class="lbl">Total Qty</span><span class="val">${totalQty}</span></div>
+                            <div class="detail-info-cell"><span class="lbl">Total Progress</span><span class="val">${totalProgress}</span></div>
+                            <div class="detail-info-cell"><span class="lbl">Total Passed</span><span class="val">${totalPassed}</span></div>
+                            <div class="detail-info-cell"><span class="lbl">Total Damage</span><span class="val">${totalDamage}</span></div>
+                            <div class="detail-info-cell"><span class="lbl">Color</span><span class="val">${escapeHtml(first.color || "-")}</span></div>
+                            <div class="detail-info-cell"><span class="lbl">Priority</span><span class="val">${escapeHtml(first.priority || "-")}</span></div>
+                        </div>
+                    </div>
+                    <div><div class="detail-photo-box"><img src="${photoSrc}" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}';"></div></div>
+                </div>
+                <h6 class="mt-4 mb-2" style="color:#161617;font-weight:700;">All Assignments — Full History</h6>
+                <div class="table-responsive">
+                    <table class="list-detail-table">
+                        <thead><tr><th>#</th><th>Sub-Batch</th><th>Piece</th><th>Worker</th><th>Qty</th><th>Progress</th><th>Damage</th><th>Passed</th><th>Remaining</th><th>View</th></tr></thead>
+                        <tbody>${tableRows}</tbody>
+                    </table>
+                </div>
+                <div class="detail-signature"><span class="sig-line">Signature .....</span></div>
+            </div>
+        `;
+    }
+
+    $(document).on("click", ".bulk-list-btn", function () {
+        const batchId = String($(this).data("batch-id"));
+        if (!batchId) return;
+        $("#listDetailBody").html(buildListDetailHtml(batchId));
+        const modal = new bootstrap.Modal(document.getElementById("listDetailModal"));
+        modal.show();
+    });
+
+    $("#printListDetailBtn").on("click", function () { window.print(); });
+
+    /* ============================================================
+       LIST ALL MODAL — only ONE view button per row
+       ============================================================ */
+    function buildListAllHtml() {
+        const byBatch = {};
+        cuttingData.forEach(row => {
+            const key = String(row.batchId);
+            if (!byBatch[key]) byBatch[key] = [];
+            byBatch[key].push(row);
+        });
+
+        const passedBatchIds = Object.keys(byBatch).filter(batchId => {
+            const rows = byBatch[batchId];
+            return rows.length > 0 && rows.every(r => isFullyPassed(r));
+        });
+
+        if (!passedBatchIds.length) {
+            return `<div class="text-center text-muted py-5"><i class="bx bx-info-circle fs-2 d-block mb-2"></i><h6 style="color:#6b7280;font-weight:700;">No Fully Passed Batches Yet</h6></div>`;
+        }
+
+        const passedRows = [];
+        passedBatchIds.forEach(batchId => {
+            byBatch[batchId].forEach(r => passedRows.push(r));
+        });
+
+        passedRows.sort((a, b) => {
+            const ba = String(a.batchId || ""), bb = String(b.batchId || "");
+            if (ba !== bb) return ba.localeCompare(bb);
+            const pa = Number(a.pieceNumber) || 0, pb = Number(b.pieceNumber) || 0;
+            if (pa !== pb) return pa - pb;
+            return String(a.subBatch || "").localeCompare(String(b.subBatch || ""));
+        });
+
+        let serial = 0, lastBatchId = null, tableRows = "";
+        passedRows.forEach((item) => {
+            const batchId = String(item.batchId || "");
+            const isFirstOfBatch = batchId !== lastBatchId;
+            if (isFirstOfBatch) serial++;
+            lastBatchId = batchId;
+
+            const qty = item.assignedQty || 0, damage = item.damageQty || 0;
+            const progress = item.completedQty || 0;
+            const effectiveTotal = Production.calculateProductionMath(item).effectiveQty;
+            const remaining = Production.calculateProductionMath(item).uncompletedQty;
+            const progressPct = effectiveTotal > 0 ? Math.min(100, Math.round((progress / effectiveTotal) * 100)) : 0;
+            const priorityClass = getPriorityClass(item.priority);
+
+            let deliveryHtml = `<span class="text-muted">Not Set</span>`;
+            if (item.deliveryDate) {
+                const cls = getDeliveryStatusClass(item.deliveryDate);
+                deliveryHtml = `<span class="badge ${cls} delivery-date-badge">${formatDateDisplay(item.deliveryDate)}</span>`;
+            }
+
+            const damageHtml = damage > 0 ? `<span class="damage-badge">${damage}</span>` : `<span class="damage-empty">-</span>`;
+            const qtyHtml = `<span class="qty-pair"><span class="qty-total">${qty}</span><span class="qty-sep">/</span><span class="qty-assigned ${progress === 0 ? "zero" : ""}">${progress}</span></span>`;
+
+            tableRows += `
+                <tr>
+                    <td>${isFirstOfBatch ? serial : ""}</td>
+                    <td>${isFirstOfBatch ? escapeHtml(batchId) : ""}</td>
+                    <td><span class="fw-semibold text-primary">${escapeHtml(item.subBatch || "-")}</span></td>
+                    <td>${escapeHtml(item.brand || "-")}</td>
+                    <td>${escapeHtml(item.pieceType || "-")}${item.itemName ? `<div class="small text-muted">Item: ${escapeHtml(item.itemName)}</div>` : ""}</td>
+                    <td>${escapeHtml(item.worker || "-")}</td>
+                    <td>${qtyHtml}</td>
+                    <td><div class="d-flex align-items-center gap-2"><span>${progress}</span><div class="progress-bar-container"><div class="progress-bar-fill" style="width:${progressPct}%;"></div></div></div></td>
+                    <td>${damageHtml}</td>
+                    <td>${remaining}</td>
+                    <td><span class="priority-badge ${priorityClass}">${escapeHtml(item.priority || "-")}</span></td>
+                    <td>${deliveryHtml}</td>
+                    <td><span class="status-badge passed">Passed</span></td>
+                    <td><button class="btn btn-sm view-row-btn batch-history-btn" data-batch-id="${escapeHtml(batchId)}" title="View Batch History"><i class="bx bx-show"></i></button></td>
+                </tr>
+            `;
+        });
+
+        return `
+            <div style="margin-bottom:12px;padding:8px 12px;background:#d1fae5;border-left:3px solid #198754;border-radius:4px;font-size:12px;color:#065f46;">
+                <strong>${passedBatchIds.length}</strong> fully-passed batch(es) found.
+            </div>
+            <div class="table-responsive" style="width:100%;">
+                <table class="table table-bordered text-nowrap w-100" style="font-size:13px; width:100%;">
+                    <thead><tr><th>#</th><th>Batch ID</th><th>Sub-Batch</th><th>Brand</th><th>Piece Type</th><th>Worker</th><th>Quantity</th><th>Progress</th><th>Damage</th><th>Remaining</th><th>Priority</th><th>Delivery Date</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody>${tableRows}</tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    $("#listAllBtn").on("click", function () {
+        $("#listAllBody").html(buildListAllHtml());
+        const modal = new bootstrap.Modal(document.getElementById("listAllModal"));
+        modal.show();
+    });
+
+    $("#printListAllBtn").on("click", function () { window.print(); });
+
+    /* ============================================================
+       BATCH HISTORY MODAL
+       ============================================================ */
+    function buildBatchHistoryHtml(batchId) {
+        const history = readStorage(CUTTING_HISTORY_KEY);
+        const batchRows = cuttingData.filter(d => String(d.batchId) === String(batchId));
+        if (!batchRows.length) return `<div class="text-center text-muted py-5">No assignments found for batch ${escapeHtml(batchId)}.</div>`;
+
+        const subBatchMap = {};
+        batchRows.forEach(r => {
+            const key = String(r.subBatch || "");
+            if (!subBatchMap[key]) subBatchMap[key] = [];
+            subBatchMap[key].push(r);
+        });
+
+        const subBatchKeys = Object.keys(subBatchMap).sort();
+        const now = new Date();
+        const dateStr = now.toLocaleDateString("en-GB") + ", " + now.toLocaleTimeString("en-GB", { hour12: false });
+        const first = batchRows[0];
+
+        let html = `
+            <div style="border-bottom: 2px solid #161617; padding-bottom: 12px; margin-bottom: 18px;">
+                <h4 style="margin: 0; font-weight: 700; color: #161617; letter-spacing: 0.5px;">BATCH HISTORY</h4>
+                <small style="color: #6b7280; display: block; margin-top: 4px;">Batch ID: <strong>${escapeHtml(batchId)}</strong> • Design: <strong>${escapeHtml(first.designNumber || "-")}</strong> • Brand: <strong>${escapeHtml(first.brand || "-")}</strong></small>
+                <small style="color: #9ca3af; display: block; margin-top: 2px;">Generated: ${escapeHtml(dateStr)}</small>
+            </div>
+        `;
+
+        subBatchKeys.forEach((subBatch, idx) => {
+            const items = subBatchMap[subBatch];
+            const firstItem = items[0];
+            const worker = firstItem.worker || "-";
+            const qty = firstItem.assignedQty || 0;
+            const progress = firstItem.completedQty || 0;
+            const passedQty = firstItem.passedQty || 0;
+            const damage = firstItem.damageQty || 0;
+            const effectiveTotal = Production.calculateProductionMath(firstItem).effectiveQty;
+            const remaining = Production.calculateProductionMath(firstItem).uncompletedQty;
+
+            const itemIds = items.map(i => i.id);
+            const allEvents = history.filter(h => itemIds.includes(Number(h.cuttingId)))
+                .sort((a, b) => String(a.at).localeCompare(String(b.at)));
+
+            let eventsHtml = "";
+            if (allEvents.length) {
+                allEvents.forEach(h => {
+                    eventsHtml += `<tr><td style="white-space:nowrap;">${escapeHtml(h.at)}</td><td>${escapeHtml(h.action || "")}</td><td>${escapeHtml(h.by || "-")}</td></tr>`;
+                });
+            } else {
+                eventsHtml = `<tr><td colspan="3" class="text-center text-muted">No history events</td></tr>`;
+            }
+
+            html += `
+                <div style="border: 1px solid #e2e7f1; border-radius: 8px; margin-bottom: 16px; overflow: hidden;">
+                    <div style="background: #f8f9fa; padding: 10px 14px; border-bottom: 1px solid #e2e7f1;">
+                        <div style="font-size: 13px; font-weight: 700; color: #161617;">${idx + 1}. ${escapeHtml(subBatch)} — ${escapeHtml(worker)}</div>
+                        <div style="font-size: 11px; color: #6b7280; margin-top: 3px;">
+                            <strong>Piece:</strong> ${escapeHtml(firstItem.pieceType || "-")} •
+                            <strong>Qty:</strong> ${qty} • <strong>Progress:</strong> ${progress} •
+                            <strong>Damage:</strong> ${damage} • <strong>Passed:</strong> ${passedQty} •
+                            <strong>Remaining:</strong> ${remaining}
+                        </div>
+                    </div>
+                    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                        <thead><tr style="background: #fafbfd;"><th style="padding:8px 12px; text-align:left; font-weight:600; color:#4b5563; font-size:11px; text-transform:uppercase; border-bottom:1px solid #e2e7f1;">Date & Time</th><th style="padding:8px 12px; text-align:left; font-weight:600; color:#4b5563; font-size:11px; text-transform:uppercase; border-bottom:1px solid #e2e7f1;">Action</th><th style="padding:8px 12px; text-align:left; font-weight:600; color:#4b5563; font-size:11px; text-transform:uppercase; border-bottom:1px solid #e2e7f1;">By</th></tr></thead>
+                        <tbody>${eventsHtml}</tbody>
+                    </table>
+                </div>
+            `;
+        });
+
+        return html;
+    }
+
+    $(document).on("click", ".batch-history-btn", function () {
+        const batchId = String($(this).data("batch-id"));
+        if (!batchId) return;
+        $("#batchHistoryBody").html(buildBatchHistoryHtml(batchId));
+        const modal = new bootstrap.Modal(document.getElementById("batchHistoryModal"));
+        modal.show();
+    });
+
+    $("#printBatchHistoryBtn").on("click", function () { window.print(); });
+
+    /* ================= SINGLE ASSIGN MODAL ================= */
+    function populateBatchSelect() {
+        const select = $("#batchSelect");
+        select.empty();
+        select.append('<option value="">Choose Batch</option>');
+        const available = approvedPool.filter(p => getPoolRemaining(p) > 0);
+        if (!available.length) {
+            select.append('<option value="" disabled>No approved items available</option>');
+            return;
+        }
+        available.forEach(item => {
+            const remaining = getPoolRemaining(item);
+            select.append(`<option value="${item.id}">${escapeHtml(item.batchId)} - ${escapeHtml(item.brand)} - Piece ${item.pieceNumber} (${escapeHtml(item.pieceItem)}) - Remaining ${remaining}/${getPoolTotal(item)}</option>`);
+        });
+    }
+
+    function generateTableRows(poolItem, remaining) {
+        const container = $("#rowsContainer");
+        container.empty();
+        const baseRows = 1;
+        const components = getCuttingComponents(poolItem);
+        if (!components.length) {
+            container.html('<div class="alert alert-warning mb-0">No available BOM items are configured as Cutting for this piece.</div>');
+            return;
+        }
+        const assignmentRemaining = Math.min(...components.map(component => getComponentRemaining(poolItem, component.id)));
+        const total = getPoolTotal(poolItem);
+        const assigned = getPoolAssigned(poolItem);
+        const designNumber = poolItem.designNumber || "-";
+
+        const workersInPool = getWorkersInPool(poolItem.id);
+        const busyWorkers = getBusyWorkersExcluding(poolItem.id);
+
+        let workerOpts = "";
+        WORKERS.forEach(w => {
+            if (workersInPool.has(w)) workerOpts += `<option value="${escapeHtml(w)}" data-in-pool="1">${escapeHtml(w)} (continuing)</option>`;
+        });
+        WORKERS.forEach(w => {
+            if (!workersInPool.has(w) && !busyWorkers.has(w)) workerOpts += `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`;
+        });
+        WORKERS.forEach(w => {
+            if (!workersInPool.has(w) && busyWorkers.has(w)) workerOpts += `<option value="${escapeHtml(w)}" disabled>${escapeHtml(w)} (busy elsewhere)</option>`;
+        });
+
+        const defaultWorker = workersInPool.size === 1 ? Array.from(workersInPool)[0] : "";
+
+        container.append(`
+            <div class="alert alert-primary mb-3">
+                <div class="row align-items-center">
+                    <div class="col-md-7">
+                        <i class="bx bx-layer me-2"></i>
+                        <strong>${escapeHtml(poolItem.batchId)}</strong> — Piece ${poolItem.pieceNumber} (${escapeHtml(poolItem.pieceItem)})
+                        <div class="small text-muted mt-1">
+                            <strong>Design:</strong> ${escapeHtml(designNumber)} •
+                            <strong>Total:</strong> ${total} •
+                            <strong>Assigned:</strong> <span class="text-success">${assigned}</span> •
+                            <strong>Remaining:</strong> <span class="text-warning">${remaining}</span>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label mb-0">Split Count (Rows)</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="splitCount" value="${baseRows}" min="1" max="20">
+                            <button class="btn btn-success" id="applySplitBtn" type="button"><i class="bx bx-check"></i> Apply Split</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        function renderRows(count) {
+            container.find('.assignment-cards-wrap').remove();
+            container.find('.assignment-table-wrap').remove();
+            if (count < 1) count = 1;
+            const autoQtys = splitQuantity(assignmentRemaining, count);
+
+            container.append(`
+                <div class="assignment-table-wrap table-responsive">
+                    <table id="singleAssignmentTable" class="split-row-table table table-bordered align-middle mb-0">
+                        <colgroup><col class="sub-col"><col class="piece-col"><col class="item-col"><col class="worker-col"><col class="qty-col"><col class="priority-col"><col class="date-col"></colgroup>
+                        <thead><tr><th>Sub-Batch ID</th><th>Piece</th><th>Item</th><th>Worker</th><th>Quantity</th><th>Priority</th><th>Delivery Date</th></tr></thead>
+                        <tbody id="assignmentTableBody"></tbody>
+                    </table>
+                </div>
+            `);
+
+            const tbody = $("#assignmentTableBody");
+            const defaultDateStr = defaultDeliveryDate();
+            const batchAssignmentCount = nextBatchSubBatchNumber(poolItem.batchId) - 1;
+
+            for (let i = 0; i < count; i++) {
+                const autoQty = autoQtys[i];
+                const splitGroupId = `${poolItem.id}-split-${i}`;
+                components.forEach((component, componentIndex) => {
+                    const subBatch = peekNextSubBatchId(poolItem.batchId, batchAssignmentCount + i + 1);
+                    tbody.append(`
+                            <tr class="assignment-row" data-row-index="${i}" data-sub-batch="${escapeHtml(subBatch)}" data-pool-id="${poolItem.id}" data-component-id="${escapeHtml(component.id)}" data-component-name="${escapeHtml(component.name)}" data-split-group-id="${escapeHtml(splitGroupId)}">
+                            <td><span class="sub-batch-label fw-semibold text-primary">${escapeHtml(subBatch)}</span><input type="hidden" class="sub-batch-input" value="${escapeHtml(subBatch)}"></td>
+                            <td><strong>Piece ${escapeHtml(poolItem.pieceNumber)}</strong><div class="small text-muted">${escapeHtml(poolItem.pieceItem || "-")}</div></td>
+                            <td><strong>${escapeHtml(component.name)}</strong></td>
+                            <td><select class="form-select form-select-sm worker-select" required><option value="">Select Worker</option>${workerOpts}</select></td>
+                            <td><input type="number" class="form-control form-control-sm quantity-input" value="${autoQty}" min="1" max="${assignmentRemaining}" data-max="${assignmentRemaining}"></td>
+                            <td><select class="form-select form-select-sm priority-select"><option value="Low">Low</option><option value="Medium" selected>Medium</option><option value="High">High</option></select></td>
+                            <td><input type="date" class="form-control form-control-sm delivery-date-input" value="${defaultDateStr}"></td>
+                        </tr>
+                    `);
+                });
+            }
+
+            if (defaultWorker) tbody.find(".worker-select").val(defaultWorker);
+
+            // ✅ Manual qty edit → redistribute remaining rows
+            tbody.off("input", ".quantity-input").on("input", ".quantity-input", function () {
+                const $input = $(this);
+                const $row = $input.closest(".assignment-row");
+                const rowIdx = Number($row.data("row-index"));
+
+                // Clamp manual value to total remaining
+                let manualVal = parseInt($input.val()) || 0;
+                if (manualVal < 0) manualVal = 0;
+                if (manualVal > remaining) {
+                    manualVal = remaining;
+                    $input.val(manualVal);
+                }
+
+                // Mark as manually edited
+                $input.addClass("manually-edited");
+
+                // If there's only one row → nothing to redistribute
+                if (tbody.find(".assignment-row").length > 1) {
+                    redistributeQuantities(tbody, remaining, rowIdx);
+                    // Keep the manually edited value intact & re-mark
+                    $input.val(manualVal).addClass("manually-edited");
+                }
+            });
+            tbody.off("input", ".quantity-input").on("input", ".quantity-input", function () {
+                const $input = $(this), $row = $input.closest(".assignment-row");
+                const poolId = String($row.data("pool-id")), componentId = String($row.data("component-id"));
+                const splitGroupId = String($row.data("split-group-id"));
+                const componentTotal = assignmentRemaining;
+                const manualVal = Math.max(0, Math.min(componentTotal, parseInt($input.val()) || 0));
+                $input.val(manualVal).addClass("manually-edited");
+                const componentRows = tbody.find(`.assignment-row[data-pool-id="${poolId}"][data-component-id="${componentId}"]`);
+                const otherRows = componentRows.not($row);
+                const distributed = splitQuantity(Math.max(0, componentTotal - manualVal), otherRows.length);
+                otherRows.each(function(index){ $(this).find(".quantity-input").val(distributed[index] || 0); });
+                tbody.find(`.assignment-row[data-split-group-id="${splitGroupId}"]`).not($row).find(".quantity-input").val(manualVal);
+                componentRows.each(function(){
+                    const group = String($(this).data("split-group-id"));
+                    const value = Number($(this).find(".quantity-input").val()) || 0;
+                    tbody.find(`.assignment-row[data-split-group-id="${group}"] .quantity-input`).val(value);
+                });
+            });
+
+            // Remove manual-edited flag when user clears and re-splits
+            $("#applySplitBtn").off("click").on("click", function () {
+                const c = parseInt($("#splitCount").val()) || 1;
+                renderRows(c);
+            });
+        }
+
+        renderRows(baseRows);
+        $("#applySplitBtn").off("click").on("click", function () {
+            const c = parseInt($("#splitCount").val()) || 1;
+            renderRows(c);
+        });
+    }
+
+    $(document).on("click", ".assign-single-btn", function () {
+        const poolId = Number($(this).data("pool-id"));
+        const item = approvedPool.find(p => Number(p.id) === poolId);
+        if (!item) return;
+        const remaining = getPoolRemaining(item);
+        if (remaining <= 0) {
+            Swal.fire({ icon: 'info', title: 'Fully Assigned' });
+            return;
+        }
+        populateBatchSelect();
+        $("#batchSelect").val(item.id).trigger("change");
+        $("#assignModal").modal("show");
+    });
+
+    $("#batchSelect").change(function () {
+        const poolId = Number($(this).val());
+        if (!poolId) { $("#rowsContainer").empty(); return; }
+        const item = approvedPool.find(p => Number(p.id) === poolId);
+        if (!item) return;
+        const remaining = getPoolRemaining(item);
+        generateTableRows(item, remaining);
+    });
+
+    $("#saveAssignBtn").on("click", async function () {
+        await productionAction(() => Production.assign("cuttingData", collectAssignments(".assignment-row", false)), "#assignModal");
+    });
+
+    /* ================= UPDATE PROGRESS MODAL ================= */
+    function refreshProgressModalNumbers(item) {
+        const progress = item.completedQty || 0, damage = item.damageQty || 0;
+        const passedQty = item.passedQty || 0, qty = item.assignedQty || 0;
+        const effectiveTotal = Production.calculateProductionMath(item).effectiveQty;
+        const remaining = Production.calculateProductionMath(item).uncompletedQty;
+        $("#progressTotal").val(qty);
+        $("#progressPassed").val(passedQty);
+        $("#progressRemaining").val(remaining);
+        $("#progressMax").text(remaining);
+        $("#progressLivePreview").html(`
+            <div class="d-flex justify-content-between">
+                <span><strong>Effective Total:</strong> ${effectiveTotal}</span>
+                <span><strong>Progress:</strong> ${progress}</span>
+                <span><strong>Passed:</strong> ${passedQty}</span>
+                <span><strong>Remaining:</strong> ${remaining}</span>
+            </div>
+        `);
+    }
+
+    /* ✅ NEW: Render assignment history into the modal */
+    function renderProgressHistory(cuttingId) {
+        const $list = $("#progressHistoryList");
+        if (!$list.length) return;
+        $list.empty();
+
+        const history = getHistoryForAssignment(cuttingId);
+        if (!history.length) {
+            $list.html(`<div class="progress-history-empty">No previous assignment / progress recorded yet.</div>`);
+            return;
+        }
+
+        history.forEach(h => {
+            $list.append(`
+                <div class="progress-history-row">
+                    <div class="h-at"><i class="bx bx-time-five me-1"></i>${escapeHtml(h.at)}</div>
+                    <div class="h-action">${escapeHtml(h.action || "-")}</div>
+                    <div class="h-by">${escapeHtml(h.by || "")}</div>
+                </div>
+            `);
+        });
+    }
+
+    $(document).on("click", ".progress-btn", function () {
+        if ($(this).prop("disabled")) return;
+        const ids = String($(this).data("group-ids") || $(this).data("id") || "").split(",").map(Number).filter(Boolean);
+        const items = ids.map(id => cuttingData.find(row => Number(row.id) === id)).filter(Boolean);
+        if (!items.length) return;
+        const item = items[0];
+
+        currentEditingId = Number(item.id);
+        currentEditingPoolId = item.poolId;
+        $("#progressModalLabel").text(`Update Progress — ${item.pieceType || `Piece ${item.pieceNumber}`}`);
+        $("#progressSubBatch").val([...new Set(items.map(displayedSubBatch))].join(" · "));
+        $("#progressPieceItem").val(items.map(row => row.itemName || "Item").join(", "));
+        $("#progressWorker").val([...new Set(items.map(row => row.worker).filter(Boolean))].join(", "));
+        $("#progressTypeSelect").val("completed");
+        $("#progressQty").val(0);
+        $("#componentUpdateType").val("completed");
+        const componentGroups = groupComponentAssignments(items);
+        $("#progressComponentInputs").html(componentGroups.map(group => {
+            const remaining = group.rows.reduce((sum, row) => sum + Production.calculateProductionMath(row).uncompletedQty, 0);
+            const damageable = group.rows.reduce((sum, row) => sum + Math.max(0, Number(row.inputQty || row.assignedQty || 0) - Number(row.damageQty || 0) - Number(row.passedQty || 0)), 0);
+            const assigned = group.rows.reduce((sum, row) => sum + Number(row.assignedQty || 0), 0);
+            const completed = group.rows.reduce((sum, row) => sum + Number(row.completedQty || 0), 0);
+            return `<div class="progress-component-row" data-component-id="${escapeHtml(group.componentId)}">
+                <div><strong>${escapeHtml(group.name)}</strong><div class="small text-muted">${group.rows.map(row => `${escapeHtml(displayedSubBatch(row))} · ${escapeHtml(row.worker || "No worker")}`).join("<br>")}</div>
+                    <div class="small text-muted">Assigned ${assigned} · Done ${completed} · Remaining ${remaining}</div></div>
+                <div><label class="form-label mb-1">Add completed qty</label><input type="number" class="form-control form-control-sm component-progress-qty" min="0" max="${remaining}" value="0" data-max="${remaining}" data-max-completed="${remaining}" data-max-damage="${damageable}"></div>
+            </div>`;
+        }).join(""));
+        $("#componentUpdateControls").show();
+        $(".progress-single-summary, .progress-single-controls").hide();
+        refreshProgressModalNumbers(item);
+
+        // ✅ NEW: Render history inside the modal
+        renderProgressHistory(item.id);
+
+        $("#progressModal").modal("show");
+    });
+
+    $(document).on("input change", "#progressQty, #progressTypeSelect", function () {
+        const item = cuttingData.find(d => Number(d.id) === currentEditingId);
+        if (!item) return;
+        const type = $("#progressTypeSelect").val();
+        const addQty = parseInt($("#progressQty").val()) || 0;
+        const progress = item.completedQty || 0, damage = item.damageQty || 0;
+        const passedQty = item.passedQty || 0, qty = item.assignedQty || 0;
+        const previewProgress = type === "set_completed" ? addQty : type === "completed" ? progress + addQty : progress;
+        const previewDamage = type === "set_damage" ? addQty : type === "damage" ? damage + addQty : damage;
+        const effectiveTotal = Production.calculateProductionMath({ ...item, damageQty: previewDamage }).effectiveQty;
+        const remaining = Production.calculateProductionMath({ ...item, completedQty: previewProgress, damageQty: previewDamage }).uncompletedQty;
+        $("#progressLivePreview").html(`
+            <div class="d-flex justify-content-between">
+                <span><strong>Effective Total:</strong> ${effectiveTotal}</span>
+                <span><strong>Progress:</strong> ${previewProgress}</span>
+                <span><strong>Passed:</strong> ${passedQty}</span>
+                <span><strong>Remaining:</strong> ${remaining}</span>
+            </div>
+        `);
+    });
+
+    $(document).on("change", "#componentUpdateType", function () {
+        const type = $(this).val();
+        $("#progressComponentInputs .component-progress-qty").each(function () {
+            const $input = $(this);
+            const max = Number($input.attr(type === "damage" ? "data-max-damage" : "data-max-completed")) || 0;
+            $input.attr("max", max).data("max", max).closest(".progress-component-row").find("label").text(type === "damage" ? "Add damaged qty" : "Add completed qty");
+        });
+    });
+
+    $("#updateProgressBtn").on("click", async function () {
+        const componentInputs = $("#progressComponentInputs .component-progress-qty");
+        if (componentInputs.length) {
+            const updates = [];
+            const field = $("#componentUpdateType").val() === "damage" ? "addDamage" : "addCompleted";
+            let invalidInput = null;
+            componentInputs.each(function () {
+                const $input = $(this);
+                const maxAttribute = field === "addDamage" ? "data-max-damage" : "data-max-completed";
+                const max = Number($input.attr(maxAttribute)) || 0;
+                const rawValue = String($input.val() ?? "").trim();
+                const quantity = rawValue === "" ? 0 : Number(rawValue);
+                if (!Number.isFinite(quantity) || quantity < 0 || quantity > max) {
+                    invalidInput = { input: this, max };
+                    return false;
+                }
+            });
+            if (invalidInput) {
+                const label = field === "addDamage" ? "Damage" : "Completed";
+                Swal.fire({ icon: "warning", title: "Quantity exceeds remaining", text: `${label} quantity cannot be more than ${invalidInput.max}. Enter a quantity within the remaining amount.` });
+                $(invalidInput.input).trigger("focus");
+                return;
+            }
+            componentInputs.each(function () {
+                const $input = $(this);
+                const maxAttribute = field === "addDamage" ? "data-max-damage" : "data-max-completed";
+                const max = Number($input.attr(maxAttribute)) || 0;
+                let quantity = Math.max(0, Number($input.val()) || 0);
+                const componentId = String($input.closest(".progress-component-row").data("component-id"));
+                const component = groupComponentAssignments(cuttingData.filter(row => String(row.poolId) === String(currentEditingPoolId) && String(row.componentId ?? "legacy") === componentId))[0];
+                if (!component) return;
+                component.rows.forEach(row => {
+                    const rowCapacity = field === "addDamage"
+                        ? Math.max(0, Number(row.inputQty || row.assignedQty || 0) - Number(row.damageQty || 0) - Number(row.passedQty || 0))
+                        : Production.calculateProductionMath(row).uncompletedQty;
+                    const amount = Math.min(quantity, rowCapacity);
+                    if (amount > 0) updates.push({ id: Number(row.id), [field]: amount });
+                    quantity -= amount;
+                });
+            });
+            if (!updates.length) {
+                Swal.fire({ icon: "info", title: "Enter a quantity", text: `Add a ${field === "addDamage" ? "damage" : "completed"} quantity for at least one item.` });
+                return;
+            }
+            await productionAction(() => Production.edit("cuttingData", updates), "#progressModal");
+            $("#progressComponentInputs").empty();
+            return;
+        }
+        const type = $("#progressTypeSelect").val(), qty = Number($("#progressQty").val());
+        if (type === "recover") { await productionAction(() => Production.recoverRepair("cuttingData", currentEditingId, qty), "#progressModal"); return; }
+        const fields = { completed: "addCompleted", damage: "addDamage", set_completed: "completedQty", set_damage: "damageQty", set_assigned: "assignedQty" };
+        await productionAction(() => Production.edit("cuttingData", [{ id: currentEditingId, [fields[type]]: qty }]), "#progressModal");
+    });
+
+    /* ================= PASS TO NEXT STAGE ================= */
+    function pushRowToNextStage(item) {
+        return Production.pass("cuttingData", [item.id]);
+    }
+
+    $(document).on("click", ".pass-row-action-btn", async function () {
+        const ids = String($(this).data("group-ids") || $(this).data("id") || "").split(",").map(Number).filter(Boolean);
+        if (!ids.length) return;
+        const items = ids.map(id => cuttingData.find(row => Number(row.id) === id)).filter(Boolean);
+        if (!items.length) return;
+        currentPassPoolId = items[0].poolId;
+        const components = groupComponentAssignments(items);
+        const capacities = components.map(group => group.rows.reduce((sum, row) => sum + Production.calculateProductionMath(row).passableQty, 0));
+        const commonQty = Math.min(...capacities);
+        $("#passPieceSummary").html(`<strong>${escapeHtml(items[0].batchId || "-")}</strong> · ${escapeHtml(items[0].pieceType || `Piece ${items[0].pieceNumber}`)} · ${escapeHtml(items[0].brand || "-")}<div class="small text-muted">Enter a matching quantity for all ${components.length} cutting item(s).</div>`);
+        $("#passPieceInputs").html(components.map((group, index) => {
+            const max = capacities[index];
+            return `<div class="pass-component-row" data-component-id="${escapeHtml(group.componentId)}">
+                <div><strong>${escapeHtml(group.name)}</strong><div class="small text-muted">${group.rows.map(row => escapeHtml(displayedSubBatch(row))).join("<br>")}</div><div class="small text-muted">Ready to pass: ${max}</div></div>
+                <div><label class="form-label mb-1">Pass quantity</label><input type="number" class="form-control form-control-sm pass-component-qty" min="0" max="${max}" value="${commonQty}" data-max="${max}"></div>
+            </div>`;
+        }).join(""));
+        $("#passPieceModal").modal("show");
+    });
+
+    $("#confirmPassPieceBtn").on("click", async function () {
+        const inputs = $("#passPieceInputs .pass-component-qty");
+        const requests = inputs.toArray().map(input => ({
+            componentId: String($(input).closest(".pass-component-row").data("component-id")),
+            quantity: Math.min(Number($(input).data("max")) || 0, Math.max(0, Number($(input).val()) || 0))
+        }));
+        if (!requests.length || requests.some(request => request.quantity !== requests[0].quantity)) {
+            Swal.fire({ icon: "warning", title: "Quantities must match", text: "Enter the same pass quantity for every cutting item to keep this piece paired." });
+            return;
+        }
+        if (requests[0].quantity <= 0) {
+            Swal.fire({ icon: "info", title: "Enter a quantity", text: "Enter a quantity greater than zero for every item." });
+            return;
+        }
+        await productionAction(() => Production.passComponents("cuttingData", currentPassPoolId, requests), "#passPieceModal");
+        $("#passPieceInputs").empty();
+    });
+
+    /* ================= STOP ROW ================= */
+    $(document).on("click", ".stop-row-action-btn", async function () {
+        const ids = String($(this).data("group-ids") || $(this).data("id") || "").split(",").map(Number).filter(Boolean);
+        if (!ids.length) return;
+        await productionAction(() => ids.length > 1 ? Production.stopGroup("cuttingData", ids) : Production.stop("cuttingData", ids[0]));
+    });
+
+    /* ================= BULK ASSIGN MODAL ================= */
+    function openBulkModal() {
+        bulkSelectedBatchIds = new Set();
+        bulkPieceSplits = {};
+        $("#multiSelectSearch").val("");
+        renderMultiSelectOptions();
+        renderBulkSelectedCards();
+        updateBulkSelectedCount();
+        const modal = new bootstrap.Modal(document.getElementById("bulkAssignModal"));
+        modal.show();
+    }
+
+    function renderMultiSelectOptions() {
+        const container = $("#multiSelectOptions");
+        container.empty();
+        const available = approvedPool.filter(p => getPoolRemaining(p) > 0);
+        const byBatch = {};
+        available.forEach(item => {
+            const key = String(item.batchId);
+            if (!byBatch[key]) byBatch[key] = [];
+            byBatch[key].push(item);
+        });
+
+        const searchTerm = String($("#multiSelectSearch").val() || "").trim().toLowerCase();
+        let batchList = Object.keys(byBatch).map(batchId => {
+            const items = byBatch[batchId].slice().sort((a, b) => Number(a.pieceNumber) - Number(b.pieceNumber));
+            return { batchId, items, first: items[0] };
+        });
+
+        if (searchTerm) {
+            batchList = batchList.filter(b => {
+                const text = [b.first.batchId, b.first.brand, b.first.designNumber, b.first.color,
+                    ...b.items.map(i => `${i.pieceNumber} ${i.pieceItem}`)].join(" ").toLowerCase();
+                return text.includes(searchTerm);
+            });
+        }
+        batchList.sort((a, b) => String(a.batchId).localeCompare(String(b.batchId)));
+
+        if (!batchList.length) { container.html(`<div class="empty-msg">No batches found</div>`); return; }
+
+        batchList.forEach(b => {
+            const isSelected = bulkSelectedBatchIds.has(String(b.batchId));
+            const pieceCount = b.items.length;
+            const perPieceQty = Number(b.items[0].quantity) || 0;
+            container.append(`
+                <label class="multi-select-option ${isSelected ? 'selected' : ''}" data-batch-id="${escapeHtml(b.batchId)}">
+                    <input type="checkbox" class="multi-select-checkbox" data-batch-id="${escapeHtml(b.batchId)}" ${isSelected ? "checked" : ""}>
+                    <div class="flex-grow-1">
+                        <div class="opt-title">${escapeHtml(b.first.batchId)}</div>
+                        <div class="opt-sub"><strong>Design:</strong> ${escapeHtml(b.first.designNumber || "-")} • <strong>Pieces:</strong> ${pieceCount} • <strong>Per-Piece Qty:</strong> ${perPieceQty} • <strong>Brand:</strong> ${escapeHtml(b.first.brand || "-")}</div>
+                    </div>
+                </label>
+            `);
+        });
+    }
+
+    function renderBulkSelectedCards() {
+        const container = $("#bulkItemsContainer");
+        container.empty();
+        if (!bulkSelectedBatchIds.size) {
+            container.html(`<div class="text-center text-muted py-5"><i class="bx bx-info-circle fs-2 d-block mb-2"></i>No batch selected yet.</div>`);
+            return;
+        }
+
+        const available = approvedPool.filter(p => getPoolRemaining(p) > 0);
+        const selectedBatches = Array.from(bulkSelectedBatchIds).map(batchId => {
+            const items = available.filter(p => String(p.batchId) === String(batchId))
+                .sort((a, b) => Number(a.pieceNumber) - Number(b.pieceNumber));
+            return { batchId, items };
+        }).filter(b => b.items.length > 0);
+
+        selectedBatches.sort((a, b) => String(a.batchId).localeCompare(String(b.batchId)));
+
+        selectedBatches.forEach(batch => {
+            const first = batch.items[0];
+            const photoSrc = first.photo ? escapeHtml(first.photo) : PLACEHOLDER_IMG;
+            const perPieceTotal = getPoolTotal(first);
+            const perPieceAssigned = getPoolAssigned(first);
+            const perPieceRemaining = getPoolRemaining(first);
+
+            container.append(`
+                <div class="bulk-item-card" data-batch-id="${escapeHtml(batch.batchId)}">
+                    <div class="bulk-item-header">
+                        <img src="${photoSrc}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}';">
+                        <div class="flex-grow-1">
+                            <div class="bulk-item-title">${escapeHtml(batch.batchId)} — Design: ${escapeHtml(first.designNumber || "-")}</div>
+                            <div class="bulk-item-sub"><strong>Brand:</strong> ${escapeHtml(first.brand || "-")} • <strong>Color:</strong> ${escapeHtml(first.color || "-")} • <strong>Pieces:</strong> ${batch.items.length} • <strong>Priority:</strong> ${escapeHtml(first.priority || "-")}</div>
+                            <div class="bulk-qty-summary">
+                                <span class="bulk-qty-pill total"><i class="bx bx-package"></i> Per-Piece Total: ${perPieceTotal}</span>
+                                <span class="bulk-qty-pill assigned"><i class="bx bx-check"></i> Per-Piece Assigned: ${perPieceAssigned}</span>
+                                <span class="bulk-qty-pill remaining"><i class="bx bx-time"></i> Per-Piece Remaining: ${perPieceRemaining}</span>
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <label class="small text-muted d-block mb-1" style="font-size:11px;">Split each piece into:</label>
+                            <div class="input-group input-group-sm" style="width:140px;">
+                                <input type="number" class="form-control form-control-sm bulk-global-split" data-batch-id="${escapeHtml(batch.batchId)}" value="1" min="1" max="50">
+                                <button type="button" class="btn btn-success bulk-apply-split-btn" data-batch-id="${escapeHtml(batch.batchId)}"><i class="bx bx-check"></i> Split</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="split-row-table">
+                            <colgroup>
+                                <col class="col-sub"><col class="col-piece"><col class="col-item"><col class="col-worker"><col class="col-qty"><col class="col-priority"><col class="col-date"><col class="col-copy">
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th>Sub-Batch</th><th>Piece</th><th>Item</th><th>Worker</th><th>Qty</th><th>Priority</th><th>Delivery Date</th>
+                                    <th class="copy-header-cell">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bulk-rows-tbody" data-batch-id="${escapeHtml(batch.batchId)}"></tbody>
+                        </table>
+                    </div>
+                </div>
+            `);
+
+            generateBatchRows(batch);
+        });
+    }
+
+    function generateBatchRows(batch) {
+        const $tbody = $(`.bulk-rows-tbody[data-batch-id="${batch.batchId}"]`);
+        $tbody.empty();
+        const defaultDateStr = defaultDeliveryDate();
+        let nextSubBatchNumber = nextBatchSubBatchNumber(batch.batchId);
+
+        const maxSplit = Math.max(...batch.items.map(i => Number(bulkPieceSplits[i.id] || 1)), 1);
+
+        for (let s = 0; s < maxSplit; s++) {
+            const splitGroupRows = [];
+
+            batch.items.forEach(item => {
+                const splitCount = Number(bulkPieceSplits[item.id] || 1);
+                if (s >= splitCount) return;
+                const components = getCuttingComponents(item);
+                if (!components.length) return;
+                const totalQty = Math.min(...components.map(component => getComponentRemaining(item, component.id)));
+                const autoQtys = splitQuantity(totalQty, splitCount);
+                const workerOpts = WORKERS.map(w => `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`).join("");
+                const splitGroupId = `${item.id}-split-${s}`;
+                const subBatch = peekNextSubBatchId(item.batchId, nextSubBatchNumber++);
+                components.forEach(component => {
+                    splitGroupRows.push({ item, component, splitIndex: s, splitGroupId, subBatch, autoQty: autoQtys[s] || 0, workerOpts, totalQty });
+                });
+            });
+
+            if (!splitGroupRows.length) continue;
+            const groupSize = splitGroupRows.length;
+
+            splitGroupRows.forEach((row, rIdx) => {
+                const item = row.item;
+                let copyCellHtml = "";
+                if (rIdx === 0) {
+                    copyCellHtml = `
+                        <td class="copy-col-cell" rowspan="${groupSize}">
+                            <div class="copy-body-inner">
+                                <button type="button" class="btn copy-row-side-btn bulk-copy-split-group-btn" data-batch-id="${escapeHtml(batch.batchId)}" data-split-index="${row.splitIndex}" title="Copy first row values">
+                                    <i class="bx bx-copy"></i>
+                                </button>
+                            </div>
+                        </td>
+                    `;
+                }
+
+                $tbody.append(`
+                    <tr class="bulk-assignment-row"
+                        data-pool-id="${item.id}"
+                        data-component-id="${escapeHtml(row.component.id)}"
+                        data-component-name="${escapeHtml(row.component.name)}"
+                        data-split-group-id="${escapeHtml(row.splitGroupId)}"
+                        data-sub-batch="${escapeHtml(row.subBatch)}"
+                        data-batch-id="${escapeHtml(item.batchId)}"
+                        data-split-index="${row.splitIndex}"
+                        data-piece-number="${item.pieceNumber}"
+                        data-piece-qty="${row.autoQty}"
+                        data-piece-total="${row.totalQty}">
+                        <td><span class="sub-batch-label fw-semibold text-primary" style="font-size:11px;">${escapeHtml(row.subBatch)}</span><input type="hidden" class="sub-batch-input" value="${escapeHtml(row.subBatch)}"></td>
+                        <td><div class="fw-semibold" style="font-size:12px;">Piece ${escapeHtml(item.pieceNumber)}</div><div class="text-muted" style="font-size:11px;">${escapeHtml(item.pieceItem || "-")}</div></td>
+                        <td><strong>${escapeHtml(row.component.name)}</strong></td>
+                        <td><select class="form-select form-select-sm worker-select" required><option value="">Select Worker</option>${row.workerOpts}</select></td>
+                        <td><input type="number" class="form-control form-control-sm quantity-input" value="${row.autoQty}" placeholder="Qty" min="1" max="${row.totalQty}" data-max="${row.totalQty}" style="width:70px;"></td>
+                        <td>
+                            <select class="form-select form-select-sm priority-select">
+                                <option value="Low">Low</option>
+                                <option value="Medium" ${item.priority === "Medium" ? "selected" : ""}>Medium</option>
+                                <option value="High" ${item.priority === "High" ? "selected" : ""}>High</option>
+                            </select>
+                        </td>
+                        <td><input type="date" class="form-control form-control-sm delivery-date-input" value="${defaultDateStr}"></td>
+                        ${copyCellHtml}
+                    </tr>
+                `);
+            });
+        }
+
+        // ✅ Manual qty edit → redistribute remaining rows within same piece group
+        $tbody.off("input", ".quantity-input").on("input", ".quantity-input", function () {
+            const $input = $(this);
+            const $row = $input.closest(".bulk-assignment-row");
+            const poolId = Number($row.data("pool-id"));
+            const splitIndex = Number($row.data("split-index"));
+            const pieceTotal = Number($row.data("piece-total")) || 0;
+
+            // Clamp value
+            let manualVal = parseInt($input.val()) || 0;
+            if (manualVal < 0) manualVal = 0;
+            if (manualVal > pieceTotal) {
+                manualVal = pieceTotal;
+                $input.val(manualVal);
+            }
+
+            $input.addClass("manually-edited");
+
+            // Only one row for this piece? nothing to redistribute
+            const $samePieceRows = $tbody.find(`.bulk-assignment-row[data-pool-id="${poolId}"]`);
+            if ($samePieceRows.length <= 1) return;
+
+            const $otherRows = $samePieceRows.not($row);
+            const remainingForOthers = Math.max(0, pieceTotal - manualVal);
+            const otherCount = $otherRows.length;
+
+            if (otherCount === 1) {
+                $otherRows.find(".quantity-input").val(remainingForOthers);
+            } else {
+                const base = Math.floor(remainingForOthers / otherCount);
+                const rem = remainingForOthers - (base * otherCount);
+                $otherRows.each(function (i) {
+                    const extra = (i >= (otherCount - rem)) ? 1 : 0;
+                    $(this).find(".quantity-input").val(base + extra);
+                });
+            }
+        });
+        $tbody.off("input", ".quantity-input").on("input", ".quantity-input", function () {
+            const $input = $(this), $row = $input.closest(".bulk-assignment-row");
+            const poolId = String($row.data("pool-id")), componentId = String($row.data("component-id"));
+            const splitGroupId = String($row.data("split-group-id"));
+            const pieceTotal = Number($row.data("piece-total")) || 0;
+            const manualVal = Math.max(0, Math.min(pieceTotal, parseInt($input.val()) || 0));
+            $input.val(manualVal).addClass("manually-edited");
+            const componentRows = $tbody.find(`.bulk-assignment-row[data-pool-id="${poolId}"][data-component-id="${componentId}"]`);
+            const otherRows = componentRows.not($row);
+            const distributed = splitQuantity(Math.max(0, pieceTotal - manualVal), otherRows.length);
+            otherRows.each(function(index){ $(this).find(".quantity-input").val(distributed[index] || 0); });
+            $tbody.find(`.bulk-assignment-row[data-split-group-id="${splitGroupId}"]`).not($row).find(".quantity-input").val(manualVal);
+            componentRows.each(function(){
+                const group = String($(this).data("split-group-id"));
+                const value = Number($(this).find(".quantity-input").val()) || 0;
+                $tbody.find(`.bulk-assignment-row[data-split-group-id="${group}"] .quantity-input`).val(value);
+            });
+        });
+    }
+
+    function updateBulkSelectedCount() {
+        $("#selectedCountBadge").text(`${bulkSelectedBatchIds.size} batch(es) selected`);
+        const $box = $("#multiSelectBox");
+        $box.find(".multi-select-chip, .placeholder").remove();
+        if (!bulkSelectedBatchIds.size) {
+            $box.prepend(`<span class="placeholder" id="multiSelectPlaceholder">Click to choose batches...</span>`);
+            return;
+        }
+        const chipsWrap = $('<div class="d-flex flex-wrap gap-1" style="flex:1;"></div>');
+        Array.from(bulkSelectedBatchIds).slice(0, 4).forEach(batchId => {
+            chipsWrap.append(`<span class="multi-select-chip">${escapeHtml(batchId)}<span class="chip-x" data-remove-batch="${escapeHtml(batchId)}">×</span></span>`);
+        });
+        if (bulkSelectedBatchIds.size > 4) chipsWrap.append(`<span class="multi-select-chip">+${bulkSelectedBatchIds.size - 4} more</span>`);
+        $box.prepend(chipsWrap);
+    }
+
+    $("#bulkAssignBtn").on("click", openBulkModal);
+    $("#bulkPassCuttingBtn").on("click", function () {
+        const key = "cuttingData";
+        const rows = Production.readState()[key]
+            .filter(item => !item.stopped && Production.status(item) !== "passed")
+            .map(item => ({
+                id: item.id, batchId: item.batchId, label: item.subBatch,
+                brand: item.brand, piece: item.pieceType, worker: item.worker,
+                quantity: item.inputQty ?? item.assignedQty, completed: item.completedQty, damage: item.damageQty
+            }));
+        BulkPass.open({
+            title: "Bulk Pass Cutting Assignments",
+            rows,
+            onSave: async changes => {
+                const requests = changes.map(change => ({
+                    id: Number(change.id),
+                    ...(change.completedChanged ? { addCompleted: change.completed } : {}),
+                    ...(change.damageChanged ? { addDamage: change.damage } : {})
+                }));
+                return (await productionAction(() => Production.edit(key, requests))) !== undefined;
+            },
+            onPass: async () => {
+                const ready = Production.readState()[key].filter(item =>
+                    !item.stopped && Production.calculateProductionMath(item).passableQty > 0);
+                if (!ready.length) {
+                    await Swal.fire({ icon: "info", title: "Nothing to Pass", text: "No completed quantities are ready to pass." });
+                    return false;
+                }
+                return (await productionAction(() => Production.pass(key, ready.map(item => item.id)))) !== undefined;
+            }
+        });
+    });
+    $("#multiSelectBox").on("click", function (e) {
+        e.stopPropagation();
+        $(this).toggleClass("open");
+        $("#multiSelectDropdown").toggleClass("open");
+    });
+    $("#multiSelectDropdown").on("click", function (e) { e.stopPropagation(); });
+    $(document).on("click", function () {
+        $("#multiSelectBox").removeClass("open");
+        $("#multiSelectDropdown").removeClass("open");
+    });
+    $("#multiSelectSearch").on("keyup", renderMultiSelectOptions);
+
+    $(document).on("change", ".multi-select-checkbox", function () {
+        const batchId = String($(this).data("batch-id"));
+        if ($(this).is(":checked")) {
+            bulkSelectedBatchIds.add(batchId);
+            $(this).closest(".multi-select-option").addClass("selected");
+        } else {
+            bulkSelectedBatchIds.delete(batchId);
+            $(this).closest(".multi-select-option").removeClass("selected");
+        }
+        updateBulkSelectedCount();
+        renderBulkSelectedCards();
+    });
+
+    $(document).on("click", ".chip-x", function (e) {
+        e.stopPropagation();
+        const batchId = String($(this).data("remove-batch"));
+        bulkSelectedBatchIds.delete(batchId);
+        updateBulkSelectedCount();
+        renderBulkSelectedCards();
+        renderMultiSelectOptions();
+    });
+
+    $(document).on("click", ".bulk-apply-split-btn", function () {
+        const batchId = String($(this).data("batch-id"));
+        const count = parseInt($(`.bulk-global-split[data-batch-id="${batchId}"]`).val()) || 1;
+        if (count < 1) { $(`.bulk-global-split[data-batch-id="${batchId}"]`).val(1); return; }
+        const available = approvedPool.filter(p => getPoolRemaining(p) > 0);
+        const batchItems = available.filter(p => String(p.batchId) === String(batchId))
+            .sort((a, b) => Number(a.pieceNumber) - Number(b.pieceNumber));
+        batchItems.forEach(item => { bulkPieceSplits[item.id] = count; });
+        generateBatchRows({ batchId, items: batchItems });
+        Swal.fire({ icon: "success", title: "Split Applied", text: `Each piece split into ${count} rows.`, timer: 1200, showConfirmButton: false });
+    });
+
+    $(document).on("click", ".bulk-copy-split-group-btn", function () {
+        const batchId = String($(this).data("batch-id"));
+        const splitIndex = Number($(this).data("split-index"));
+        if (!batchId || isNaN(splitIndex)) return;
+
+        const $card = $(`.bulk-item-card[data-batch-id="${batchId}"]`);
+        if (!$card.length) return;
+
+        const $groupRows = $card.find(`.bulk-assignment-row[data-split-index="${splitIndex}"]`);
+        if (!$groupRows.length) { Swal.fire({ icon: 'info', title: `C${splitIndex + 1} has no rows.` }); return; }
+        if ($groupRows.length < 2) { Swal.fire({ icon: 'info', title: `C${splitIndex + 1} only has 1 row.` }); return; }
+
+        const $first = $groupRows.first();
+        const worker = $first.find(".worker-select").val();
+        const priority = $first.find(".priority-select").val();
+        const deliveryDate = $first.find(".delivery-date-input").val();
+
+        if (!worker || !deliveryDate) {
+            Swal.fire({ icon: 'warning', title: 'Incomplete', text: `Fill C${splitIndex + 1} first row first.` });
+            return;
+        }
+
+        $groupRows.each(function (i) {
+            if (i === 0) return;
+            const $row = $(this);
+            $row.find(".worker-select").val(worker);
+            $row.find(".priority-select").val(priority);
+            $row.find(".delivery-date-input").val(deliveryDate);
+        });
+
+        Swal.fire({ icon: "success", title: "Copied", text: `C${splitIndex + 1} values copied.`, timer: 1500, showConfirmButton: false });
+    });
+
+    $("#saveBulkAssignBtn").on("click", async function () {
+        await productionAction(() => Production.assign("cuttingData", collectAssignments(".bulk-assignment-row", true)), "#bulkAssignModal");
+    });
+
+    /* ================= REFRESH ================= */
+    $("#refreshCuttingBtn").click(function () {
+        loadData();
+        renderApprovedTable();
+        renderCuttingTable();
+        Swal.fire({ icon: "success", title: "Refreshed", timer: 1000, showConfirmButton: false });
+    });
+
+    /* ================= INIT ================= */
+    loadData();
+    renderApprovedTable();
+    renderCuttingTable();
+    hydrateLegacyCuttingItems();
+
+    window.addEventListener("focus", function () {
+        loadData();
+        renderApprovedTable();
+        renderCuttingTable();
+    });
+
+    setInterval(function () {
+        const prevPool = JSON.stringify(approvedPool);
+        const prevCutting = JSON.stringify(cuttingData);
+        loadData();
+        if (JSON.stringify(approvedPool) !== prevPool || JSON.stringify(cuttingData) !== prevCutting) {
+            renderApprovedTable();
+            renderCuttingTable();
+        }
+    }, 2000);
+    installProductionControls("cuttingData", () => { loadData(); renderApprovedTable(); renderCuttingTable(); });
+
+});

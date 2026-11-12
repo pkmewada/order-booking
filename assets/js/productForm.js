@@ -1,0 +1,7 @@
+$(async function(){
+ const id=$('#productId').val(),button=$('#productForm button[type=submit]').prop('disabled',true);
+ function size(){const value=ProductCodes.sizes[$('#brand').val()]||'';$('#brandSizeHint').text(value?'Size: '+value:'Size will be selected automatically from the brand.');}
+ try{await CatalogApi.load();CatalogApi.masters.colors.forEach(c=>$('#color').append($('<option>').val(c.name).text(c.name)));const original=CatalogApi.records.find(p=>String(p.id)===id);if(id&&!original)throw new Error('Product no longer exists.');if(original){$('#productDesign').val(original.designNumber);$('#brand').val(original.brand);$('#color').val(original.color);}button.prop('disabled',false);}catch(e){Swal.fire('Unable to load',e.message,'error');return;}
+ $('#brand').on('change',size);size();
+ $('#productForm').on('submit',async function(e){e.preventDefault();if(button.prop('disabled'))return;const designNumber=$('#productDesign').val().trim(),brand=$('#brand').val(),color=$('#color').val();if(!/^[0-9]{1,18}$/.test(designNumber)||!brand||!color){Swal.fire('Warning!','Select brand/colour and enter a numeric design number (1?18 digits).','warning');return;}button.prop('disabled',true);try{await CatalogApi.request('product',CatalogApi.details({id:id||null,designNumber,brand,color}));await CatalogApi.load();Swal.fire('Success!','Product saved successfully.','success').then(()=>window.location.href='product-creation');}catch(e){Swal.fire('Unable to save',e.message,'error');button.prop('disabled',false);}});
+});

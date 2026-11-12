@@ -4,15 +4,24 @@
 
 <head>
 
+    <?php
+    $scriptPath = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/');
+    $nestedPage = preg_match('~/(manufacturing|orderBooking|settings)/[^/]+$~', $scriptPath) === 1;
+    $baseDirectory = $nestedPage ? dirname(dirname($scriptPath)) : dirname($scriptPath);
+    $appBaseHref = rtrim($baseDirectory, '/') . '/';
+    if ($appBaseHref === '/') { $appBaseHref = '/'; }
+    ?>
+    <base href="<?= htmlspecialchars($appBaseHref, ENT_QUOTES, 'UTF-8') ?>">
+
     <meta charset="UTF-8">
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title> MAMIX - Bootstrap 5 Premium Admin & Dashboard Template </title>
+    <title>Bothra Creation</title>
     <meta name="Description" content="Bootstrap Responsive Admin Web Dashboard HTML5 Template">
     <meta name="Author" content="Spruko Technologies Private Limited">
     <meta name="keywords"
         content="admin dashboard,admin template,admin panel,bootstrap admin dashboard,html template,sales dashboard,dashboard,template dashboard,admin,html and css template,admin dashboard bootstrap,personal dashboard,crypto dashboard,stocks dashboard,admin panel template">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>'
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="icon" href="assets/images/brand-logos/favicon.ico" type="image/x-icon">
     <script src="assets/libs/choices.js/public/assets/scripts/choices.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -161,6 +170,42 @@
             fill: #000000 !important;
             color: #000000 !important;
         }
+    </style>
+    <style>
+        /* Match the main header's black navigation text in light mode. */
+        html[data-theme-mode="light"] .main-menu .side-menu__item,
+        html[data-theme-mode="light"] .main-menu .side-menu__label,
+        html[data-theme-mode="light"] .main-menu .side-menu__angle,
+        html[data-theme-mode="light"] .main-menu .side-menu__icon,
+        html[data-theme-mode="light"] .slide-menu .side-menu__label1 > a,
+        html[data-theme-mode="light"] .slide__category .category-name,
+        html[data-theme-mode="light"] .breadcrumb a,
+        html[data-theme-mode="light"] .page-link {
+            color: #161617 !important;
+        }
+        html[data-theme-mode="light"] .main-menu .side-menu__item.active,
+        html[data-theme-mode="light"] .main-menu .side-menu__item:hover,
+        html[data-theme-mode="light"] .main-menu .side-menu__item.active .side-menu__label,
+        html[data-theme-mode="light"] .main-menu .side-menu__item:hover .side-menu__label {
+            color: #000 !important;
+        }
+        html[data-theme-mode="light"] .main-menu .side-menu__icon svg,
+        html[data-theme-mode="light"] svg.side-menu__icon {
+            color: #161617 !important;
+            stroke: #161617 !important;
+        }
+    </style>
+    <style>
+        /* Show submenu icons and labels without the theme's dash markers. */
+        .app-sidebar .slide-menu .side-menu__item::before {
+            content: none !important;
+            display: none !important;
+        }
+    </style>
+    <style>
+        .app-sidebar .slide-menu.child2 > li { padding-inline-start: .5rem; }
+        .app-sidebar .slide-menu .side-menu__label { margin-inline-end: 8px; }
+        .app-sidebar .slide-menu .side-menu__icon { flex-shrink: 0; }
     </style>
 </head>
 
@@ -808,6 +853,12 @@
                                 <!-- NEW ITEMS ADDED -->
                                 <li class="slide">
                                     <a href="item-list" class="side-menu__item">Item List</a>
+                                </li>
+                                <li class="slide">
+                                    <a href="item-list?type=piece" class="side-menu__item">Piece Items</a>
+                                </li>
+                                 <li class="slide">
+                                    <a href="pattern" class="side-menu__item">Pattern</a>
                                 </li>
                                 <li class="slide">
                                     <a href="additional-work" class="side-menu__item">Additional Work</a>
