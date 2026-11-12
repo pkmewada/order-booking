@@ -146,3 +146,20 @@ The two new tests were added at different times, and the "17 + 1" runs already i
 - **MySQL 8.4 suite.** After TR-FIX-02 the only changes were the PDF folder check (filesystem, no SQL), front-end popup calls and tests. TR-FIX-02 already covers every SQL path on MySQL 8.4.
 - **`npm test`.** The production engine and its tests were not touched. TR-FIX-01 ran it after the PHP access change: 14/14.
 - **TC-M01 and TC-M02.** Neither touches the changed code paths beyond what TC-05, TC-06 and TR-FIX-06 check.
+
+### Database configuration fix (`includes/db.config.php`)
+
+Code version: commit `a6ad9b9` plus working tree, fingerprint `cd5a0d3a5f6a6b32`.
+
+| Run | Command / check | DB | Result |
+| --- | --- | --- | --- |
+| TR-DB-01 | `php -l includes/db.php includes/db.config.example.php` | - | No syntax errors |
+| TR-DB-02 | `git check-ignore -v includes/db.config.php`; `git ls-files -ci --exclude-standard` | - | `db.config.php` ignored. `db.php` and the example are tracked and no longer ignored. Only `uploads/` stays tracked-but-ignored, on purpose |
+| TR-DB-03 | Temporary `includes/db.config.php` pointing to `order_booking_test` on 3307 (deleted afterwards), with `DB_*` env unset: `SELECT @@port, DATABASE()` | MariaDB 11.4.9 | `3307 order_booking_test`, so the config file is used |
+| TR-DB-04 | Same file, plus `DB_NAME=order_booking_envwins_test` | MariaDB 11.4.9 | `Unknown database 'order_booking_envwins_test'`, so the env var wins over the file |
+| TR-DB-05 | `APACHE_BASE_URL=http://127.0.0.1:1 npm run test:orders` (env-var path used by every API and CLI test) | MariaDB 11.4.9 | **19 tests: 18 passed, 0 failed, 1 skipped** (TC-19, on purpose) |
+| TR-DB-06 | `curl http://localhost/order-bookings/order-list` on WAMP Apache, no config file | MySQL 8.4.7 (defaults) | 200 |
+
+Not repeated, and why:
+- **MySQL 8.4 suite:** no SQL changed.
+- **`npm test`:** it does not use `db.php`.

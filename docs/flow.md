@@ -24,7 +24,7 @@ Management pages load records from the database and maintain a localStorage comp
 - New installation: import `database/order-booking.sql` using phpMyAdmin. Creates the database and three tables with unique email indexes.
 - Fresh database setup uses only `database/order-booking.sql`; there is no separate migration file. Each table includes the phone constraint and unique email index.
 - Order tables (SAP Phase 1): run `php cli/orders-admin.php migrate` once per database, also after a fresh import. It is safe to run twice and verifies the schema before the order APIs work.
-- Configure connection defaults in `includes/db.php`, or use its DB environment variables. XAMPP defaults: `127.0.0.1:3306`, `root`, blank password.
+- Configure the connection in `includes/db.config.php` (copy of `includes/db.config.example.php`, ignored by Git) or with the `DB_*` environment variables, which take priority. Never edit `includes/db.php` for credentials: it is tracked code. XAMPP defaults: `127.0.0.1:3306`, `root`, blank password.
 
 ## Remaining order booking flow
 

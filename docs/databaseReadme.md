@@ -2,14 +2,22 @@
 
 1. Start Apache and MySQL in XAMPP.
 2. Open phpMyAdmin, choose **Import**, and import `../database/order-booking.sql`. It creates the database `order-booking` and separate `agents`, `distributors`, `transporters`, and `customerRecords` tables. This is the complete schema for a fresh database. All four tables include phone constraints and unique email indexes.
-3. Connection settings are in `../includes/db.php`: host `127.0.0.1`, port `3306`, database `order-booking`, username `root`, empty password. Change these defaults to match your MySQL setup, or set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` in the server environment. PHP needs PDO MySQL and mbstring (included with XAMPP).
+3. **Connection settings.** Defaults: host `127.0.0.1`, port `3306`, database `order-booking`, username `root`, empty password. To use other values, either:
+   - copy `../includes/db.config.example.php` to `../includes/db.config.php` and edit the copy; or
+   - set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` in the server environment. These take priority over the file.
+
+   `db.config.php` is ignored by Git. Do **not** edit `../includes/db.php`: it is tracked code, so local edits show up as changes and every deploy replaces it. PHP needs PDO MySQL and mbstring (included with XAMPP).
 4. Open the application through Apache, then use the existing Agent, Distributor, and Transporter pages. Add, edit, delete, and list operations now use the database. Success appears only after the API accepts the change; database errors appear in the form instead.
 
 ## Automatic live schema updates
 
 Hostinger Git deployment synchronizes files but does not execute SQL files. Versioned SQL files in `../database/migrations/` are applied automatically the first time a PHP API connects to MySQL after deployment. Applied migration filenames are recorded in `appSchemaMigrations`; each migration runs once, in filename order. Migration statements use idempotent DDL/DML so they can be safely retried if a deployment is interrupted. The custom BOM pattern migration adds `patternRecords` and `patternPieceLinks` without clearing any existing records.
 
-Configure `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` and `DB_PASSWORD` in Hostinger's PHP environment or in the server's `../includes/db.php` connection settings. Do not put live credentials in Git. Back up the live database before deploying schema changes. The current migration adds the piece-item catalog and manufacturing-state tables without replacing existing application data. SQL and migration files are blocked from direct web access.
+Configure the live connection in one of two places, both of which survive deploys:
+- Create `includes/db.config.php` on the server once, from `includes/db.config.example.php`, using the Hostinger File Manager. It is ignored by Git, so deploys never overwrite it.
+- Or set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` and `DB_PASSWORD` in Hostinger's PHP environment.
+
+Do not edit `includes/db.php` on the server: deploys replace it. Do not put live credentials in Git. Back up the live database before deploying schema changes. The current migration adds the piece-item catalog and manufacturing-state tables without replacing existing application data. SQL and migration files are blocked from direct web access.
 
 ## Separate APIs
 
