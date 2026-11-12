@@ -101,6 +101,8 @@
 
 <script src="assets/libs/html2pdf/html2pdf.bundle.min.js"></script>
 <script src="assets/js/orderPdf.js?v=<?= filemtime(__DIR__ . '/../assets/js/orderPdf.js') ?>"></script>
+<script src="assets/js/ordersApi.js?v=<?= filemtime(__DIR__ . '/../assets/js/ordersApi.js') ?>"></script>
+<script src="assets/js/orderImport.js?v=<?= filemtime(__DIR__ . '/../assets/js/orderImport.js') ?>"></script>
 <script src="assets/js/orderQuantities.js?v=<?= filemtime(__DIR__ . '/../assets/js/orderQuantities.js') ?>"></script>
 <script src="assets/js/orderList.js?v=<?= filemtime(__DIR__ . '/../assets/js/orderList.js') ?>"></script>
 <script src="assets/js/orderDetails.js?v=<?= filemtime(__DIR__ . '/../assets/js/orderDetails.js') ?>"></script>

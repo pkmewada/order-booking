@@ -4,6 +4,8 @@ $(document).ready(function() {
     let html5QrCode = null;
     let scanTarget = null; // 'customer' | 'product'
     let editingOrderId = null;
+    let editingVersion = null;
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
     // ---------- Data helpers ----------
 
@@ -17,9 +19,8 @@ $(document).ready(function() {
         return item ? item.name : 'N/A';
     }
 
-    // Products are managed via the Product Creation page (localStorage
-    // 'products'). Mirrors how a real product/barcode API response would
-    // look once this is wired to a backend.
+    // Products and customers are loaded from the database on page open (OrdersApi) and kept in
+    // the localStorage compatibility caches that these lookups read.
     function loadProducts() {
         return getList('products');
     }
@@ -247,17 +248,17 @@ $(document).ready(function() {
             orderItems.forEach((item, index) => {
                 tbody.append(`
                     <tr>
-                        <td>${item.description}</td>
+                        <td>${esc(item.description)}</td>
                         <td>
                             <div class="input-group input-group-sm">
                                 <button class="btn btn-outline-secondary qty-decrease" type="button" data-index="${index}">-</button>
-                                <input type="number" class="form-control text-center qty-input" min="1" value="${item.qty}" data-index="${index}">
+                                <input type="number" class="form-control text-center qty-input" min="1" value="${esc(item.qty)}" data-index="${index}">
                                 <button class="btn btn-outline-secondary qty-increase" type="button" data-index="${index}">+</button>
                             </div>
                         </td>
-                        <td>${OrderQuantities.perSet(item)}</td><td>${OrderQuantities.pieces(item)}</td><td>${item.size}</td>
-                        <td>${item.barcode}</td>
-                        <td>${item.brand}</td>
+                        <td>${OrderQuantities.perSet(item)}</td><td>${OrderQuantities.pieces(item)}</td><td>${esc(item.size)}</td>
+                        <td>${esc(item.barcode)}</td>
+                        <td>${esc(item.brand)}</td>
                         <td class="text-center">
                             <button class="btn btn-sm btn-danger remove-item-btn" data-index="${index}">Remove</button>
                         </td>
@@ -380,67 +381,52 @@ $(document).ready(function() {
             return;
         }
 
-        const totalSets = orderItems.reduce((sum, i) => sum + i.qty, 0);
-        const totalPcs = orderItems.reduce((sum, i) => sum + OrderQuantities.pieces(i), 0);
-
+        // The server takes the customer and product snapshots from the database and checks every rule.
         const orderFields = {
             customerId: currentCustomer.id,
-            customerName: currentCustomer.name,
-            shopName: currentCustomer.shopName,
-            city: currentCustomer.city || '',
-            contact: currentCustomer.contact || '',
-            agentName: (getList('agents').find(agent => agent.id === currentCustomer.agentId) || {}).name || '',
-            transportName: (getList('transporters').find(transport => transport.id === currentCustomer.transporterId) || {}).name || '',
-            agentId: currentCustomer.agentId,
-            transporterId: currentCustomer.transporterId,
-            distributorId: currentCustomer.distributorId,
             existingCustomer: $('#orgExistingCustomer').val(),
             deliveryDate: deliveryDate,
-            items: orderItems,
-            totalSets: totalSets,
-            totalPcs: totalPcs
+            items: orderItems.map(item => ({ barcode: item.barcode, qty: item.qty }))
         };
 
-        const orders = getList('orders');
-
-        if (editingOrderId) {
-            const index = orders.findIndex(o => o.id === editingOrderId);
-            if (index !== -1) {
-                orders[index] = { ...orders[index], ...orderFields, updatedAt: new Date().toISOString() };
+        const button = $(this).prop('disabled', true);
+        const saving = editingOrderId
+            ? OrdersApi.update(editingOrderId, editingVersion, orderFields)
+            : OrdersApi.create(orderFields);
+        saving.then(() => {
+            if (editingOrderId) {
+                Swal.fire('Order Updated!', 'The order has been updated successfully.', 'success').then(() => {
+                    window.location.href = 'order-list';
+                });
+                return;
             }
-            localStorage.setItem('orders', JSON.stringify(orders));
-            Swal.fire('Order Updated!', 'The order has been updated successfully.', 'success').then(() => {
-                window.location.href = 'order-list';
-            });
-            return;
-        }
-
-        orders.push({
-            id: 'ORD' + Date.now(),
-            status: 'Active',
-            createdAt: new Date().toISOString(),
-            ...orderFields
-        });
-        localStorage.setItem('orders', JSON.stringify(orders));
-
-        Swal.fire('Order Saved!', 'The order has been submitted and saved successfully.', 'success');
-        resetOrderForm();
+            Swal.fire('Order Saved!', 'The order has been submitted and saved successfully.', 'success');
+            resetOrderForm();
+        }).catch(error => {
+            Swal.fire({ title: 'Not saved', text: error.message, icon: 'error' });
+        }).finally(() => button.prop('disabled', false));
     });
 
     // ---------- Init: edit mode ----------
 
-    function loadOrderForEdit(orderId) {
-        const orders = getList('orders');
-        const order = orders.find(o => o.id === orderId);
-
-        if (!order) {
-            Swal.fire('Not Found!', 'This order could not be found. It may have been deleted.', 'warning').then(() => {
+    async function loadOrderForEdit(orderId) {
+        let order = null;
+        try { order = await OrdersApi.get(orderId); }
+        catch (error) {
+            Swal.fire({ title: 'Not Found!', text: error.status === 404 ? 'This order could not be found. It may have been deleted.' : error.message, icon: 'warning' }).then(() => {
+                window.location.href = 'order-list';
+            });
+            return;
+        }
+        if (order.dispatchPassedAt) {
+            Swal.fire('Cannot edit', 'This order has been passed to Dispatch and can no longer be edited.', 'warning').then(() => {
                 window.location.href = 'order-list';
             });
             return;
         }
 
         editingOrderId = order.id;
+        editingVersion = order.version;
         $('#pageTitle').text('Edit Order');
         $('#breadcrumbActive').text('Edit Order');
         $('#submitOrderBtn').html('<i class="bx bx-save me-1"></i> Update Order');
@@ -470,8 +456,12 @@ $(document).ready(function() {
     // ---------- Init ----------
     renderItemsTable();
 
-    const editId = new URLSearchParams(window.location.search).get('id');
-    if (editId) {
-        loadOrderForEdit(editId);
-    }
+    Promise.all([OrdersApi.masters(), OrdersApi.products()]).catch(error => {
+        Swal.fire({ title: 'Data not loaded', text: error.message + ' Saved copies in this browser are used for lookups.', icon: 'warning' });
+    }).then(() => {
+        const editId = new URLSearchParams(window.location.search).get('id');
+        if (editId) {
+            loadOrderForEdit(editId);
+        }
+    });
 });

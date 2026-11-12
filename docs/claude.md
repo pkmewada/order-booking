@@ -1,6 +1,17 @@
 # Production flow and quantity rules
 
-This document describes the production engine in `assets/js/productionEngine.js` and the manager integrations. The application remains PHP pages with browser localStorage; this is not a database-backed or multi-device backend.
+This document describes the production engine in `assets/js/productionEngine.js` and the manager integrations. Production state is saved in MySQL through `api/manufacturing-state.php` (table `manufacturingState`, one JSON row per storage key below, with a revision check in `manufacturingStateMeta`). The browser keeps a localStorage working copy that the engine loads from and saves back to the database. Orders, dispatch and delivery are separate from the production engine. On branch `sap_integration` they are stored in MySQL (`api/orders.php`; see `docs/flow.md`); on `main` they are still browser-only.
+
+## SAP Business One integration
+
+All SAP work is tracked in `docs/SAP_INTEGRATION.md`. Read it before any SAP-related change and update it at the end of every session. Rules:
+
+- Work on one phase at a time and stop for approval after each phase.
+- Never invent SAP connection details or field requirements. Record unknowns as blockers.
+- SAP credentials stay server side only: never in Git, JavaScript, localStorage or API responses.
+- Invoice and payment sync are out of scope.
+- SAP sync must not bypass `productionEngine.js` for production quantities or routes.
+- Schema changes update `database/order-booking.sql` **and** add an idempotent migration in `database/migrations/`.
 
 ## Route
 

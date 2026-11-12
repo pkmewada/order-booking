@@ -1,2 +1,20 @@
 node_modules/
 includes/db.php
+
+# Secrets and environment files: never commit these.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# User uploads belong only on the server.
+# Files already tracked under uploads/ stay tracked on purpose. Untracking them
+# would delete them from Hostinger on the next Git deploy. See docs/SAP_INTEGRATION.md (Phase 0).
+uploads/
+
+# Delivery PDFs (local fallback storage; on live, DELIVERY_PDF_DIR points outside public_html).
+# storage/.htaccess stays tracked: it denies all direct web access.
+storage/delivery-pdfs/

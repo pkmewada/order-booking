@@ -1,167 +1,111 @@
-# Project Overview: Order Booking & Garment Production Tracker
+# Project Overview: Order Booking & Garment Production
 
-> Context for an AI assistant. Read this before suggesting changes to the code.
+> Context for an AI assistant. Read this before suggesting changes. Last checked against commit `6ee8500` (2026-11-12).
 
 ## 1. What the app is
 
-A web app for a garment manufacturer. It does two jobs:
+The app is a PHP web application for a garment manufacturer (brands: Little Dolly, Amari, Nivi Blossom). It has three areas:
 
-1. **Order Booking**: create customers and record their orders.
-2. **Manufacturing / Production tracking**: define designs (BOM), create production batches, approve them against materials, and follow every piece through Cutting → Additional Work → Stitching → Ironing → Packing.
+1. **Order Booking**: customers, orders, dispatch and delivery.
+2. **Manufacturing**: BOM, batches, approval, and production stages through to finished-goods inventory.
+3. **Settings / masters**: agents, distributors, transporters, employees, colours, items, additional works, patterns and products.
 
-## 2. Tech stack and limitations
+It is deployed from GitHub (`pkmewada/order-booking`) to Hostinger.
+
+## 2. Tech stack
 
 | Item | Detail |
 | --- | --- |
-| Server | PHP on WAMP (Apache). PHP only renders HTML pages. There is **no backend logic**. |
-| Data | All business data lives in **browser `localStorage`** as JSON arrays. There is **no database**: `includes/db.php` is empty. |
-| Frontend | jQuery, Bootstrap 5 (the "Mamix" admin template), SweetAlert2, DataTables, Choices.js, qrcode.js / html5-qrcode, SheetJS (xlsx). |
-| Auth | None. `login.php` is a template page that links to the dashboard. |
-| Tests | Node.js: `npm test`, `npm run verify`, `npm run test:browser`. |
+| Server | PHP with Apache. The router is `index.php` plus `.htaccess`. |
+| Database | **MySQL** through PDO (`includes/db.php`). Credentials come from the `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` and `DB_PASSWORD` environment variables (set on Hostinger). The fallback is XAMPP `root` with no password. |
+| Schema | `database/order-booking.sql` is the full schema. Files in `database/migrations/` run automatically on the first API call after a deploy (`includes/schema-migrations.php`, tracked in `appSchemaMigrations`). |
+| APIs | `api/*.php` return JSON: `{success, data}` or `{success:false, message}`. They use prepared statements. |
+| Frontend | jQuery, Bootstrap 5 (Mamix template), SweetAlert2, DataTables, html5-qrcode / qrcode.js, SheetJS. |
+| Auth | **None.** `login.php` is a template page. Pages and APIs are open to anyone with the URL. |
 
-**Consequences:** data is per browser and per device. Clearing site data deletes everything. There is no multi-user sync. The production engine needs `localhost` or HTTPS, because it uses the Web Locks API.
+## 3. Routing and folders
 
-## 3. Routing
+- `.htaccess` sends every URL that isn't a real file to `index.php?url=...`.
+- `index.php` maps the first URL segment through `$pageRoutes`; for example, `bom-master` loads `manufacturing/bomMaster.php`. If a segment isn't listed, it falls back to `<segment>.php`, and then to `404.php`.
 
-- `.htaccess` sends every URL that is not a real file to `index.php?url=...`.
-- `index.php` loads `<first-segment>.php`. For example, `/batch-approval` loads `batch-approval.php`. An empty URL loads `login`. Unknown pages load `404.php`.
-- Each page includes `includes/header.php` (top bar and sidebar menu), its own markup, `includes/footer.php`, and then its page script from `assets/js/`.
-- `config.php` builds `$baseURL`.
-
-## 4. Modules and pages
-
-### A. Order Booking (sidebar: "Order Booking")
-
-| Page | Script | localStorage key | Purpose |
-| --- | --- | --- | --- |
-| `customer-creation` | `customer-creation.js` | `customers` | Create customers and link them to an agent, distributor and transporter. Has QR support. |
-| `order-punch` | `order-punch.js` | `orders` (reads `products`, `customers`) | Create or edit an order: pick a customer, add product items, set the delivery date. Has a QR scanner. |
-| `order-list` | `order-list.js` | `orders` | List and manage orders. |
-| `agent`, `distributor`, `transporter` | same-name `.js` | `agents`, `distributors`, `transporters` | Master lists. Use `state-city.js` with `assets/data/in-states-cities.json` (Indian states and cities). |
-| `product-creation`, `product-form` | same-name `.js` | `products` | Product master. Brand sets the size range (for example `AMARI` → `S-L`). |
-| `empolyee` (spelling as in the code) | `empolyee.js` | `employees` | Employee master. |
-
-**Order Booking is not connected to Production.** An order does not create a batch.
-
-Pages with **in-memory sample data only, which is lost on reload**: `item-list`, `colour`, `additional-work`, `stock`, `product-manager`. `dashboard.php` shows template demo numbers.
-
-### B. Manufacturing (sidebar: "Manufacturing")
-
-| Page | Script | Role |
-| --- | --- | --- |
-| `bom-master` | `bom-master.js` | Defines a **design** (BOM): design number, brand, colour, photo, and **pieces**. Each piece has materials and optional additional works, and each work has a timing. A BOM is active or inactive. |
-| `batch` | `batch.js` | Creates a **batch** from an active BOM: quantity, priority, and a snapshot of its pieces. Gets a `BATCH-XXX` ID. |
-| `batch-approval` (menu label "Production") | `batch-approval.js` | Checks each piece's materials and approves it, which sends the piece into production. |
-| `requirment` (spelling as in the code) | `requirment.js` | Lists missing materials and records their receipt. |
-| `cutting-manager` | `cutting-manager.js` | Cutting stage. |
-| `Embroidery`, `Digital-Print`, `Screen-Print`, `Handwork`, `Peco` | same-name `.js` | Additional-work stages. All five pages are built on `additional-work-template.js`. |
-| `stitching-manager` | `stitching-manager.js` | Stitching, done in-house or outsourced. |
-| `ironing` | `ironing.js` | Ironing. Passed pieces go to `packingPool`. |
-| *(no page)* | n/a | **Packing.** The engine supports it, but there is no Packing UI yet. |
-
-Shared files that every production page loads:
-
-- **`assets/js/production-engine.js`**: the core. It holds all quantity math, routing, validation and transactions. It runs in the browser (`window.Production`) and in Node for tests.
-- **`assets/js/production-controls.js`**: shared UI controls for the managers: assign, edit, pass, stop, and the progress modal.
-
-## 5. End-to-end production flow
-
-```
-BOM Master  →  Batch  →  Batch Approval  →  [Requirement if materials missing]
-                               │
-                               ▼  (one "pool" per batch + piece)
-   [Before-Cutting works] → Cutting → [After-Cutting works] → Stitching
-   → [After-Stitching works] → Ironing → [After-Ironing works] → Packing
-```
-
-- **Additional works** are Embroidery, Digital Print, Screen Print, Hand Work and Peco. They always run in that order within a timing slot. Each work can be placed **Before Cutting, After Cutting, After Stitching or After Ironing**. Older data with no timing defaults to After Cutting. A piece with no works goes straight from Cutting to Stitching.
-- `Production.buildRoute(piece)` is the **only** route builder.
-- The route is **saved into the pool when the piece is approved**. Editing a BOM later does not change production that already exists.
-
-### Batch Approval outcomes
-
-| Action | Display | Production | Requirement |
-| --- | --- | --- | --- |
-| Approve, all materials present | Green Pass | Creates a pool at its first stage | none |
-| Confirm, some materials missing | Pending | Waits for the materials | created |
-| Pass, some materials missing (force) | Orange Pass | Creates a pool now | created |
-| Final materials received | Green Pass | Updates the pool, or creates it once if it was pending | completed |
-
-Receiving materials again never adds quantity and never sends a piece back to Cutting.
-
-## 6. Core concepts in the production engine
-
-### Pool (`approvedPool`)
-
-There is one record per **batch + piece**. It holds the stored route, `currentStage` (the furthest stage reached, which never moves backward), and **`stageBalances`**. `stageBalances` is the cumulative quantity each stage has received, for example `{ Cutting: {inputQty: 500}, Embroidery: {inputQty: 400} }`. This lets part of a batch move ahead while the rest is still in an earlier stage.
-
-### Work assignment (one record per worker or job, stored per stage)
-
-```js
-{ id, poolId, batchId, pieceNumber, stage, storageKey,
-  inputQty,      // this assignment's share
-  assignedQty,   // reservation (includes its passed and damaged pieces)
-  completedQty,  // good pieces finished
-  damageQty,     // outstanding damaged pieces
-  passedQty }    // good pieces already sent to the next stage
-```
-
-Sub-batch IDs look like `BATCH-XXX-PieceName-C1`, `C2`, and so on. Outsourced stitching uses `OS1`, `OS2`, and so on.
-
-### Quantity rules
-
-```
-effectiveQty   = inputQty - damageQty
-passableQty    = max(0, min(completedQty, effectiveQty) - passedQty)
-remainingQty   = effectiveQty - passedQty
-uncompletedQty = max(0, effectiveQty - completedQty)
-inputQty       = passedQty + remainingQty + damageQty     (must always hold)
-availableQty   = stageInputQty - sum(assignedQty)          (for new assignments)
-```
-
-- All quantities are non-negative whole numbers. An invalid change shows an error and saves nothing.
-- You cannot assign more than the stage has available. Bulk assignment is checked as a whole: if any part fails, nothing is saved.
-- **Pass is a separate, explicit action.** Saving progress does not pass pieces. The Pass button appears only when `passableQty > 0`. A pass sends only the new difference, so a repeated or stale click passes 0.
-- Damage creates a linked record in `repairData`. Recovering damaged pieces reduces the damage count, but the recovered pieces still have to be completed and passed.
-- Ironing → Packing transfers use a stable transfer ID, so `packingPool` never receives the same pieces twice.
-- Assignments that are fully passed are hidden from the active tables but stay in history.
-
-### Safety
-
-- Every production change runs inside **one transaction** guarded by a browser **Web Lock**. The engine re-reads storage inside the lock.
-- A rollback journal (`productionTransaction`) undoes partial writes. A transaction left unfinished is rolled back on the next page load.
-- The code never calls `localStorage.clear()`, never deletes records to make totals fit, and never silently "fixes" old data whose meaning is unclear. Changes to such data are blocked and the reason is shown.
-
-## 7. Production localStorage keys
-
-| Key | Content |
+| Folder | Contents |
 | --- | --- |
-| `bomMasterData` | BOM designs |
-| `batchData` | Batches |
-| `approvedBatchData` | Approved batches and per-piece material approval |
-| `requirementData` | Missing and received materials |
-| `approvedPool` | Pools: route, current stage, stage balances, audit |
-| `cuttingData` / `cuttingHistory` | Cutting |
-| `addWork_embroidery`, `addWork_digital_print`, `addWork_screen_print`, `addWork_hand_work`, `addWork_peco` (each also has a `_history` key) | Additional works |
-| `stitchingData` / `stitchingData_history` | Stitching |
-| `ironingData` / `ironingData_history` | Ironing |
-| `packingPool`, `packingData` / `packingData_history` | Packing receipts and assignments |
-| `repairData` | Damage and recovery |
-| `productionTransaction` | Temporary rollback journal |
+| `orderBooking/` | customerCreation, orderPunch, orderList, dispatch, dispatchConfirm, delivery, dashboard |
+| `manufacturing/` | bomMaster, batch, batchApproval, requirements, cuttingManager, additional-work-manager (Embroidery, Digital Print, Screen Print, Handwork, Peco), stitchingManager, ironing, packing, bundling, inventory, stock, finalProduction, damageRepair, autoPass, productManager |
+| `settings/` | agent, distributor, transporter, employee, colour, itemList, additionalWork, pattern, productCreation, productForm, settings |
+| `api/` | one endpoint per resource, plus the shared handlers `master-records.php`, `manufacturing-records.php` and `product-records.php` |
+| `assets/js/` | page scripts in camelCase (`bomMaster.js`, `orderPunch.js`, …) and the shared `productionEngine.js` |
+| `database/` | schema and migrations (blocked from web access). `database/cli-migrations/` is applied only by `php cli/orders-admin.php migrate` |
+| `cli/` | command-line tools (`orders-admin.php`) and the local dev server (`dev-server.cjs`, `dev-router.php`); blocked from web access |
+| `storage/` | local fallback for delivery PDFs (deny-all `.htaccess`; contents ignored by Git) |
+| `uploads/products/` | product photos (random file names; listing and script execution blocked) |
+| `docs/` | `flow.md` (flow and table register), `databaseReadme.md`, `productionFlow.md`, `packingBundlingInventory.md`, `claude.md` |
 
-## 8. Rules for changing the code
+## 4. Where data is saved
 
-1. Put all quantity and route logic in `production-engine.js`. Manager pages call the engine's API (`assign`, `edit`, `pass`, `stop`, `recoverRepair`, `transaction`, `readState`, `views`). They must not write pools or quantities directly.
-2. Keep the canonical fields (`inputQty`, `assignedQty`, `completedQty`, `damageQty`, `passedQty`). The old fields `quantity`, `progress` and `damage` are kept only as display aliases.
-3. Do not add auto-pass, checkbox bulk-pass, or bulk-damage controls. These were removed on purpose.
-4. Keep the misspelled file names (`requirment`, `empolyee`) unless every reference is renamed too. URLs map directly to file names.
-5. After changing production code, run `npm test` (engine tests) and `npm run verify` (syntax and lint checks). `npm run test:browser` runs the pages in headless Edge.
-6. More detail: `PRODUCTION_FLOW.md` (full rules) and `VERIFICATION.md` (test results and known gaps).
+| Data | Saved in | API | Table(s) |
+| --- | --- | --- | --- |
+| Agents, distributors, transporters | MySQL | `api/agent.php`, `distributor.php`, `transporter.php` | `agents`, `distributors`, `transporters` |
+| Customers | MySQL | `api/customer.php` | `customerRecords` |
+| Employees, colours, items, additional works, piece items | MySQL | `api/employee.php`, `colour.php`, `item-list.php`, `additional-work.php`, `piece-item-list.php` | `employeeRecords`, `colourRecords`, `itemList`, `additionalWork`, `pieceItemList` |
+| Patterns | MySQL | `api/patterns.php` | `patternRecords`, `patternPieceLinks` |
+| BOM / products (one shared catalog) | MySQL | `api/bom.php`, `api/product.php` | `productRecords`, `productItemLinks`, `productWorkSteps` (`productWorkLinks` is legacy) |
+| All production state (batches, approval, requirements, every stage, packing, bundling, inventory, repairs) | MySQL, stored as JSON with one row per key | `api/manufacturing-state.php` | `manufacturingState`, `manufacturingStateMeta` |
+| Orders, dispatch, delivery (branch `sap_integration`, local only) | MySQL | `api/orders.php` (logic in `api/order-records.php`) | `customerOrders`, `customerOrderItems`, `deliveryBatches`, `deliveryBatchItems` |
+| Delivery PDFs (branch `sap_integration`, local only) | Private server folder (`DELIVERY_PDF_DIR`, local fallback `storage/delivery-pdfs/`) | `api/delivery-pdf.php` | `deliveryBatches.pdf*` |
 
-## 9. Known gaps
+Notes:
+- Pages also keep a **localStorage cache** of database records (`customers`, `products`, `bomMasterData`, …) so older order and production screens can read them. **MySQL is the real copy**; the cache is rebuilt when a page loads.
+- **Production engine persistence:** `productionEngine.js` loads the full state from `api/manufacturing-state.php` and works on it in the browser. It saves changes back with a **revision number**. If another session saved first, the API returns 409 and the user must reload. On first use it imports any old browser data once.
+- **Orders (SAP Phase 1, not yet merged or deployed):**
+  - On `main` and on the live site, orders are still browser-only (localStorage `orders`, PDFs in IndexedDB).
+  - On branch `sap_integration` they are in MySQL. `orderImport.js` imports each browser's old orders once, and nothing in the browser is deleted.
+  - The order APIs return **401** unless the explicit local dev switch is set (`npm run dev`). They return **503** until `php cli/orders-admin.php migrate` has run.
+  - Details: `docs/flow.md` and `docs/SAP_INTEGRATION.md`.
 
-- There is no database, no login, and no multi-device data.
-- There is no Packing or dispatch page.
-- Order Booking is not linked to Production.
-- Several master pages (item list, colour, additional work, stock, product manager) do not save their data.
-- The shared template scripts (ApexCharts, Simplebar) throw console errors. These do not come from production code.
+## 5. Order Booking flow
+
+```
+Customer (QR) → Order Punch (scan customer + product barcodes, sets) → Order List
+  → Pass to Dispatch → Dispatch (scan pieces; each partial dispatch = a delivery batch)
+  → Delivery: In Progress → Pass with PDF upload → Success
+```
+
+- Order fields: customer (id, name, shop, city, contact), agent, transporter, distributor, delivery date and items. Each item has barcode, description, size, brand, pieces per set and quantity in sets.
+- Orders have **no price, tax, discount or warehouse** yet.
+
+## 6. Manufacturing flow
+
+```
+BOM Master → Batch → Batch Approval (materials) → [Requirements if missing]
+  → [Before-Cutting works] → Cutting → [After-Cutting works, up to 5 in parallel]
+  → Stitching → [1 After-Stitching work] → Ironing → [1 After-Ironing work]
+  → Packing → Bundling → Inventory / Stock
+```
+
+- **BOM / product** (`productRecords`): brand, numeric design number (unique), colour, pattern, MRP, photo and pieces. Each piece has its items/materials from `itemList` and ordered work steps from `additionalWork`. Products created in Product Creation are drafts until their BOM is completed.
+- **Generated fields:** barcode = brand prefix + design + colour + size. Size range is fixed per brand: Little Dolly 18-26, Amari S-L, Nivi Blossom 28-34.
+- **Route:** `Production.buildRoute(piece)` builds the route. It is saved on the pool at approval, so later BOM edits don't reroute running production.
+- **Quantities:** each assignment has `inputQty`, `assignedQty`, `completedQty`, `damageQty` and `passedQty`. Pass is an explicit action and only sends the new difference. Damage links to `repairData`. Full rules are in `docs/claude.md` and `docs/productionFlow.md`.
+- **Packing, Bundling and Inventory** work in sets. Bundling splits by brand size assortment (Little Dolly 5 sizes, Amari 3, Nivi Blossom 4). Rules are in `docs/packingBundlingInventory.md`.
+
+## 7. Rules for changing the code
+
+1. All quantity and route logic goes through `productionEngine.js`. Pages must not write production state directly.
+2. Schema changes need two edits: update `database/order-booking.sql` **and** add an idempotent file in `database/migrations/`, because Hostinger doesn't run SQL on deploy.
+3. New tables and columns use lower camelCase (`customerOrders`, `deliveryBatches`).
+4. Never commit live credentials. Use Hostinger environment variables.
+5. Keep `docs/flow.md` updated whenever APIs or tables change.
+6. URLs come from `$pageRoutes` in `index.php`; old misspelt routes (`requirment`, `empolyee`) are kept as aliases.
+7. Tests:
+   - `npm test` runs `tests/*.test.cjs`: `parallel-piece-routing` and `production-damage-flow` (14 tests).
+   - `npm run test:orders` runs the Phase 1 integration tests. They need the PHP CLI and local MariaDB/MySQL, and use only a local `*_test` database (default `order_booking_test` on 127.0.0.1:3307).
+   - `npm run dev` starts the local development server on 127.0.0.1:8080, with the app at `/order-bookings/`.
+8. Order changes go through `api/order-records.php`. Pages must not write orders to localStorage. Never set `ORDERS_ALLOW_UNAUTHENTICATED_DEV` outside local development.
+
+## 8. Known gaps
+
+- On `main` and live, orders, dispatch and delivery are still browser-only. SAP Phase 1 on branch `sap_integration` moves them to MySQL; it is not merged or deployed.
+- There is no login or access control on pages or APIs. The new order APIs refuse all requests outside local development until login exists.
+- There is no SAP Business One integration yet, and SAP's required fields (customer group, GSTIN, payment terms, item code, UoM, unit price, tax code, warehouse) are missing.
+- Production state is stored as JSON per key, not as normalized tables. Reporting has to go through the engine.
